@@ -287,26 +287,6 @@
   line-height:1.45;
 }
 
-.composer-draft-status{
-  font-size:.75rem;
-  color:var(--moss-600);
-  background:rgba(214,171,74,.12);
-  border:1px solid rgba(214,171,74,.35);
-  border-radius:8px;
-  padding:.45rem .7rem;
-  margin:-.4rem 0 .8rem;
-}
-.composer-draft-discard{
-  background:none;
-  border:none;
-  padding:0;
-  color:var(--terracotta-500);
-  font-weight:600;
-  font-size:.75rem;
-  cursor:pointer;
-  text-decoration:underline;
-}
-
 /* Inline images (draggable & resizable) */
 .inline-image{
   position:relative;

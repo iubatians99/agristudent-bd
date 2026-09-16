@@ -158,7 +158,6 @@ async function init() {
 
     renderIdentity(reg);
     renderPasswordSection(session.regId, reg);
-    setupPasswordModal(session.regId, reg);
 
     // Each section loads independently — a failure in one (e.g. a blocked
     // Firestore query for blog posts) no longer blanks out the whole page.
@@ -178,12 +177,6 @@ async function init() {
       await renderMyBlogPosts(normalizeEmail(reg.email));
     } catch (err) {
       console.error("[Profile] failed to load blog posts:", err);
-    }
-
-    try {
-      await renderInbox(session.regId);
-    } catch (err) {
-      console.error("[Profile] failed to load inbox:", err);
     }
   } catch (err) {
     console.error("[Profile] failed to load:", err);
@@ -206,33 +199,15 @@ function renderIdentity(reg) {
 
   const idBadge = document.getElementById("profile-id-verified-badge");
   const avatarWrapEl = document.getElementById("profile-avatar-wrap");
+  idBadge?.classList.toggle("hidden", !reg.idVerified);
+  avatarWrapEl?.classList.toggle("is-id-verified", !!reg.idVerified);
+
   const status = reg.status || "unverified";
   const pill = document.getElementById("profile-status-pill");
   const note = document.getElementById("profile-status-note");
-
-  avatarWrapEl?.classList.toggle("is-id-verified", !!reg.idVerified);
-
-  // When BOTH the student ID and the email/registration are verified,
-  // showing two separate "verified" badges is redundant — collapse them
-  // into a single combined badge instead of stacking two pills.
-  const bothVerified = !!reg.idVerified && status === "verified";
-
-  if (bothVerified) {
-    if (idBadge) {
-      idBadge.textContent = "✅ Verified";
-      idBadge.classList.remove("hidden");
-    }
-    pill.classList.add("hidden");
-  } else {
-    if (idBadge) {
-      idBadge.textContent = "🟢 ID Verified";
-      idBadge.classList.toggle("hidden", !reg.idVerified);
-    }
-    const labels = { verified: "✅ Email Verified", unverified: "🕓 Unverified", rejected: "❌ Rejected" };
-    pill.textContent = labels[status] || status;
-    pill.className = "profile-status-pill " + status;
-    pill.classList.remove("hidden");
-  }
+  const labels = { verified: "✅ Email Verified", unverified: "🕓 Unverified", rejected: "❌ Rejected" };
+  pill.textContent = labels[status] || status;
+  pill.className = "profile-status-pill " + status;
 
   if (status !== "verified") {
     note.classList.remove("hidden");
@@ -242,19 +217,6 @@ function renderIdentity(reg) {
   } else {
     note.classList.add("hidden");
   }
-}
-
-// ============================================
-// Shared save routine — hashes + writes the new password and emails
-// the student their new credentials. Used by both the Account-tab
-// form (renderPasswordSection) and the popup (setupPasswordModal) so
-// the two never drift out of sync.
-// ============================================
-async function persistNewPassword(regId, reg, password) {
-  const passwordHash = await hashPassword(password, reg.email);
-  await updateDoc(doc(db, "registrations", regId), { passwordHash });
-  reg.passwordHash = passwordHash;
-  sendCredentialsEmail({ toEmail: reg.email, toName: reg.fullName, studentId: reg.studentIdNumber, password });
 }
 
 // ============================================
@@ -303,18 +265,17 @@ function renderPasswordSection(regId, reg) {
     showPwStatus("Saving your password…");
 
     try {
-      await persistNewPassword(regId, reg, password);
+      const passwordHash = await hashPassword(password, reg.email);
+      await updateDoc(doc(db, "registrations", regId), { passwordHash });
+      reg.passwordHash = passwordHash;
+
+      sendCredentialsEmail({ toEmail: reg.email, toName: reg.fullName, studentId: reg.studentIdNumber, password });
 
       newPasswordInput.value = "";
       confirmInput.value = "";
       showPwStatus("✅ Password saved. From now on, log in with your Student ID + this password (your email will no longer work for login).");
       noPasswordBlock.classList.add("hidden");
       hasPasswordBlock.classList.remove("hidden");
-
-      // If the popup happens to still be open (e.g. the student switched
-      // to the Account tab instead of using it), close it now that a
-      // password exists — it should never be shown again after this.
-      document.getElementById("password-setup-modal")?.classList.add("hidden");
     } catch (err) {
       console.error("[Profile] failed to save password:", err);
       showPwStatus("Something went wrong saving your password. (" + err.message + ")", true);
@@ -323,94 +284,6 @@ function renderPasswordSection(regId, reg) {
       freshBtn.textContent = "Save Password";
     }
   });
-}
-
-// ============================================
-// PASSWORD SETUP POPUP
-// Appears automatically whenever the account has no password yet.
-// The student can type a password right in the popup and save it, or
-// dismiss it (✕ / "Skip for now") and keep browsing — it'll simply be
-// offered again on a future visit. Once a password exists, this is
-// skipped entirely (see the reg.passwordHash check below), so it never
-// shows again after the student sets one, whether from here or later
-// from the Account tab.
-// ============================================
-function setupPasswordModal(regId, reg) {
-  const overlay = document.getElementById("password-setup-modal");
-  if (!overlay) return;
-
-  // Already has a password — nothing to prompt for, ever again.
-  if (reg.passwordHash) {
-    overlay.classList.add("hidden");
-    return;
-  }
-
-  const closeBtn = document.getElementById("password-setup-modal-close");
-  const skipBtn = document.getElementById("pw-modal-skip-btn");
-  const submitBtn = document.getElementById("pw-modal-submit-btn");
-  const statusEl = document.getElementById("pw-modal-status");
-  const newPasswordInput = document.getElementById("pw-modal-new-password");
-  const confirmInput = document.getElementById("pw-modal-new-password-confirm");
-
-  function showModalStatus(msg, isError = false) {
-    statusEl.textContent = msg;
-    statusEl.style.color = isError ? "var(--terracotta-500)" : "var(--moss-600)";
-  }
-
-  function closeModal() {
-    overlay.classList.add("hidden");
-  }
-
-  // Clone-and-replace to strip any listener left over from a previous
-  // init() call (e.g. the "Try Again" retry button re-running init()).
-  const freshClose = closeBtn.cloneNode(true);
-  closeBtn.replaceWith(freshClose);
-  const freshSkip = skipBtn.cloneNode(true);
-  skipBtn.replaceWith(freshSkip);
-  const freshSubmit = submitBtn.cloneNode(true);
-  submitBtn.replaceWith(freshSubmit);
-
-  freshClose.addEventListener("click", closeModal);
-  freshSkip.addEventListener("click", closeModal);
-  // Tapping the dimmed backdrop counts as "cross it" too.
-  overlay.addEventListener("click", (e) => { if (e.target === overlay) closeModal(); });
-
-  newPasswordInput.value = "";
-  confirmInput.value = "";
-  showModalStatus("");
-
-  freshSubmit.addEventListener("click", async () => {
-    const password = newPasswordInput.value;
-    const confirmVal = confirmInput.value;
-
-    if (!isPasswordValid(password)) {
-      showModalStatus("Password must be at least 6 characters.", true);
-      return;
-    }
-    if (password !== confirmVal) {
-      showModalStatus("Passwords don't match.", true);
-      return;
-    }
-
-    freshSubmit.disabled = true;
-    freshSubmit.textContent = "Saving…";
-    showModalStatus("Saving your password…");
-
-    try {
-      await persistNewPassword(regId, reg, password);
-      showModalStatus("✅ Password saved! From now on, log in with your Student ID + this password.");
-      renderPasswordSection(regId, reg); // keep the Account tab in sync
-      setTimeout(closeModal, 900);
-    } catch (err) {
-      console.error("[Profile] failed to save password from popup:", err);
-      showModalStatus("Something went wrong saving your password. (" + err.message + ")", true);
-    } finally {
-      freshSubmit.disabled = false;
-      freshSubmit.textContent = "Save Password";
-    }
-  });
-
-  overlay.classList.remove("hidden");
 }
 
 async function renderCredits(email, fullName) {
@@ -647,136 +520,6 @@ async function renderMyBlogPosts(email) {
       }
     });
   });
-}
-
-// ============================================
-// INBOX — admin-sent notifications (js/notifications.js)
-// ============================================
-// Loaded dynamically (not as a top-level import) on purpose: if this one
-// file is ever missing/broken on the server, only the Inbox section fails
-// quietly — it can no longer take down the entire Profile page the way a
-// failed top-level import would (a failed static import stops the whole
-// module before init() ever runs, which looks like the page being stuck
-// on "Loading your profile…" forever).
-// Compact relative-time label for the inbox ("Just now", "2h ago", "3d ago"),
-// falling back to the DD/MM/YYYY format once a message is more than a week old.
-function inboxTimeAgo(date) {
-  if (!date || Number.isNaN(date.getTime?.())) return "";
-  const diffMs = Date.now() - date.getTime();
-  const minutes = Math.floor(diffMs / 60000);
-  if (minutes < 1) return "Just now";
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d ago`;
-  return formatDate(date);
-}
-
-async function renderInbox(regId) {
-  const listEl = document.getElementById("inbox-list");
-  const emptyEl = document.getElementById("inbox-empty");
-  const badgeEl = document.getElementById("inbox-unread-badge");
-  const markAllBtn = document.getElementById("inbox-mark-all-read-btn");
-  if (!listEl) return;
-
-  let fetchStudentNotifications, markNotificationRead;
-  try {
-    ({ fetchStudentNotifications, markNotificationRead } = await import("./notifications.js"));
-  } catch (err) {
-    console.error("[Profile] notifications.js failed to load — inbox unavailable:", err);
-    return;
-  }
-
-  let items;
-  try {
-    items = await fetchStudentNotifications(regId);
-  } catch (err) {
-    console.error("[Profile] failed to load inbox:", err);
-    emptyEl.classList.add("hidden");
-    listEl.innerHTML = `<p style="color:var(--terracotta-500);font-size:.85rem;">Couldn't load your inbox right now. <button type="button" id="retry-inbox" style="background:none;border:none;color:var(--leaf-500);font-weight:600;cursor:pointer;text-decoration:underline;">Retry</button></p>`;
-    document.getElementById("retry-inbox")?.addEventListener("click", () => renderInbox(regId).catch(e => console.error(e)));
-    return;
-  }
-
-  function updateUnreadBadge() {
-    const unreadCount = items.filter(n => !n.read).length;
-    if (unreadCount > 0) {
-      badgeEl.textContent = unreadCount;
-      badgeEl.classList.remove("hidden");
-      markAllBtn.classList.remove("hidden");
-    } else {
-      badgeEl.classList.add("hidden");
-      markAllBtn.classList.add("hidden");
-    }
-  }
-
-  if (items.length === 0) {
-    listEl.innerHTML = "";
-    emptyEl.classList.remove("hidden");
-    updateUnreadBadge();
-    return;
-  }
-  emptyEl.classList.add("hidden");
-
-  function renderList() {
-    // Newest first — a premium inbox reads top-down like a real message center.
-    const sorted = items.slice().sort((a, b) => (b.sentAt?.toDate?.() || 0) - (a.sentAt?.toDate?.() || 0));
-
-    listEl.innerHTML = sorted.map(item => {
-      const sentDate = item.sentAt?.toDate?.() ? item.sentAt.toDate() : null;
-      const timeLabel = sentDate ? inboxTimeAgo(sentDate) : "";
-      const readState = item.read ? "is-read" : "is-unread";
-      return `
-        <div class="inbox-item ${readState}" data-id="${esc(item.id)}">
-          <div class="inbox-item-icon">${item.read ? "📨" : "✉️"}</div>
-          <div class="inbox-item-main">
-            <div class="inbox-item-head">
-              <span class="inbox-item-sender">Admin</span>
-              <span class="inbox-item-time">${esc(timeLabel)}</span>
-            </div>
-            <div class="inbox-item-body">${esc(item.message)}</div>
-          </div>
-          <span class="inbox-item-dot" aria-hidden="true"></span>
-        </div>`;
-    }).join("");
-
-    listEl.querySelectorAll(".inbox-item").forEach(el => {
-      el.addEventListener("click", async () => {
-        const item = items.find(n => n.id === el.dataset.id);
-        if (!item || item.read) return;
-        el.classList.remove("is-unread");
-        el.classList.add("is-read");
-        const iconEl = el.querySelector(".inbox-item-icon");
-        if (iconEl) iconEl.textContent = "📨";
-        item.read = true;
-        updateUnreadBadge();
-        try {
-          await markNotificationRead(item.id);
-        } catch (err) {
-          console.error("[Profile] failed to mark notification read:", err);
-        }
-      });
-    });
-  }
-
-  renderList();
-  updateUnreadBadge();
-
-  markAllBtn.onclick = async () => {
-    const unread = items.filter(n => !n.read);
-    if (unread.length === 0) return;
-    markAllBtn.disabled = true;
-    try {
-      await Promise.all(unread.map(n => markNotificationRead(n.id).then(() => { n.read = true; })));
-      renderList();
-      updateUnreadBadge();
-    } catch (err) {
-      console.error("[Profile] failed to mark all notifications read:", err);
-    } finally {
-      markAllBtn.disabled = false;
-    }
-  };
 }
 
 const logoutBtn = document.getElementById("profile-logout-btn");

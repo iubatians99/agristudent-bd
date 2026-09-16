@@ -1,9 +1,9 @@
 {
-  "firestore": { "rules": "firestore.rules", "indexes": "firestore.indexes.json" },
+  "firestore": { "rules": "firestore.rules" },
   "storage": { "rules": "storage.rules" },
   "hosting": {
     "public": ".",
-    "ignore": ["firebase.json", "firestore.rules", "firestore.indexes.json", "storage.rules", "README.md", "SECURITY_HARDENING.md"],
+    "ignore": ["firebase.json", "firestore.rules", "storage.rules", "README.md", "SECURITY_HARDENING.md"],
     "headers": [
       {"source":"**","headers":[
         {"key":"X-Content-Type-Options","value":"nosniff"},

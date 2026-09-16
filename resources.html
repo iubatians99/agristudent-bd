@@ -37,7 +37,10 @@
 <section class="section-page">
   <div class="container">
     <div class="crumb"><a href="index.html">Home</a> / Resources</div>
-    <h1>📚 Resources</h1>
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;margin-bottom:.6rem;">
+      <h1 style="margin:0;">📚 Resources</h1>
+      <button id="share-page-btn" class="btn-primary" style="background:var(--moss-600);font-size:.9rem;padding:.5rem .9rem;border-radius:6px;cursor:pointer;">📤 Share This Page</button>
+    </div>
     <p style="color:var(--moss-600);max-width:560px;margin-bottom:1.4rem;">Browse course materials or submit your own — every upload is reviewed before it goes live.</p>
 
     <div id="resource-content">
@@ -132,9 +135,23 @@
               <input type="file" id="files" multiple required accept=".pdf,application/pdf">
               <div id="files-selected-preview" class="selected-files-preview hidden"></div>
             </div>
+            <div class="form-field hidden" id="upload-images-wrapper">
+              <label id="upload-images-label">Image File(s) *</label>
+              <div class="file-drop" style="border:1px dashed var(--line);padding:2rem;border-radius:8px;text-align:center;background:var(--leaf-50,#eef5ee);cursor:pointer;">
+                <div class="file-drop-icon" style="font-size:2rem;margin-bottom:.5rem;">🖼️</div>
+                <div class="file-drop-text" style="color:var(--moss-600);font-size:.9rem;">Tap to choose images, or drag them here (JPEG, PNG, WebP supported)</div>
+                <input type="file" id="upload-images" multiple accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" style="display:none;">
+              </div>
+              <small style="display:block;margin-top:.4rem;color:var(--moss-600);font-size:.85rem;">Multiple images will be uploaded as a folder. Supports high-quality images up to 10MB each.</small>
+              <div id="upload-images-selected-preview" class="selected-files-preview hidden"></div>
+            </div>
             <div class="form-field hidden" id="upload-image-titles-wrap">
-              <label>Image Title(s) — shown under each image in the gallery</label>
-              <div id="upload-image-titles-list" style="display:flex;flex-direction:column;gap:.5rem;"></div>
+              <label>Image Details (optional) — 2-3 lines description for each</label>
+              <div id="upload-image-titles-list" style="display:flex;flex-direction:column;gap:.8rem;"></div>
+            </div>
+            <div class="form-field">
+              <label for="upload-description">Description (optional)</label>
+              <textarea id="upload-description" placeholder="2-3 lines about this resource (e.g., topics covered, helpful notes, etc.)" style="padding:.6rem .8rem;border:1px solid var(--line);border-radius:6px;font-family:inherit;resize:vertical;min-height:70px;"></textarea>
             </div>
 
             <button type="submit" id="upload-submit" class="btn-primary" style="width:100%;padding:.85rem;">Submit for Review</button>
@@ -198,5 +215,27 @@
 <script type="module" src="js/resources.js"></script>
 <script type="module" src="js/session.js"></script>
 <script src="js/main.js"></script>
+
+<script>
+// Share Page Button Functionality
+document.getElementById("share-page-btn").addEventListener("click", async () => {
+  try {
+    await navigator.share({
+      title: "📚 Resources — Agri Core",
+      text: "Browse course materials or submit your own — every upload is reviewed before it goes live.",
+      url: window.location.href
+    });
+  } catch (err) {
+    if (err.name !== "AbortError") {
+      // Fallback: copy to clipboard for desktop browsers without share API
+      navigator.clipboard.writeText(window.location.href).then(() => {
+        alert("✅ Link copied to clipboard!");
+      }).catch(() => {
+        alert("📋 Share link: " + window.location.href);
+      });
+    }
+  }
+});
+</script>
 </body>
 </html>

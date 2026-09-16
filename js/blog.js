@@ -391,7 +391,6 @@ const postDocxInput = document.getElementById("post-docx-input");
 const postUploadStatus = document.getElementById("post-upload-status");
 const postError = document.getElementById("post-error");
 const postSubmitBtn = document.getElementById("post-submit-btn");
-const composerDraftStatus = document.getElementById("composer-draft-status");
 
 // Tracks in-flight inline uploads so submit can wait for them, and the wrapper
 // currently being dragged so it can be dropped at a new spot in the text.
@@ -461,20 +460,17 @@ composerOpenBtn?.addEventListener("click", () => {
   composerModal.classList.remove("hidden");
   postTitleInput.focus();
   updateImageModeUI();
-  maybeRestoreDraft(null);
 });
 
 composerCloseBtn?.addEventListener("click", () => {
   composerModal.classList.add("hidden");
   resetComposer();
-  clearDraft();
 });
 
 composerModal?.addEventListener("click", (e) => {
   if (e.target === composerModal) {
     composerModal.classList.add("hidden");
     resetComposer();
-    clearDraft();
   }
 });
 
@@ -496,129 +492,7 @@ function resetComposer() {
   delete composerModal.dataset.editingPostId;
   postSubmitBtn.textContent = "📝 Post";
   updateImageModeUI();
-  hideDraftStatus();
 }
-
-// ============================================
-// DRAFT AUTOSAVE — protects against an accidental tab close / crash /
-// browser quit while writing a post. Saves title + body HTML (no
-// character limit) to localStorage as the user types, and offers to
-// restore it the next time the composer is opened for that same post
-// (or for a new post, if the draft wasn't tied to any particular post).
-//
-// Images are NOT part of the draft — pendingImages holds live File
-// objects that can't be safely serialized to localStorage, so only the
-// text is recovered. This is called out in the restored-draft banner.
-// ============================================
-const BLOG_DRAFT_KEY = "agri_blog_draft_v1";
-let draftSaveTimer = null;
-
-function currentDraftPostId() {
-  return composerModal.dataset.editingPostId || null;
-}
-
-function saveDraftNow() {
-  try {
-    if (composerModal.classList.contains("hidden")) return; // nothing open, nothing to save
-    const s = getSession();
-    if (!s) return;
-
-    const title = postTitleInput.value;
-    const body = postBodyInput.innerHTML;
-    const hasContent = title.trim().length > 0 || plainTextLength(body) > 0;
-
-    if (!hasContent) {
-      localStorage.removeItem(BLOG_DRAFT_KEY);
-      return;
-    }
-
-    localStorage.setItem(BLOG_DRAFT_KEY, JSON.stringify({
-      postId: currentDraftPostId(),
-      title,
-      body,
-      savedAt: Date.now()
-    }));
-    showDraftStatus(`💾 Draft autosaved ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`, false);
-  } catch (err) {
-    console.warn("[Blog] Couldn't autosave draft:", err);
-  }
-}
-
-function scheduleDraftSave() {
-  clearTimeout(draftSaveTimer);
-  draftSaveTimer = setTimeout(saveDraftNow, 900);
-}
-
-function clearDraft() {
-  try { localStorage.removeItem(BLOG_DRAFT_KEY); } catch (err) { /* storage unavailable — non-fatal */ }
-  hideDraftStatus();
-}
-
-function readDraft() {
-  try {
-    const raw = localStorage.getItem(BLOG_DRAFT_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch (err) {
-    return null;
-  }
-}
-
-// Called right after the composer is opened (new post or edit) — restores
-// a saved draft ONLY if it belongs to this same context (same post id
-// being edited, or both "new post"), so an in-progress draft for one post
-// never overwrites what you just opened for another.
-function maybeRestoreDraft(matchPostId) {
-  const draft = readDraft();
-  if (!draft) return;
-  if ((draft.postId || null) !== (matchPostId || null)) return;
-
-  const hasContent = (draft.title || "").trim().length > 0 || plainTextLength(draft.body || "") > 0;
-  if (!hasContent) return;
-
-  postTitleInput.value = draft.title || "";
-  postBodyInput.innerHTML = draft.body || "";
-  updateImageModeUI();
-
-  const when = draft.savedAt
-    ? new Date(draft.savedAt).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
-    : "earlier";
-  showDraftStatus(
-    `♻️ Restored your unsaved draft from ${when} (text only — re-add any images). <button type="button" id="discard-draft-btn" class="composer-draft-discard">Discard it</button>`,
-    true
-  );
-  document.getElementById("discard-draft-btn")?.addEventListener("click", () => {
-    postTitleInput.value = "";
-    postBodyInput.innerHTML = "";
-    updateImageModeUI();
-    clearDraft();
-  });
-}
-
-function showDraftStatus(content, isHtml) {
-  if (!composerDraftStatus) return;
-  composerDraftStatus.classList.remove("hidden");
-  if (isHtml) composerDraftStatus.innerHTML = content;
-  else composerDraftStatus.textContent = content;
-}
-
-function hideDraftStatus() {
-  if (!composerDraftStatus) return;
-  composerDraftStatus.classList.add("hidden");
-  composerDraftStatus.innerHTML = "";
-}
-
-postTitleInput?.addEventListener("input", scheduleDraftSave);
-postBodyInput?.addEventListener("input", scheduleDraftSave);
-
-// Safety nets for "quit by mistake": beforeunload covers closing the tab/
-// browser on desktop, visibilitychange covers switching apps / losing
-// focus on mobile (where beforeunload often doesn't fire reliably).
-window.addEventListener("beforeunload", () => {
-  if (composerModal && !composerModal.classList.contains("hidden")) saveDraftNow();
-});
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "hidden" && composerModal && !composerModal.classList.contains("hidden")) saveDraftNow();
-});
 
 // ============================================
 // OPEN COMPOSER IN EDIT MODE — loads an existing post's title, body, and
@@ -644,7 +518,6 @@ function openPostEditor(id, item) {
   composerModal.classList.remove("hidden");
   postSubmitBtn.textContent = "💾 Save Changes";
   postTitleInput.focus();
-  maybeRestoreDraft(id);
 }
 
 // ============================================
@@ -1323,6 +1196,11 @@ postSubmitBtn?.addEventListener("click", async () => {
     postError.textContent = "Add some text or images";
     return;
   }
+  if (bodyText > 20000) {
+    postError.classList.remove("hidden");
+    postError.textContent = "Post too long (max 20k chars)";
+    return;
+  }
   if (inlineUploadsInFlight > 0) {
     postError.classList.remove("hidden");
     postError.textContent = "Please wait for images to finish uploading";
@@ -1379,7 +1257,6 @@ postSubmitBtn?.addEventListener("click", async () => {
 
     // Success — reset and close
     resetComposer();
-    clearDraft();
     composerModal.classList.add("hidden");
     postUploadStatus.textContent = "";
     postSubmitBtn.textContent = "📝 Post"; // Reset button text

@@ -35,7 +35,6 @@ import { sendReviewEmail } from "./email-config.js";
 export const DAY_MS = 24 * 60 * 60 * 1000;
 export const ACCESS_PER_FILE_MS = DAY_MS; // 24h per uploaded resource file
 export const ACCESS_PER_CLASSROOM_MS = 6 * 60 * 60 * 1000; // 6h per classroom code
-export const ACCESS_PER_COFFEE_MS = 6 * 60 * 60 * 1000; // 6h per confirmed bKash "coffee" payment
 export const ACCESS_PER_AD_MS = 6 * 60 * 60 * 1000; // 6h per watched rewarded ad
 export const RESTRICTION_MS = 30 * DAY_MS;
 const REMINDER_WINDOW_DAYS = 1;
@@ -116,24 +115,6 @@ export function computeResourceAccessStatus(items, now = Date.now()) {
         status: "approved",
         time: (approvedAt || submittedAt)?.getTime?.() || now,
         durationMs: ACCESS_PER_CLASSROOM_MS
-      });
-      continue;
-    }
-
-    // A bKash "Buy Me a Coffee" payment works exactly like a classroom
-    // code: it grants NO access until an admin reviews the sender number
-    // + transaction id and confirms it (see js/resources.js hnStepCoffee
-    // / "coffeeUnlocks" collection, and the admin panel's Coffee tab).
-    if (item?.kind === "coffee") {
-      if (status !== "approved") continue;
-      const approvedAt = eventTime(item, "approvedAt");
-      const submittedAt = eventTime(item, "submittedAt");
-      grants.push({
-        item,
-        kind: "coffee",
-        status: "approved",
-        time: (approvedAt || submittedAt)?.getTime?.() || now,
-        durationMs: ACCESS_PER_COFFEE_MS
       });
       continue;
     }

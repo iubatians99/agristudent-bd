@@ -5,9 +5,12 @@
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="X-Frame-Options" content="SAMEORIGIN">
   <meta name="referrer" content="strict-origin-when-cross-origin">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdnjs.cloudflare.com https://www.googletagmanager.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://res.cloudinary.com https://lh3.googleusercontent.com https://*.gstatic.com; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://api.cloudinary.com; object-src 'none'; base-uri 'self';">
-<!-- No ad-based unlock on this page for now — "Unlock with Notes" and
-     "Unlock with Google Classroom" remain the two unlock paths. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdnjs.cloudflare.com https://www.googletagmanager.com https://cdn.jsdelivr.net https://pagead2.googlesyndication.com https://www.googletagservices.com https://googleads.g.doubleclick.net https://tpc.googlesyndication.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://res.cloudinary.com https://lh3.googleusercontent.com https://*.googlesyndication.com https://*.doubleclick.net https://*.gstatic.com; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://api.cloudinary.com https://*.googlesyndication.com https://*.doubleclick.net https://*.google.com; frame-src https://googleads.g.doubleclick.net https://tpc.googlesyndication.com https://www.google.com https://pagead2.googlesyndication.com https://*.googlesyndication.com; object-src 'none'; base-uri 'self';">
+<!-- Google AdSense — TODO: replace ca-pub-XXXXXXXXXXXXXXXX with your real publisher id
+     (see the "UNLOCK BY WATCHING AN AD" section near the top of js/resources.js for the
+     matching ad-unit slot id). Required for the "Unlock by Watching an Ad" step below to
+     actually show an ad instead of an empty box. -->
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-XXXXXXXXXXXXXXXX" crossorigin="anonymous"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
 <link rel="manifest" href="manifest.json">
@@ -68,7 +71,7 @@
             <p style="color:var(--moss-600);font-size:.9rem;margin-bottom:1.4rem;line-height:1.6;">Choose how you'd like to unlock access.</p>
             <button type="button" id="hn-choose-notes" class="btn-primary" style="display:block;width:100%;padding:.8rem;margin-bottom:.7rem;">📤 Unlock with Notes <span style="font-weight:400;opacity:.85;">— upload a file, 24h on approval</span></button>
             <button type="button" id="hn-choose-classroom" class="btn-primary" style="display:block;width:100%;padding:.8rem;background:var(--moss-600);margin-bottom:.7rem;">🏫 Unlock with Google Classroom <span style="font-weight:400;opacity:.85;">— send a code, 6h access</span></button>
-            <button type="button" id="hn-choose-coffee" class="btn-primary" style="display:block;width:100%;padding:.8rem;background:var(--wheat-500,#c8933a);">☕ Buy Me a Coffee <span style="font-weight:400;opacity:.85;">— bKash, 6h on review</span></button>
+            <button type="button" id="hn-choose-ad" class="btn-primary" style="display:block;width:100%;padding:.8rem;background:var(--wheat-500,#c8933a);">🎬 Unlock by Watching an Ad <span style="font-weight:400;opacity:.85;">— instant, 6h access</span></button>
           </div>
 
           <!-- STEP: UNLOCK WITH NOTES (existing upload form) -->
@@ -100,7 +103,7 @@
               <input type="email" id="hn-uploaderEmail" required>
             </div>
             <div class="form-field">
-              <label>Note Type *</label>
+              <label>Folder Type *</label>
               <div class="filetype-grid">
                 <label class="filetype-option">
                   <input type="radio" name="hn-noteType" value="hand_notes" checked>
@@ -108,11 +111,7 @@
                 </label>
                 <label class="filetype-option">
                   <input type="radio" name="hn-noteType" value="class_slide">
-                  <span>🖥️ Class Slide</span>
-                </label>
-                <label class="filetype-option">
-                  <input type="radio" name="hn-noteType" value="others">
-                  <span>📦 Others</span>
+                  <span>🖥️ Class Lecture Slides</span>
                 </label>
               </div>
             </div>
@@ -142,9 +141,23 @@
               </div>
               <div id="hn-files-selected-preview" class="selected-files-preview hidden"></div>
             </div>
-            <div class="form-field hidden" id="hn-image-titles-wrap">
-              <label>Image Title(s) — shown under each image in the gallery</label>
-              <div id="hn-image-titles-list" style="display:flex;flex-direction:column;gap:.5rem;"></div>
+            <div class="form-field hidden" id="hn-image-wrapper">
+              <label id="hn-images-label">Image File(s) *</label>
+              <div class="file-drop">
+                <div class="file-drop-icon">🖼️</div>
+                <div class="file-drop-text">Tap to choose images, or drag them here (JPEG, PNG, WebP supported)</div>
+                <input type="file" id="hn-images" multiple accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp">
+              </div>
+              <small style="display:block;margin-top:.4rem;color:var(--moss-600);font-size:.85rem;">Multiple images will be uploaded as a folder. Supports high-quality images up to 10MB each.</small>
+              <div id="hn-images-selected-preview" class="selected-files-preview hidden"></div>
+            </div>
+            <div class="form-field hidden" id="hn-images-titles-wrap">
+              <label>Image Details (optional) — 2-3 lines description for each</label>
+              <div id="hn-images-titles-list" style="display:flex;flex-direction:column;gap:.8rem;"></div>
+            </div>
+            <div class="form-field">
+              <label for="hn-description">Description (optional)</label>
+              <textarea id="hn-description" placeholder="2-3 lines about this file (e.g., topics covered, chapter, etc.)" style="padding:.6rem .8rem;border:1px solid var(--line);border-radius:6px;font-family:inherit;resize:vertical;min-height:70px;"></textarea>
             </div>
             <button type="submit" id="hn-unlock-submit" class="btn-primary" style="width:100%;padding:.8rem;margin-top:.6rem;">Upload &amp; Unlock</button>
 
@@ -194,37 +207,38 @@
             </div>
           </div>
 
-          <!-- STEP: BUY ME A COFFEE (bKash) (new) -->
-          <div id="hn-gate-step-coffee" class="hidden">
-            <button type="button" id="hn-coffee-back" class="modal-close" title="Back" style="position:static;float:right;">✕</button>
+          <!-- STEP: UNLOCK BY WATCHING AN AD (new) -->
+          <div id="hn-gate-step-ad" class="hidden">
+            <button type="button" id="hn-ad-back" class="modal-close" title="Back" style="position:static;float:right;">✕</button>
             <div style="text-align:center;">
-              <div style="font-size:1.7rem;width:3.4rem;height:3.4rem;line-height:3.4rem;margin:0 auto .9rem;border-radius:50%;background:linear-gradient(135deg, var(--moss-900), var(--moss-700));box-shadow:0 10px 22px rgba(31,46,34,.28);">☕</div>
-              <h2 style="font-size:1.35rem;margin-bottom:.3rem;">Buy Me a Coffee</h2>
-              <p style="color:var(--moss-600);font-size:.9rem;margin-bottom:1rem;line-height:1.6;">Send <strong>৳<span id="hn-coffee-amount">20</span></strong> (or more, if you'd like) via bKash to the number below, then submit the number you sent FROM and the transaction id. Once an admin confirms it, this file unlocks for 6 hours.</p>
-              <p style="background:rgba(107,155,94,.1);border:1px solid var(--line);border-radius:8px;padding:.7rem .8rem;font-size:.95rem;margin-bottom:1.2rem;">
-                <span style="display:block;font-size:.75rem;color:var(--moss-600);margin-bottom:.15rem;">Send Money (Personal) to</span>
-                <strong style="font-family:monospace;font-size:1.1rem;letter-spacing:.03em;" id="hn-coffee-bkash-number">01753486065</strong>
-              </p>
-              <p style="background:rgba(214,171,74,.15);color:var(--wheat-400,#a3791f);border-radius:8px;padding:.6rem .8rem;font-size:.82rem;margin-bottom:1.2rem;text-align:left;">⚠️ Please only submit a real transaction id from a payment you actually sent. A false or reused transaction id may result in your profile being restricted by an admin.</p>
+              <div style="font-size:1.7rem;width:3.4rem;height:3.4rem;line-height:3.4rem;margin:0 auto .9rem;border-radius:50%;background:linear-gradient(135deg, var(--moss-900), var(--moss-700));box-shadow:0 10px 22px rgba(31,46,34,.28);">🎬</div>
+              <h2 style="font-size:1.35rem;margin-bottom:.3rem;">Watch an Ad to Unlock</h2>
+              <p style="color:var(--moss-600);font-size:.9rem;margin-bottom:1rem;line-height:1.6;">Keep this ad on screen for <span id="hn-ad-seconds-total">15</span> seconds. Once it finishes, this file unlocks instantly for 6 hours — no admin review needed.</p>
             </div>
-            <form id="hn-coffee-form">
-              <div class="form-field">
-                <label for="hn-coffee-sender-number">Your bKash Number (the one you sent FROM) *</label>
-                <input type="tel" id="hn-coffee-sender-number" required maxlength="20" placeholder="e.g., 01XXXXXXXXX">
+
+            <!-- Google AdSense unit renders here. Replace data-ad-client / data-ad-slot
+                 with your real AdSense publisher + ad unit ids (see js/resources.js
+                 AD_CLIENT_ID / AD_SLOT_ID near the top of the "UNLOCK BY WATCHING AN AD"
+                 section) before going live. -->
+            <div id="hn-ad-form-area">
+              <div id="hn-ad-slot-wrap" style="min-height:250px;background:var(--leaf-50,#eef5ee);border:1px dashed var(--line);border-radius:10px;display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:1rem;"></div>
+
+              <div style="display:flex;align-items:center;gap:.8rem;margin-bottom:1rem;">
+                <div style="flex:1;height:8px;border-radius:999px;background:var(--line);overflow:hidden;">
+                  <div id="hn-ad-progress-bar" style="height:100%;width:0%;background:var(--leaf-500);transition:width .3s linear;"></div>
+                </div>
+                <span id="hn-ad-countdown" style="font-size:.85rem;color:var(--moss-700);min-width:4.5rem;text-align:right;">15s left</span>
               </div>
-              <div class="form-field">
-                <label for="hn-coffee-txn-id">bKash Transaction ID *</label>
-                <input type="text" id="hn-coffee-txn-id" required maxlength="30" placeholder="e.g., 9G7H2K3L4M">
-                <small style="display:block;margin-top:.3rem;color:var(--moss-600);font-size:.8rem;">Found in the payment confirmation SMS from bKash.</small>
-              </div>
-              <p id="hn-coffee-error" class="hidden" style="color:var(--terracotta-500);font-size:.85rem;margin:-.4rem 0 .8rem;"></p>
-              <button type="submit" id="hn-coffee-submit" class="btn-primary" style="width:100%;padding:.85rem;">Send for Review</button>
-            </form>
-            <div id="hn-coffee-success" class="uc-panel hidden" style="border-color:var(--leaf-500);background:rgba(107,155,94,.06);margin-top:1rem;">
-              <span class="badge" style="background:var(--leaf-500);">✅ Sent for review</span>
-              <h3>Thank you! Your payment is with an admin now</h3>
-              <p>This file unlocks for 6 hours as soon as an admin reviews and confirms your payment — no need to keep this page open.</p>
-              <button type="button" id="hn-coffee-success-close" class="btn-primary" style="margin-top:.8rem;">Back to Notes</button>
+
+              <button type="button" id="hn-ad-claim" class="btn-primary" style="width:100%;padding:.85rem;" disabled>Watching ad… please wait</button>
+              <p id="hn-ad-error" class="hidden" style="color:var(--terracotta-500);font-size:.85rem;margin-top:.6rem;"></p>
+            </div>
+
+            <div id="hn-ad-success" class="uc-panel hidden" style="border-color:var(--leaf-500);background:rgba(107,155,94,.06);margin-top:1rem;">
+              <span class="badge" style="background:var(--leaf-500);">✅ Unlocked</span>
+              <h3>Your file is unlocked now!</h3>
+              <p>It's unlocked for 6 hours.</p>
+              <button type="button" id="hn-ad-success-close" class="btn-primary" style="margin-top:.8rem;">See the File</button>
             </div>
           </div>
 
@@ -240,21 +254,39 @@
       <div class="resource-preview-wrap">
         <div class="premium-cards-grid">
 
-          <!-- PDF & PRESENTATIONS CARD -->
-          <div class="premium-card pdf-card">
+          <!-- HAND NOTES FOLDER CARD -->
+          <div class="premium-card handnotes-card">
             <div class="card-header">
-              <span class="card-icon">📄</span>
-              <span class="card-title">PDFs &amp; Presentations</span>
-              <span class="card-count" id="pdf-count">(0)</span>
+              <span class="card-icon">📝</span>
+              <span class="card-title">Hand Notes</span>
+              <span class="card-count" id="handnotes-count">(0)</span>
             </div>
             <div class="card-body">
-              <input type="text" id="pdf-search" placeholder="Search by course code (e.g., AGR 371)" class="card-search" style="display:none;">
-              <div id="pdf-list" class="file-list">
+              <input type="text" id="handnotes-search" placeholder="Search by course code (e.g., AGR 371)" class="card-search" style="display:none;">
+              <div id="handnotes-list" class="file-list">
                 <p style="color:var(--moss-600);font-size:.9rem;text-align:center;padding:1rem;">Loading files…</p>
               </div>
             </div>
             <div class="card-footer">
-              <a href="#" class="view-all-link" id="pdf-view-all" style="display:none;">View All →</a>
+              <a href="#" class="view-all-link" id="handnotes-view-all" style="display:none;">View All →</a>
+            </div>
+          </div>
+
+          <!-- CLASS LECTURE SLIDES FOLDER CARD -->
+          <div class="premium-card slides-card">
+            <div class="card-header">
+              <span class="card-icon">🖥️</span>
+              <span class="card-title">Class Lecture Slides</span>
+              <span class="card-count" id="slides-count">(0)</span>
+            </div>
+            <div class="card-body">
+              <input type="text" id="slides-search" placeholder="Search by course code (e.g., AGR 371)" class="card-search" style="display:none;">
+              <div id="slides-list" class="file-list">
+                <p style="color:var(--moss-600);font-size:.9rem;text-align:center;padding:1rem;">Loading files…</p>
+              </div>
+            </div>
+            <div class="card-footer">
+              <a href="#" class="view-all-link" id="slides-view-all" style="display:none;">View All →</a>
             </div>
           </div>
 
@@ -349,7 +381,7 @@
               <input type="email" id="au-uploaderEmail" required>
             </div>
             <div class="form-field">
-              <label>Note Type *</label>
+              <label>Folder Type *</label>
               <div class="filetype-grid">
                 <label class="filetype-option">
                   <input type="radio" name="au-noteType" value="hand_notes" checked>
@@ -357,11 +389,7 @@
                 </label>
                 <label class="filetype-option">
                   <input type="radio" name="au-noteType" value="class_slide">
-                  <span>🖥️ Class Slide</span>
-                </label>
-                <label class="filetype-option">
-                  <input type="radio" name="au-noteType" value="others">
-                  <span>📦 Others</span>
+                  <span>🖥️ Class Lecture Slides</span>
                 </label>
               </div>
             </div>
@@ -391,9 +419,23 @@
               </div>
               <div id="au-files-selected-preview" class="selected-files-preview hidden"></div>
             </div>
-            <div class="form-field hidden" id="au-image-titles-wrap">
-              <label>Image Title(s) — shown under each image in the gallery</label>
-              <div id="au-image-titles-list" style="display:flex;flex-direction:column;gap:.5rem;"></div>
+            <div class="form-field hidden" id="au-images-wrapper">
+              <label id="au-images-label">Image File(s) *</label>
+              <div class="file-drop">
+                <div class="file-drop-icon">🖼️</div>
+                <div class="file-drop-text">Tap to choose images, or drag them here (JPEG, PNG, WebP supported)</div>
+                <input type="file" id="au-images" multiple accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp">
+              </div>
+              <small style="display:block;margin-top:.4rem;color:var(--moss-600);font-size:.85rem;">Multiple images will be uploaded as a folder. Supports high-quality images up to 10MB each.</small>
+              <div id="au-images-selected-preview" class="selected-files-preview hidden"></div>
+            </div>
+            <div class="form-field hidden" id="au-images-titles-wrap">
+              <label>Image Details (optional) — 2-3 lines description for each</label>
+              <div id="au-images-titles-list" style="display:flex;flex-direction:column;gap:.8rem;"></div>
+            </div>
+            <div class="form-field">
+              <label for="au-description">Description (optional)</label>
+              <textarea id="au-description" placeholder="2-3 lines about this file (e.g., topics covered, chapter, etc.)" style="padding:.6rem .8rem;border:1px solid var(--line);border-radius:6px;font-family:inherit;resize:vertical;min-height:70px;"></textarea>
             </div>
             <button type="submit" id="au-submit" class="btn-primary" style="width:100%;padding:.8rem;margin-top:.6rem;">Submit for Review</button>
 

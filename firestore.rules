@@ -196,33 +196,6 @@ service cloud.firestore {
     }
 
     // ============================================
-    // COFFEE UNLOCKS (bKash): "Buy Me a Coffee" (slides-notes.html gate)
-    // ============================================
-    // Same public-write-with-validation trust model as classroomCodes
-    // above — a bKash payment grants NO access until an admin reviews the
-    // sender number + transaction id and confirms it (same pattern as a
-    // classroom code; see js/access.js kind === "coffee").
-    match /coffeeUnlocks/{id} {
-      allow create: if
-        request.resource.data.keys().hasAll(['bkashNumber', 'transactionId', 'status']) &&
-        request.resource.data.bkashNumber is string &&
-        request.resource.data.bkashNumber.size() > 0 &&
-        request.resource.data.bkashNumber.size() <= 30 &&
-        request.resource.data.transactionId is string &&
-        request.resource.data.transactionId.size() > 0 &&
-        request.resource.data.transactionId.size() <= 60 &&
-        request.resource.data.status == "new";
-
-      // js/resources.js checks for a duplicate transaction id before
-      // accepting a new one, and reads a student's own submissions to
-      // compute remaining access time — same as classroomCodes above.
-      allow list, get: if true;
-
-      // Admin panel only (js/admin.js loadCoffeeUnlocks / moderation).
-      allow update, delete: if request.auth != null;
-    }
-
-    // ============================================
     // AD UNLOCKS: "Unlock by Watching an Ad" (slides-notes.html gate)
     // ============================================
     // Same public-write-with-validation trust model as classroomCodes
@@ -279,7 +252,7 @@ service cloud.firestore {
         request.resource.data.title is string &&
         request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 200 &&
         request.resource.data.content is string &&
-        request.resource.data.content.size() > 0 && request.resource.data.content.size() <= 900000 &&
+        request.resource.data.content.size() > 0 && request.resource.data.content.size() <= 20000 &&
         request.resource.data.authorEmail is string && request.resource.data.authorEmail.size() > 0 &&
         request.resource.data.authorRegId is string && request.resource.data.authorRegId.size() > 0 &&
         request.resource.data.likesCount == 0 &&
@@ -331,18 +304,13 @@ service cloud.firestore {
       // approved. The edit updates the SAME document in place; it never
       // creates a new one, and it goes back through admin review exactly
       // like a brand-new post did.
-      //
-      // content.size() <= 900000 is not a real writing limit (the
-      // composer imposes none — see js/blog.js) — it's headroom under
-      // Firestore's hard 1 MiB per-document ceiling, shared with title/
-      // imageUrls/etc. on the same doc.
       allow update: if
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'content', 'imageUrls', 'status', 'editedAt', 'editedBy']) &&
         request.resource.data.status == "pending_edit" &&
         request.resource.data.title is string &&
         request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 200 &&
         request.resource.data.content is string &&
-        request.resource.data.content.size() > 0 && request.resource.data.content.size() <= 900000;
+        request.resource.data.content.size() > 0 && request.resource.data.content.size() <= 20000;
 
       // Deleting a post: students never hold a Firebase Auth session, and
       // even the admin panel's own session email doesn't match
@@ -406,34 +374,6 @@ service cloud.firestore {
       allow read: if true;
       allow delete: if true;
       allow update: if false;
-    }
-
-    // ============================================
-    // NOTIFICATIONS: admin → student inbox messages (js/notifications.js)
-    // ============================================
-    // Same trust model as messages/registrations above: students never
-    // sign in with Firebase Auth, so reading/marking-read their own
-    // inbox stays public; only the admin panel (which does sign in) may
-    // create a new message.
-    match /notifications/{id} {
-      allow create: if request.auth != null &&
-        request.resource.data.keys().hasAll(['targetRegId', 'message']) &&
-        request.resource.data.targetRegId is string &&
-        request.resource.data.targetRegId.size() > 0 &&
-        request.resource.data.message is string &&
-        request.resource.data.message.size() > 0 &&
-        request.resource.data.message.size() <= 20000;
-
-      // Student's own Profile inbox (js/profile.js)
-      allow list, get: if true;
-
-      // Student marking a message read may only ever flip read/readAt —
-      // everything else (message, targetRegId, sentAt...) stays locked.
-      allow update: if request.auth == null &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'readAt']);
-
-      // Admin panel (history view / cleanup)
-      allow update, delete: if request.auth != null;
     }
   }
 }

@@ -131,7 +131,6 @@ async function deleteUserFully(regId, email) {
     deleteDocsByField("terms", "uploaderEmail", normalized),
     deleteDocsByField("blogPosts", "authorEmail", normalized),
     deleteDocsByField("classroomCodes", "fromEmail", normalized),
-    deleteDocsByField("coffeeUnlocks", "fromEmail", normalized),
     deleteDocsByField("messages", "fromEmail", normalized)
   ]);
   await deleteDoc(doc(db, "registrations", regId));
@@ -289,10 +288,8 @@ const timelineList = document.getElementById("admin-timeline-list");
 const regList = document.getElementById("admin-registrations-list");
 const msgList = document.getElementById("admin-messages-list");
 const classroomCodesList = document.getElementById("admin-classroom-codes-list");
-const coffeeUnlocksList = document.getElementById("admin-coffee-unlocks-list");
 const adUnlocksList = document.getElementById("admin-ad-unlocks-list");
 const blogList = document.getElementById("admin-blog-list");
-const notificationsList = document.getElementById("admin-notifications-list");
 
 // Caches of last-loaded docs, keyed by id — used to populate the "Edit any content" modal
 // without a second round-trip to Firestore.
@@ -303,15 +300,13 @@ const registrationsCache = {};
 const blogCache = {};
 
 const tabs = {
+  approvals: { btn: document.getElementById("tab-approvals"), panel: document.getElementById("approvals-panel"), load: loadApprovals },
   resources: { btn: document.getElementById("tab-resources"), panel: document.getElementById("resources-panel"), load: loadResources },
   blog: { btn: document.getElementById("tab-blog"), panel: document.getElementById("blog-panel"), load: loadBlogPosts },
   terms: { btn: document.getElementById("tab-terms"), panel: document.getElementById("terms-panel"), load: loadTerms },
   timeline: { btn: document.getElementById("tab-timeline"), panel: document.getElementById("timeline-panel"), load: loadTimeline },
-  registrations: { btn: document.getElementById("tab-registrations"), panel: document.getElementById("registrations-panel"), load: loadRegistrations },
   messages: { btn: document.getElementById("tab-messages"), panel: document.getElementById("messages-panel"), load: loadMessages },
-  notify: { btn: document.getElementById("tab-notify"), panel: document.getElementById("notify-panel"), load: loadNotifyTab },
   classroomCodes: { btn: document.getElementById("tab-classroom-codes"), panel: document.getElementById("classroom-codes-panel"), load: loadClassroomCodes },
-  coffeeUnlocks: { btn: document.getElementById("tab-coffee-unlocks"), panel: document.getElementById("coffee-unlocks-panel"), load: loadCoffeeUnlocks },
   adUnlocks: { btn: document.getElementById("tab-ad-unlocks"), panel: document.getElementById("ad-unlocks-panel"), load: loadAdUnlocks },
   danger: { btn: document.getElementById("tab-danger"), panel: document.getElementById("danger-panel"), load: () => {} }
 };
@@ -332,8 +327,154 @@ Object.entries(tabs).forEach(([key, tab]) => {
 });
 
 // Activate the first tab by default so the sidebar/topbar reflect the initial panel shown.
-tabs.resources.btn.classList.add("is-active");
-if (adminPageTitle) adminPageTitle.textContent = tabs.resources.btn.dataset.label || "Resources";
+tabs.approvals.btn.classList.add("is-active");
+if (adminPageTitle) adminPageTitle.textContent = tabs.approvals.btn.dataset.label || "Approvals";
+
+// ============================================
+// UNIFIED APPROVALS
+// ============================================
+async function loadApprovals() {
+  const listEl = document.getElementById("admin-approvals-list");
+  const filterEl = document.getElementById("approval-filter");
+  if (!listEl || !filterEl) return;
+
+  listEl.innerHTML = "<p style='text-align:center;color:var(--moss-600);padding:2rem;'>Loading approvals…</p>";
+
+  try {
+    // Load pending registrations
+    const regSnap = await getDocs(
+      query(collection(db, "registrations"), where("status", "==", "unverified"), orderBy("createdAt", "desc"))
+    );
+
+    // Load pending resources
+    const resSnap = await getDocs(
+      query(collection(db, "resources"), where("status", "==", "pending"), orderBy("uploadedAt", "desc"))
+    );
+
+    // Load pending blog posts
+    const blogSnap = await getDocs(
+      query(collection(db, "blogPosts"), where("status", "==", "unverified"), orderBy("submittedAt", "desc"))
+    );
+
+    const registrations = regSnap.docs.map(d => ({ id: d.id, type: "registration", ...d.data() }));
+    const resources = resSnap.docs.map(d => ({ id: d.id, type: "resource", ...d.data() }));
+    const blogs = blogSnap.docs.map(d => ({ id: d.id, type: "blog", ...d.data() }));
+
+    const allApprovals = [...registrations, ...resources, ...blogs];
+
+    // Setup filter listener
+    filterEl.addEventListener("change", () => {
+      const filter = filterEl.value;
+      renderApprovalsTable(allApprovals, filter, listEl);
+    });
+
+    renderApprovalsTable(allApprovals, "", listEl);
+  } catch (err) {
+    console.error("[Admin] Error loading approvals:", err);
+    listEl.innerHTML = `<p style='color:var(--terracotta-500);'>Error loading approvals: ${err.message}</p>`;
+  }
+}
+
+function renderApprovalsTable(items, filter, container) {
+  let filtered = items;
+  if (filter) {
+    filtered = items.filter(item => item.type === filter);
+  }
+
+  if (filtered.length === 0) {
+    container.innerHTML = "<p style='text-align:center;color:var(--moss-600);padding:2rem;'>No pending items to review</p>";
+    return;
+  }
+
+  let html = "<table style='width:100%;border-collapse:collapse;font-size:.9rem;'>";
+  html += "<thead style='background:var(--leaf-50);border-bottom:2px solid var(--line);'>";
+  html += "<tr>";
+  html += "<th style='padding:.8rem;text-align:left;font-weight:600;'>Type</th>";
+  html += "<th style='padding:.8rem;text-align:left;font-weight:600;'>Details</th>";
+  html += "<th style='padding:.8rem;text-align:left;font-weight:600;'>Submitted</th>";
+  html += "<th style='padding:.8rem;text-align:center;font-weight:600;'>Actions</th>";
+  html += "</tr></thead><tbody>";
+
+  filtered.forEach(item => {
+    const rowId = `approval-${item.type}-${item.id}`;
+    let typeEmoji = item.type === "registration" ? "📝" : item.type === "resource" ? "📚" : "✍️";
+    let details = "";
+
+    if (item.type === "registration") {
+      details = `<strong>${esc(item.studentName || "")}</strong> (${esc(item.emailNormalized || "")})<br/><small>${esc(item.studentId || "")}</small>`;
+    } else if (item.type === "resource") {
+      details = `<strong>${esc(item.courseCode || "")}</strong> - ${esc(item.courseName || "")}<br/><small>${esc(item.facultyName || "")}</small>`;
+    } else if (item.type === "blog") {
+      details = `<strong>${esc(item.title || "")}</strong><br/><small>by ${esc(item.authorEmail || "")}</small>`;
+    }
+
+    const submitted = fmtAdminDate(item.createdAt || item.uploadedAt || item.submittedAt);
+
+    html += `<tr id='${rowId}' style='border-bottom:1px solid var(--line);'>`;
+    html += `<td style='padding:.8rem;'>${typeEmoji} ${item.type}</td>`;
+    html += `<td style='padding:.8rem;'>${details}</td>`;
+    html += `<td style='padding:.8rem;'>${submitted}</td>`;
+    html += `<td style='padding:.8rem;text-align:center;'>`;
+    html += `<button class='approve-btn' data-type='${item.type}' data-id='${item.id}' style='background:var(--leaf-500);color:white;border:none;padding:.4rem .6rem;border-radius:4px;cursor:pointer;font-size:.8rem;margin-right:.3rem;'>✅ Approve</button>`;
+    html += `<button class='reject-btn' data-type='${item.type}' data-id='${item.id}' style='background:var(--terracotta-500);color:white;border:none;padding:.4rem .6rem;border-radius:4px;cursor:pointer;font-size:.8rem;'>❌ Reject</button>`;
+    html += `</td></tr>`;
+  });
+
+  html += "</tbody></table>";
+  container.innerHTML = html;
+
+  // Add event listeners
+  container.querySelectorAll(".approve-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const type = btn.dataset.type;
+      const id = btn.dataset.id;
+      await approveItem(type, id, container, filter);
+    });
+  });
+
+  container.querySelectorAll(".reject-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const type = btn.dataset.type;
+      const id = btn.dataset.id;
+      await rejectItem(type, id, container, filter);
+    });
+  });
+}
+
+async function approveItem(type, id, container, filter) {
+  try {
+    if (type === "registration") {
+      await updateDoc(doc(db, "registrations", id), { status: "verified" });
+    } else if (type === "resource") {
+      await updateDoc(doc(db, "resources", id), { status: "approved" });
+      const doc_data = (await getDocs(query(collection(db, "resources"), where("__name__", "==", id)))).docs[0].data();
+      await syncStudentAccessStatus(db, doc_data.uploaderEmail);
+    } else if (type === "blog") {
+      await updateDoc(doc(db, "blogPosts", id), { status: "verified" });
+    }
+    loadApprovals();
+  } catch (err) {
+    alert(`Error approving ${type}: ${err.message}`);
+  }
+}
+
+async function rejectItem(type, id, container, filter) {
+  const reason = prompt(`Enter reason for rejecting this ${type}:`);
+  if (reason === null) return;
+
+  try {
+    if (type === "registration") {
+      await deleteDoc(doc(db, "registrations", id));
+    } else if (type === "resource") {
+      await updateDoc(doc(db, "resources", id), { status: "rejected", rejectionReason: reason });
+    } else if (type === "blog") {
+      await updateDoc(doc(db, "blogPosts", id), { status: "rejected", rejectionReason: reason });
+    }
+    loadApprovals();
+  } catch (err) {
+    alert(`Error rejecting ${type}: ${err.message}`);
+  }
+}
 
 // ============================================
 // RESOURCES
@@ -975,135 +1116,55 @@ async function loadTimeline() {
 // ============================================
 // REGISTRATIONS (student ID verification)
 // ============================================
-function renderRegStats(items) {
-  const statsEl = document.getElementById("reg-stats");
-  if (!statsEl) return;
-  const total = items.length;
-  const verified = items.filter(i => i.idVerified).length;
-  const unverified = total - verified;
-  const restricted = items.filter(i => !!i.accountRestrictedUntil).length;
-  const removed = items.filter(i => !!i.removed).length;
-  statsEl.innerHTML = `
-    <div class="reg-stat"><span class="reg-stat-num">${total}</span><span class="reg-stat-label">Total</span></div>
-    <div class="reg-stat is-success"><span class="reg-stat-num">${verified}</span><span class="reg-stat-label">ID Verified</span></div>
-    <div class="reg-stat is-warning"><span class="reg-stat-num">${unverified}</span><span class="reg-stat-label">Not Verified</span></div>
-    <div class="reg-stat is-danger"><span class="reg-stat-num">${restricted}</span><span class="reg-stat-label">Restricted</span></div>
-    <div class="reg-stat is-danger"><span class="reg-stat-num">${removed}</span><span class="reg-stat-label">Removed</span></div>`;
-}
-
-/** Applies the current search text + active filter chip to the already-
- * rendered cards, purely client-side (no re-fetch), so typing/filtering
- * feels instant. */
-function applyRegFilters() {
-  const term = (document.getElementById("reg-search-input")?.value || "").trim().toLowerCase();
-  const activeChip = document.querySelector("#reg-filter-chips .reg-chip.is-active");
-  const filter = activeChip ? activeChip.dataset.filter : "all";
-  let visibleCount = 0;
-
-  regList.querySelectorAll(".reg-card").forEach(card => {
-    const matchesSearch = !term || card.dataset.search.includes(term);
-    let matchesFilter = true;
-    if (filter === "verified") matchesFilter = card.dataset.verified === "true";
-    else if (filter === "unverified") matchesFilter = card.dataset.verified === "false";
-    else if (filter === "restricted") matchesFilter = card.dataset.restricted === "true";
-    else if (filter === "removed") matchesFilter = card.dataset.removed === "true";
-
-    const show = matchesSearch && matchesFilter;
-    card.classList.toggle("hidden", !show);
-    if (show) visibleCount++;
-  });
-
-  const emptyEl = document.getElementById("reg-empty-state");
-  if (emptyEl) emptyEl.classList.toggle("hidden", visibleCount !== 0);
-}
-
-document.getElementById("reg-search-input")?.addEventListener("input", applyRegFilters);
-document.getElementById("reg-filter-chips")?.addEventListener("click", (e) => {
-  const chip = e.target.closest(".reg-chip");
-  if (!chip) return;
-  document.querySelectorAll("#reg-filter-chips .reg-chip").forEach(c => c.classList.remove("is-active"));
-  chip.classList.add("is-active");
-  applyRegFilters();
-});
-
 async function loadRegistrations() {
   regList.innerHTML = `<p style="color:var(--moss-600);">Loading…</p>`;
   try {
     const q = query(collection(db, "registrations"), orderBy("submittedAt", "desc"));
     const snap = await getDocs(q);
 
-    if (snap.empty) {
-      document.getElementById("reg-stats").innerHTML = "";
-      regList.innerHTML = `<p style="color:var(--moss-600);">No registrations yet.</p>`;
-      return;
-    }
-
-    renderRegStats(snap.docs.map(d => d.data()));
+    if (snap.empty) { regList.innerHTML = `<p style="color:var(--moss-600);">No registrations yet.</p>`; return; }
 
     regList.innerHTML = "";
     snap.forEach(d => {
       const item = d.data();
       registrationsCache[d.id] = item;
-      const isVerified = !!item.idVerified;
-      const isRestricted = !!item.accountRestrictedUntil;
-      const isRemoved = !!item.removed;
-      const searchBlob = [item.fullName, item.email, item.studentIdNumber].filter(Boolean).join(" ").toLowerCase();
-
-      const card = document.createElement("div");
-      card.className = "reg-card" + (isRestricted ? " is-restricted" : "") + (isRemoved ? " is-removed" : "");
-      card.dataset.verified = String(isVerified);
-      card.dataset.restricted = String(isRestricted);
-      card.dataset.removed = String(isRemoved);
-      card.dataset.search = esc(searchBlob);
-      card.innerHTML = `
-        <div class="reg-card-left">
-          <img class="reg-avatar" src="${esc(item.avatarUrl) || (item.gender === 'female' ? 'assets/avatar-female.svg' : 'assets/avatar-male.svg')}" alt="">
-          ${item.studentIdUrl
-            ? `<a class="reg-idthumb-link" href="${esc(item.studentIdUrl)}" target="_blank" rel="noopener"><img class="reg-idthumb" src="${esc(item.studentIdUrl)}" alt="Student ID"></a>`
-            : `<div class="reg-idthumb-missing">No ID photo</div>`}
-          <div class="reg-info">
-            <span class="reg-name">${esc(item.fullName)}</span>
-            <span class="reg-gender">${esc(item.gender) || "—"}</span>
-            <div class="reg-meta-row">
-              <span>✉️ ${esc(item.email) || "—"}</span>
-              ${item.studentIdNumber ? `<span>🆔 ${esc(item.studentIdNumber)}</span>` : ""}
-            </div>
+      const row = document.createElement("div");
+      row.className = "resource-row";
+      row.innerHTML = `
+        <div style="display:flex;gap:.8rem;align-items:flex-start;">
+          <img src="${esc(item.avatarUrl) || (item.gender === 'female' ? 'assets/avatar-female.svg' : 'assets/avatar-male.svg')}" alt="" style="width:48px;height:48px;object-fit:cover;border-radius:50%;flex-shrink:0;">
+          ${item.studentIdUrl ? `<a href="${esc(item.studentIdUrl)}" target="_blank" rel="noopener"><img src="${esc(item.studentIdUrl)}" alt="ID" style="width:60px;height:60px;object-fit:cover;border-radius:6px;flex-shrink:0;"></a>` : `<div style="width:60px;height:60px;background:var(--paper-100);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:.7rem;color:var(--moss-600);flex-shrink:0;">No ID photo</div>`}
+          <div>
+            <strong>${esc(item.fullName)}</strong>
+            <div style="font-size:.8rem;color:var(--moss-600);">${esc(item.gender) || "—"}</div>
+            <div style="font-size:.78rem;color:var(--moss-600);margin-top:.2rem;">✉️ ${esc(item.email) || "—"}</div>
+            ${item.studentIdNumber ? `<div style="font-size:.78rem;color:var(--moss-600);">ID #: ${esc(item.studentIdNumber)}</div>` : ""}
           </div>
         </div>
-        <div class="reg-card-right">
-          <div class="reg-badges">
-            <span class="reg-badge reg-badge--success">✅ OTP Verified · Auto-approved</span>
-            ${isVerified
-              ? `<span class="reg-badge reg-badge--verified">🟢 ID Verified</span>`
-              : `<span class="reg-badge reg-badge--pending">🕓 ID Not Verified</span>`}
-            ${isRestricted ? `<span class="reg-badge reg-badge--danger account-restriction-badge">⛔ Restricted until ${esc(fmtAdminDate(item.accountRestrictedUntil))}</span>` : ""}
-            ${isRemoved ? `<span class="reg-badge reg-badge--removed user-removed-badge">🚫 Removed${item.removedAt ? ` · ${esc(fmtAdminDate(item.removedAt))}` : ""}</span>` : ""}
-          </div>
-          <div class="reg-actions">
-            <button type="button" class="reg-btn edit-btn" data-schema="registrations" data-id="${esc(d.id)}">✏️ Edit</button>
-            ${isVerified
-              ? `<button type="button" class="reg-btn unverify-id-btn" data-id="${esc(d.id)}">↩️ Unverify</button>`
-              : `<button type="button" class="reg-btn reg-btn--solid-success verify-id-btn" data-id="${esc(d.id)}">🟢 Mark Verified</button>`}
-            ${isRestricted
-              ? `<button type="button" class="reg-btn reg-btn--outline-success unrestrict-btn" data-id="${esc(d.id)}">✅ Lift Restriction</button>`
-              : `<button type="button" class="reg-btn reg-btn--outline-danger restrict-week-btn" data-id="${esc(d.id)}">⛔ Restrict 7d</button>
-                 <button type="button" class="reg-btn reg-btn--outline-danger restrict-custom-btn" data-id="${esc(d.id)}">⛔ Custom…</button>`}
-            ${isRemoved
-              ? `<button type="button" class="reg-btn reg-btn--solid-success restore-user-btn" data-id="${esc(d.id)}" data-name="${esc(item.fullName || "")}">↩️ Restore User</button>
-                 <button type="button" class="reg-btn reg-btn--outline-danger erase-user-btn" data-id="${esc(d.id)}" data-email="${esc(item.email || "")}" data-name="${esc(item.fullName || "")}">🗑️ Erase Permanently</button>`
-              : `<button type="button" class="reg-btn reg-btn--solid-danger remove-user-btn" data-id="${esc(d.id)}" data-email="${esc(item.email || "")}" data-name="${esc(item.fullName || "")}">🗑️ Remove User</button>`}
+        <div style="display:flex;flex-direction:column;gap:.4rem;align-items:flex-end;">
+          <span style="display:inline-flex;align-items:center;gap:.35rem;padding:.35rem .65rem;border-radius:999px;background:rgba(63,91,61,.10);color:var(--moss-700);font-size:.78rem;font-weight:600;">✅ OTP Verified · Auto-approved</span>
+          ${item.idVerified
+            ? `<span style="display:inline-flex;align-items:center;gap:.35rem;padding:.35rem .65rem;border-radius:999px;background:linear-gradient(135deg,rgba(107,155,94,.22),rgba(63,91,61,.18));color:var(--leaf-500);font-size:.78rem;font-weight:700;">🟢 ID Verified</span>`
+            : `<span style="display:inline-flex;align-items:center;gap:.35rem;padding:.35rem .65rem;border-radius:999px;background:rgba(214,171,74,.15);color:var(--wheat-400);font-size:.78rem;font-weight:600;">🕓 ID Not Verified</span>`}
+          ${item.accountRestrictedUntil ? `<span class="account-restriction-badge" style="display:inline-flex;align-items:center;gap:.35rem;padding:.35rem .65rem;border-radius:999px;background:rgba(196,90,63,.12);color:var(--terracotta-500);font-size:.78rem;font-weight:600;">⛔ Restricted until ${esc(fmtAdminDate(item.accountRestrictedUntil))}</span>` : ""}
+          ${item.removed ? `<span class="user-removed-badge" style="display:inline-flex;align-items:center;gap:.35rem;padding:.35rem .65rem;border-radius:999px;background:rgba(196,90,63,.14);color:var(--terracotta-500);font-size:.78rem;font-weight:700;">🚫 Removed${item.removedAt ? ` · ${esc(fmtAdminDate(item.removedAt))}` : ""}</span>` : ""}
+          <div style="display:flex;gap:.4rem;flex-wrap:wrap;justify-content:flex-end;">
+            <button type="button" class="edit-btn" data-schema="registrations" data-id="${esc(d.id)}" style="background:none;border:1px solid var(--line);padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">✏️ Edit</button>
+            ${item.idVerified
+              ? `<button type="button" class="unverify-id-btn" data-id="${esc(d.id)}" style="background:none;border:1px solid var(--line);color:var(--moss-600);padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">↩️ Unverify</button>`
+              : `<button type="button" class="verify-id-btn" data-id="${esc(d.id)}" style="background:var(--leaf-500);border:none;color:#fff;padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">🟢 Mark Verified</button>`}
+            ${item.accountRestrictedUntil
+              ? `<button type="button" class="unrestrict-btn" data-id="${esc(d.id)}" style="background:none;border:1px solid var(--leaf-500);color:var(--leaf-500);padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">✅ Lift Restriction</button>`
+              : `<button type="button" class="restrict-week-btn" data-id="${esc(d.id)}" style="background:none;border:1px solid var(--terracotta-500);color:var(--terracotta-500);padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">⛔ Restrict 7d</button>
+                 <button type="button" class="restrict-custom-btn" data-id="${esc(d.id)}" style="background:none;border:1px solid var(--terracotta-500);color:var(--terracotta-500);padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">⛔ Custom…</button>`}
+            ${item.removed
+              ? `<button type="button" class="restore-user-btn" data-id="${esc(d.id)}" data-name="${esc(item.fullName || "")}" style="background:var(--leaf-500);border:none;color:#fff;padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;font-weight:600;">↩️ Restore User</button>
+                 <button type="button" class="erase-user-btn" data-id="${esc(d.id)}" data-email="${esc(item.email || "")}" data-name="${esc(item.fullName || "")}" style="background:none;border:1px solid var(--terracotta-500);color:var(--terracotta-500);padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.72rem;">🗑️ Erase Permanently</button>`
+              : `<button type="button" class="remove-user-btn" data-id="${esc(d.id)}" data-email="${esc(item.email || "")}" data-name="${esc(item.fullName || "")}" style="background:var(--terracotta-500);border:none;color:#fff;padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;font-weight:600;">🗑️ Remove User</button>`}
           </div>
         </div>`;
-      regList.appendChild(card);
+      regList.appendChild(row);
     });
-
-    const emptyEl = document.createElement("p");
-    emptyEl.id = "reg-empty-state";
-    emptyEl.className = "reg-empty-state hidden";
-    emptyEl.textContent = "No students match your search/filter.";
-    regList.appendChild(emptyEl);
-
-    applyRegFilters();
 
     regList.querySelectorAll(".remove-user-btn").forEach(btn => {
       btn.addEventListener("click", async () => {
@@ -1293,155 +1354,6 @@ async function loadMessages() {
 }
 
 // ============================================
-// NOTIFY USER — send a custom message to one student's Profile inbox
-// ============================================
-const notifyStudentSearch = document.getElementById("notify-student-search");
-const notifyStudentResults = document.getElementById("notify-student-results");
-const notifySelectedStudent = document.getElementById("notify-selected-student");
-const notifySelectedName = document.getElementById("notify-selected-name");
-const notifySelectedMeta = document.getElementById("notify-selected-meta");
-const notifySelectedClear = document.getElementById("notify-selected-clear");
-const notifyMessageTextarea = document.getElementById("notify-message-textarea");
-const notifySendBtn = document.getElementById("notify-send-btn");
-const notifySendStatus = document.getElementById("notify-send-status");
-
-let notifySelectedRegId = null;
-
-function clearNotifySelection() {
-  notifySelectedRegId = null;
-  notifySelectedStudent.classList.add("hidden");
-  notifyStudentSearch.value = "";
-  notifyStudentSearch.disabled = false;
-  notifyStudentResults.classList.add("hidden");
-  notifyStudentResults.innerHTML = "";
-}
-
-function selectNotifyStudent(regId, item) {
-  notifySelectedRegId = regId;
-  notifySelectedName.textContent = item.fullName || item.email || "Unnamed student";
-  notifySelectedMeta.textContent = ` · ${item.email || ""}${item.studentIdNumber ? " · ID# " + item.studentIdNumber : ""}`;
-  notifySelectedStudent.classList.remove("hidden");
-  notifyStudentSearch.disabled = true;
-  notifyStudentResults.classList.add("hidden");
-  notifyStudentResults.innerHTML = "";
-}
-
-notifySelectedClear?.addEventListener("click", clearNotifySelection);
-
-notifyStudentSearch?.addEventListener("input", () => {
-  const term = notifyStudentSearch.value.trim().toLowerCase();
-  if (!term) { notifyStudentResults.classList.add("hidden"); notifyStudentResults.innerHTML = ""; return; }
-
-  const matches = Object.entries(registrationsCache).filter(([, item]) => {
-    return (item.fullName || "").toLowerCase().includes(term) ||
-           (item.email || "").toLowerCase().includes(term) ||
-           (item.studentIdNumber || "").toLowerCase().includes(term);
-  }).slice(0, 8);
-
-  if (matches.length === 0) {
-    notifyStudentResults.innerHTML = `<div style="padding:.7rem .9rem;font-size:.82rem;color:var(--moss-600);">No matching students.</div>`;
-    notifyStudentResults.classList.remove("hidden");
-    return;
-  }
-
-  notifyStudentResults.innerHTML = matches.map(([id, item]) => `
-    <button type="button" class="notify-result-row" data-id="${esc(id)}"
-      style="display:block;width:100%;text-align:left;padding:.6rem .9rem;border:none;border-bottom:1px solid var(--line);background:#fff;cursor:pointer;font-size:.85rem;">
-      <strong>${esc(item.fullName) || "Unnamed"}</strong>
-      <div style="font-size:.78rem;color:var(--moss-600);">${esc(item.email) || "—"}${item.studentIdNumber ? " · ID# " + esc(item.studentIdNumber) : ""}</div>
-    </button>`).join("");
-  notifyStudentResults.classList.remove("hidden");
-
-  notifyStudentResults.querySelectorAll(".notify-result-row").forEach(btn => {
-    btn.addEventListener("click", () => selectNotifyStudent(btn.dataset.id, registrationsCache[btn.dataset.id]));
-  });
-});
-
-notifySendBtn?.addEventListener("click", async () => {
-  notifySendStatus.textContent = "";
-  notifySendStatus.style.color = "";
-
-  if (!notifySelectedRegId) {
-    notifySendStatus.textContent = "Pick a student first.";
-    notifySendStatus.style.color = "var(--terracotta-500)";
-    return;
-  }
-  const message = notifyMessageTextarea.value.trim();
-  if (!message) {
-    notifySendStatus.textContent = "Write a message first.";
-    notifySendStatus.style.color = "var(--terracotta-500)";
-    return;
-  }
-
-  const item = registrationsCache[notifySelectedRegId] || {};
-  notifySendBtn.disabled = true;
-  notifySendBtn.textContent = "Sending…";
-  try {
-    const { sendNotificationToStudent } = await import("./notifications.js");
-    await sendNotificationToStudent({
-      targetRegId: notifySelectedRegId,
-      targetName: item.fullName || item.email || "",
-      targetStudentIdNumber: item.studentIdNumber || "",
-      message
-    });
-    notifyMessageTextarea.value = "";
-    clearNotifySelection();
-    notifySendStatus.textContent = "✅ Sent — it'll show up in their Profile inbox.";
-    notifySendStatus.style.color = "var(--leaf-500)";
-    loadNotificationHistory();
-  } catch (err) {
-    console.error("[AgriAdmin] failed to send notification:", err);
-    notifySendStatus.textContent = "Something went wrong sending that. Please try again.";
-    notifySendStatus.style.color = "var(--terracotta-500)";
-  } finally {
-    notifySendBtn.disabled = false;
-    notifySendBtn.textContent = "🔔 Send Message";
-  }
-});
-
-// Runs every time the "Notify User" tab is opened. Registrations are
-// loaded (and cached) here if they haven't been already, so the search
-// box has data even if the admin never visited the Registrations tab.
-async function loadNotifyTab() {
-  if (Object.keys(registrationsCache).length === 0) {
-    await loadRegistrations();
-  }
-  await loadNotificationHistory();
-}
-
-async function loadNotificationHistory() {
-  notificationsList.innerHTML = `<p style="color:var(--moss-600);">Loading…</p>`;
-  try {
-    const { fetchNotificationHistory } = await import("./notifications.js");
-    const items = await fetchNotificationHistory(100);
-    if (items.length === 0) {
-      notificationsList.innerHTML = `<p style="color:var(--moss-600);">No messages sent yet.</p>`;
-      return;
-    }
-    notificationsList.innerHTML = "";
-    items.forEach(item => {
-      const row = document.createElement("div");
-      row.className = "resource-row";
-      row.innerHTML = `
-        <div>
-          <strong>${esc(item.targetName) || "Unnamed student"}</strong>
-          ${item.targetStudentIdNumber ? `<span style="font-size:.78rem;color:var(--moss-600);"> · ID# ${esc(item.targetStudentIdNumber)}</span>` : ""}
-          <div style="font-size:.85rem;color:var(--moss-700);margin-top:.3rem;max-width:480px;white-space:pre-wrap;">${esc(item.message)}</div>
-          <div style="font-size:.75rem;color:var(--moss-600);margin-top:.3rem;">${esc(fmtAdminDate(item.sentAt))}</div>
-        </div>
-        <div>
-          ${item.read
-            ? `<span style="display:inline-flex;align-items:center;gap:.35rem;padding:.35rem .65rem;border-radius:999px;background:rgba(63,91,61,.10);color:var(--moss-700);font-size:.78rem;font-weight:600;">✅ Read</span>`
-            : `<span style="display:inline-flex;align-items:center;gap:.35rem;padding:.35rem .65rem;border-radius:999px;background:rgba(214,171,74,.15);color:var(--wheat-400);font-size:.78rem;font-weight:600;">🕓 Unread</span>`}
-        </div>`;
-      notificationsList.appendChild(row);
-    });
-  } catch (err) {
-    showLoadError(notificationsList, "notifications", err);
-  }
-}
-
-// ============================================
 // CLASSROOM CODES ("Send Us Classroom Code" submissions, resources.html)
 // ============================================
 async function loadClassroomCodes() {
@@ -1535,82 +1447,6 @@ async function loadClassroomCodes() {
     });
   } catch (err) {
     showLoadError(classroomCodesList, "classroom codes", err);
-  }
-}
-
-// ============================================
-// COFFEE (bKash) UNLOCKS ("Buy Me a Coffee", slides-notes.html gate)
-// ============================================
-async function loadCoffeeUnlocks() {
-  if (!coffeeUnlocksList) return;
-  coffeeUnlocksList.innerHTML = `<p style="color:var(--moss-600);">Loading…</p>`;
-  try {
-    const q = query(collection(db, "coffeeUnlocks"), orderBy("submittedAt", "desc"));
-    const snap = await getDocs(q);
-
-    if (snap.empty) { coffeeUnlocksList.innerHTML = `<p style="color:var(--moss-600);">No coffee (bKash) payments submitted yet.</p>`; return; }
-
-    coffeeUnlocksList.innerHTML = "";
-    snap.forEach(d => {
-      const item = d.data();
-      const isApproved = item.status === "approved";
-      const statusLabel = isApproved ? "Approved & Unlocked" : "New";
-      const statusStyle = isApproved
-        ? "background:#E4F2E7;color:var(--leaf-600,#2D4A35);"
-        : "background:#FDF3D9;color:#8A6A1A;";
-      const row = document.createElement("div");
-      row.className = "resource-row";
-      row.innerHTML = `
-        <div>
-          <span style="display:inline-block;font-family:monospace;font-size:1.05rem;font-weight:700;background:var(--leaf-50,#eef5ee);border:1px solid var(--line);border-radius:6px;padding:.2rem .6rem;">${esc(item.bkashNumber)}</span>
-          <span style="margin-left:.5rem;font-family:monospace;font-size:.85rem;color:var(--moss-700);">TXN: ${esc(item.transactionId)}</span>
-          <span style="margin-left:.5rem;font-size:.75rem;font-weight:700;padding:.15rem .5rem;border-radius:999px;${statusStyle}">${statusLabel}</span>
-          <div style="font-size:.85rem;color:var(--moss-700);margin-top:.35rem;">
-            ${item.fromName ? esc(item.fromName) : "Anonymous"}${item.fromEmail ? ` — ${esc(item.fromEmail)}` : ""}
-            ${item.targetFileId
-              ? `<div style="font-size:.78rem;color:var(--moss-500,#7a8f7d);margin-top:.15rem;">Unlocking one specific file</div>`
-              : `<div style="font-size:.78rem;color:var(--moss-500,#7a8f7d);margin-top:.15rem;">⚠️ No specific file — unlocks every file for this student</div>`}
-          </div>
-        </div>
-        <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
-          ${isApproved ? "" : `<button type="button" class="confirm-coffee-unlock-btn" data-id="${d.id}" style="background:var(--leaf-500);color:#fff;border:none;padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">✅ Confirm &amp; Unlock</button>`}
-          <button type="button" class="btn-danger delete-coffee-unlock-btn" data-id="${d.id}" style="padding:.35rem .7rem;font-size:.78rem;">🗑 Delete</button>
-        </div>`;
-      coffeeUnlocksList.appendChild(row);
-    });
-
-    // Confirming is what actually unlocks the target file for the
-    // student — see js/access.js, which only grants a coffee (bKash)
-    // submission access once status is "approved". Check the bKash
-    // number + transaction id against your own bKash account before
-    // confirming.
-    coffeeUnlocksList.querySelectorAll(".confirm-coffee-unlock-btn").forEach(btn => {
-      btn.addEventListener("click", async () => {
-        btn.disabled = true;
-        try {
-          await updateDoc(doc(db, "coffeeUnlocks", btn.dataset.id), { status: "approved", approvedAt: serverTimestamp() });
-          loadCoffeeUnlocks();
-        } catch (err) {
-          console.error("[AgriAdmin] Failed to confirm coffee unlock:", err);
-          btn.disabled = false;
-        }
-      });
-    });
-    coffeeUnlocksList.querySelectorAll(".delete-coffee-unlock-btn").forEach(btn => {
-      btn.addEventListener("click", async () => {
-        if (!confirm("Delete this coffee (bKash) submission?")) return;
-        btn.disabled = true;
-        try {
-          await deleteDoc(doc(db, "coffeeUnlocks", btn.dataset.id));
-          loadCoffeeUnlocks();
-        } catch (err) {
-          console.error("[AgriAdmin] Failed to delete coffee unlock:", err);
-          btn.disabled = false;
-        }
-      });
-    });
-  } catch (err) {
-    showLoadError(coffeeUnlocksList, "coffee (bKash) unlocks", err);
   }
 }
 
@@ -1716,7 +1552,6 @@ document.querySelectorAll(".danger-delete-btn").forEach(btn => {
       if (collectionName === "timeline") loadTimeline();
       if (collectionName === "messages") loadMessages();
       if (collectionName === "classroomCodes") loadClassroomCodes();
-      if (collectionName === "coffeeUnlocks") loadCoffeeUnlocks();
       if (collectionName === "blogPosts") loadBlogPosts();
     } catch (err) {
       console.error("[AgriAdmin] bulk delete failed:", err);

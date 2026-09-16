@@ -2459,30 +2459,29 @@ body.viewer-layout {
 .atl-status.is-expired{ background:rgba(214,171,74,.15); color:var(--wheat-400); }
 
 /* ============================================
-   ADMIN PAGE — Login Screen (premium glass card)
+   ADMIN PAGE — Login Screen
    ============================================ */
 .admin-login-screen{
   min-height:100vh;
-  min-height:100dvh;
   display:flex;
   align-items:center;
   justify-content:center;
   padding:1.5rem;
   background:
-    radial-gradient(circle at 15% 15%, rgba(107,155,94,.30), transparent 45%),
-    radial-gradient(circle at 85% 85%, rgba(212,162,76,.24), transparent 50%),
+    radial-gradient(circle at 15% 15%, rgba(107,155,94,.28), transparent 45%),
+    radial-gradient(circle at 85% 85%, rgba(212,162,76,.22), transparent 50%),
     linear-gradient(160deg, var(--moss-900), var(--moss-700) 60%, var(--moss-600));
 }
 .admin-login-card{
   width:100%;
-  max-width:400px;
-  background:rgba(255,255,255,.94);
-  backdrop-filter:blur(20px) saturate(180%);
-  -webkit-backdrop-filter:blur(20px) saturate(180%);
+  max-width:380px;
+  background:rgba(255,255,255,.92);
+  backdrop-filter:blur(18px) saturate(180%);
+  -webkit-backdrop-filter:blur(18px) saturate(180%);
   border:1px solid rgba(255,255,255,.6);
-  border-radius:24px;
-  padding:2.4rem 2.1rem 2.1rem;
-  box-shadow:0 34px 70px rgba(15,25,17,.38), 0 6px 18px rgba(15,25,17,.2);
+  border-radius:20px;
+  padding:2.2rem 2rem 2rem;
+  box-shadow:0 30px 64px rgba(15,25,17,.35), 0 4px 16px rgba(15,25,17,.18);
   position:relative;
   overflow:hidden;
   animation:modalBoxIn .35s cubic-bezier(.22,1,.36,1);
@@ -2498,14 +2497,14 @@ body.viewer-layout {
   font-size:.85rem;
   letter-spacing:.02em;
   color:var(--moss-600);
-  margin-bottom:1.4rem;
+  margin-bottom:1.3rem;
   display:flex;
   align-items:center;
   gap:.4rem;
 }
 .admin-login-title{
   font-family:var(--font-display);
-  font-size:1.65rem;
+  font-size:1.6rem;
   font-weight:600;
   color:var(--moss-900);
   margin:0 0 .35rem;
@@ -2533,7 +2532,7 @@ body.viewer-layout {
   transition:color .15s ease;
 }
 .admin-link-btn:hover{ color:var(--moss-700); text-decoration:underline; }
-.admin-login-submit{ width:100%; border-radius:12px !important; padding:.85rem 1rem !important; font-size:1rem !important; }
+.admin-login-submit{ width:100%; }
 .admin-form-msg{
   margin-top:1rem;
   text-align:center;
@@ -2542,7 +2541,7 @@ body.viewer-layout {
   color:var(--leaf-500);
   background:rgba(107,155,94,.1);
   border:1px solid rgba(107,155,94,.3);
-  border-radius:10px;
+  border-radius:8px;
   padding:.6rem .8rem;
 }
 .admin-form-msg.is-error{
@@ -2551,86 +2550,67 @@ body.viewer-layout {
   border-color:rgba(181,101,29,.3);
 }
 
-@media (max-width:420px){
-  .admin-login-card{ padding:2rem 1.4rem 1.7rem; border-radius:20px; }
-  .admin-login-title{ font-size:1.4rem; }
-}
-
 /* ============================================
-   ADMIN PAGE — Shell (sidebar + main), premium redesign
-   ============================================
-   Desktop: a tall gradient sidebar with pill nav items, mirroring the
-   moss/leaf/terracotta language used on the student profile page.
-   Mobile (<=900px): the sidebar collapses into a sticky, scrollable
-   segmented pill bar — the same "app tab strip" pattern as the
-   profile page's tabs — so admins get a touch-friendly, thumb-width
-   nav instead of a cramped desktop sidebar squeezed into a phone. */
+   ADMIN PAGE — Shell (sidebar + main)
+   ============================================ */
 .admin-shell{
   display:flex;
   min-height:100vh;
-  min-height:100dvh;
   background:var(--paper-50);
 }
 .admin-sidebar{
-  width:240px;
+  width:230px;
   flex-shrink:0;
-  background:
-    radial-gradient(circle at 15% 0%, rgba(214,171,74,.18), transparent 50%),
-    linear-gradient(180deg, var(--moss-900), var(--moss-700));
+  background:linear-gradient(180deg, var(--moss-900), var(--moss-700));
   color:#fff;
   display:flex;
   flex-direction:column;
-  padding:1.5rem 1.1rem;
+  padding:1.4rem 1rem;
   position:sticky;
   top:0;
   height:100vh;
-  height:100dvh;
-  box-shadow:4px 0 24px rgba(31,46,34,.12);
-  z-index:20;
 }
 .admin-sidebar-top{
   display:flex;
   align-items:center;
   justify-content:space-between;
   gap:.5rem;
-  margin-bottom:1.8rem;
+  margin-bottom:1.6rem;
   padding:0 .3rem;
 }
 .admin-sidebar-brand{
   display:flex;
   align-items:center;
-  gap:.45rem;
+  gap:.4rem;
   color:#fff;
   text-decoration:none;
   font-family:var(--font-display);
   font-weight:600;
-  font-size:1.05rem;
+  font-size:1.02rem;
 }
 .admin-sidebar-brand em{ font-style:normal; color:var(--wheat-400); }
 .admin-badge{
   font-family:var(--font-mono);
-  font-size:.66rem;
+  font-size:.68rem;
   font-weight:700;
-  letter-spacing:.05em;
-  background:linear-gradient(135deg, rgba(214,171,74,.35), rgba(107,155,94,.3));
-  border:1px solid rgba(255,255,255,.28);
-  color:#fff;
-  padding:.22rem .55rem;
+  letter-spacing:.04em;
+  background:rgba(255,255,255,.14);
+  border:1px solid rgba(255,255,255,.22);
+  padding:.2rem .5rem;
   border-radius:999px;
   text-transform:uppercase;
-  box-shadow:0 2px 6px rgba(0,0,0,.2);
 }
 .admin-nav{
   display:flex;
   flex-direction:column;
-  gap:.35rem;
+  gap:.3rem;
   flex:1;
   overflow-y:auto;
 }
 .admin-nav-item{
   display:flex;
   align-items:center;
-  gap:.75rem;
+  gap:.7rem;
   width:100%;
   text-align:left;
   background:none;
@@ -2640,37 +2620,27 @@ body.viewer-layout {
   font-weight:600;
   font-size:.9rem;
   padding:.65rem .8rem;
-  border-radius:12px;
+  border-radius:10px;
   cursor:pointer;
-  transition:background .16s ease, color .16s ease, transform .1s ease;
+  transition:background .15s ease, color .15s ease;
 }
-.admin-nav-item:active{ transform:scale(.98); }
-.admin-nav-icon{
-  font-size:.95rem; line-height:1; flex-shrink:0;
-  width:28px; height:28px; border-radius:9px;
-  background:rgba(255,255,255,.08);
-  display:flex; align-items:center; justify-content:center;
-  transition:background .16s ease;
-}
+.admin-nav-icon{ font-size:1rem; line-height:1; }
 .admin-nav-item:hover{ background:rgba(255,255,255,.08); color:#fff; }
-.admin-nav-item:hover .admin-nav-icon{ background:rgba(255,255,255,.14); }
 .admin-nav-item.is-active{
-  background:linear-gradient(135deg, rgba(255,255,255,.18), rgba(255,255,255,.08));
+  background:rgba(255,255,255,.16);
   color:#fff;
-  box-shadow:inset 3px 0 0 var(--leaf-400), 0 4px 12px rgba(0,0,0,.15);
+  box-shadow:inset 3px 0 0 var(--leaf-400);
 }
-.admin-nav-item.is-active .admin-nav-icon{ background:var(--leaf-500); }
 .admin-nav-item--danger{ color:rgba(224,150,110,.85); }
 .admin-nav-item--danger:hover{ background:rgba(181,101,29,.18); color:#F3C9A9; }
 .admin-nav-item--danger.is-active{
   background:rgba(181,101,29,.22);
   color:#F3C9A9;
-  box-shadow:inset 3px 0 0 var(--terracotta-400), 0 4px 12px rgba(0,0,0,.15);
+  box-shadow:inset 3px 0 0 var(--terracotta-400);
 }
-.admin-nav-item--danger.is-active .admin-nav-icon{ background:var(--terracotta-500); }
 .admin-sidebar-bottom{
   border-top:1px solid rgba(255,255,255,.14);
-  padding-top:1.1rem;
+  padding-top:1rem;
   margin-top:1rem;
   display:flex;
   flex-direction:column;
@@ -2686,15 +2656,14 @@ body.viewer-layout {
   background:rgba(181,101,29,.85);
   color:#fff;
   border:none;
-  padding:.65rem .8rem;
-  border-radius:12px;
+  padding:.6rem .8rem;
+  border-radius:10px;
   font-weight:600;
   font-size:.85rem;
   cursor:pointer;
   transition:background .15s ease, transform .15s ease;
 }
 .admin-logout-btn:hover{ background:var(--terracotta-500); transform:translateY(-1px); }
-.admin-logout-btn:active{ transform:scale(.96); }
 
 .admin-main{
   flex:1;
@@ -2703,18 +2672,15 @@ body.viewer-layout {
   flex-direction:column;
 }
 .admin-topbar{
-  background:rgba(255,255,255,.85);
-  backdrop-filter:blur(10px) saturate(160%);
-  -webkit-backdrop-filter:blur(10px) saturate(160%);
+  background:#fff;
   border-bottom:1px solid var(--line);
   padding:1.1rem 1.8rem;
   position:sticky;
   top:0;
-  z-index:15;
+  z-index:5;
   display:flex;
   align-items:center;
   gap:1rem;
-  box-shadow:0 4px 16px rgba(31,46,34,.04);
 }
 @keyframes adminNotifyIn{
   from{ opacity:0; transform:translateY(-6px); }
@@ -2728,16 +2694,16 @@ body.viewer-layout {
   margin:0;
 }
 .admin-content{
-  padding:1.7rem 1.8rem 3rem;
+  padding:1.6rem 1.8rem 3rem;
   max-width:1000px;
   width:100%;
 }
 .admin-panel-card{
   background:#fff;
   border:1px solid var(--line);
-  border-radius:18px;
-  padding:1.5rem 1.6rem 1.7rem;
-  box-shadow:0 10px 28px rgba(31,46,34,.06);
+  border-radius:14px;
+  padding:1.4rem 1.5rem 1.6rem;
+  box-shadow:0 2px 10px rgba(31,46,34,.04);
 }
 .admin-panel-heading{
   font-size:1.05rem;
@@ -2748,379 +2714,36 @@ body.viewer-layout {
   border-bottom:1px solid var(--line);
 }
 
-/* ---------- Tablet / phone (<=900px) ----------
-   Sidebar becomes a sticky, horizontally-scrollable pill strip — same
-   visual language as the segmented tabs on the student profile page. */
 @media (max-width:900px){
   .admin-shell{ flex-direction:column; }
   .admin-sidebar{
     width:100%;
     height:auto;
-    position:sticky;
-    top:0;
-    z-index:30;
+    position:static;
     flex-direction:row;
     align-items:center;
-    padding:.7rem .9rem;
-    gap:.7rem;
-    box-shadow:0 4px 16px rgba(31,46,34,.18);
+    padding:.8rem 1rem;
+    gap:.8rem;
   }
-  .admin-sidebar-top{ margin-bottom:0; flex-shrink:0; }
-  .admin-sidebar-brand span{ display:none; }
+  .admin-sidebar-top{ margin-bottom:0; }
   .admin-nav{
     flex-direction:row;
     flex-wrap:nowrap;
     overflow-x:auto;
-    -webkit-overflow-scrolling:touch;
-    scrollbar-width:none;
     flex:1;
-    gap:.3rem;
-    padding:.15rem;
-    background:rgba(0,0,0,.14);
-    border-radius:999px;
   }
-  .admin-nav::-webkit-scrollbar{ display:none; }
-  .admin-nav-item{
-    white-space:nowrap;
-    flex:0 0 auto;
-    border-radius:999px;
-    padding:.5rem .7rem;
-  }
-  .admin-nav-item .admin-nav-icon{ width:24px; height:24px; background:none; }
-  .admin-nav-item.is-active{ box-shadow:none; }
-  .admin-nav-item.is-active .admin-nav-icon{ background:rgba(255,255,255,.16); }
-  .admin-nav-item--danger.is-active{ box-shadow:none; }
+  .admin-nav-item{ white-space:nowrap; }
   .admin-nav-item span:not(.admin-nav-icon){ display:none; }
   .admin-sidebar-bottom{
     border-top:none;
-    border-left:1px solid rgba(255,255,255,.18);
+    border-left:1px solid rgba(255,255,255,.14);
     padding-top:0;
-    padding-left:.8rem;
+    padding-left:1rem;
     margin-top:0;
     flex-direction:row;
     align-items:center;
-    flex-shrink:0;
   }
   .admin-user-chip{ display:none; }
-  .admin-logout-btn{ padding:.5rem .65rem; font-size:1.05rem; }
-  .admin-content{ padding:1.2rem 1rem calc(2.5rem + env(safe-area-inset-bottom)); }
-  /* The pill nav strip above is already sticky at top:0 — stacking a
-     second sticky bar under it without offsetting "top" would make
-     them overlap once the page scrolls past the nav strip's height.
-     Simplest fix on mobile: let the topbar scroll normally. */
-  .admin-topbar{ position:static; padding:.9rem 1.1rem; }
-  .admin-topbar h1{ font-size:1.15rem; }
-  .admin-panel-card{ padding:1.2rem 1.1rem 1.4rem; border-radius:16px; }
+  .admin-content{ padding:1.2rem 1rem 2.5rem; }
+  .admin-topbar{ padding:1rem 1.2rem; }
 }
-
-@media (max-width:480px){
-  .admin-sidebar-brand{ font-size:.95rem; }
-  .admin-badge{ display:none; }
-  #admin-notify-bell{ font-size:.72rem !important; padding:.4rem .6rem !important; }
-  .admin-topbar h1{ font-size:1.05rem; }
-}
-
-/* ============================================
-   ADMIN — REGISTRATIONS (student directory) redesign
-   ============================================ */
-.admin-panel-sub{
-  font-size:.85rem;
-  color:var(--moss-600);
-  margin:-.7rem 0 1.3rem;
-}
-
-/* ---------- Stat strip ---------- */
-.reg-stats{
-  display:grid;
-  grid-template-columns:repeat(5, 1fr);
-  gap:.7rem;
-  margin-bottom:1.2rem;
-}
-.reg-stat{
-  background:var(--paper-100);
-  border:1px solid var(--line);
-  border-radius:12px;
-  padding:.7rem .8rem;
-  text-align:center;
-}
-.reg-stat-num{
-  display:block;
-  font-family:var(--font-display);
-  font-size:1.35rem;
-  font-weight:700;
-  color:var(--moss-900);
-  line-height:1.1;
-}
-.reg-stat-label{
-  display:block;
-  font-size:.68rem;
-  font-weight:600;
-  letter-spacing:.02em;
-  text-transform:uppercase;
-  color:var(--moss-600);
-  margin-top:.25rem;
-}
-.reg-stat.is-warning .reg-stat-num{ color:var(--wheat-400); }
-.reg-stat.is-danger .reg-stat-num{ color:var(--terracotta-500); }
-.reg-stat.is-success .reg-stat-num{ color:var(--leaf-500); }
-
-/* ---------- Toolbar: search + filter chips ---------- */
-.reg-toolbar{
-  display:flex;
-  flex-direction:column;
-  gap:.8rem;
-  margin-bottom:1.4rem;
-}
-.reg-search-wrap{
-  position:relative;
-}
-.reg-search-input{
-  width:100%;
-  padding:.65rem .9rem .65rem 2.3rem;
-  border:1px solid var(--line);
-  border-radius:10px;
-  font-family:var(--font-body);
-  font-size:.88rem;
-  background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%233C5C44' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E") no-repeat .8rem center;
-  background-size:15px;
-  transition:border-color .15s ease, box-shadow .15s ease;
-}
-.reg-search-input:focus{
-  outline:none;
-  border-color:var(--leaf-500);
-  box-shadow:0 0 0 3px rgba(107,155,94,.15);
-}
-.reg-filter-chips{
-  display:flex;
-  flex-wrap:wrap;
-  gap:.5rem;
-}
-.reg-chip{
-  background:#fff;
-  border:1px solid var(--line);
-  color:var(--moss-700);
-  font-size:.78rem;
-  font-weight:600;
-  padding:.4rem .85rem;
-  border-radius:999px;
-  cursor:pointer;
-  transition:all .15s ease;
-  white-space:nowrap;
-}
-.reg-chip:hover{ border-color:var(--leaf-500); color:var(--moss-900); }
-.reg-chip.is-active{
-  background:var(--moss-700);
-  border-color:var(--moss-700);
-  color:#fff;
-}
-.reg-empty-state{
-  text-align:center;
-  padding:2.2rem 1rem;
-  color:var(--moss-600);
-  font-size:.9rem;
-  border:1px dashed var(--line);
-  border-radius:12px;
-  background:var(--paper-100);
-}
-
-/* ---------- Registration card ---------- */
-.reg-card{
-  display:flex;
-  justify-content:space-between;
-  align-items:flex-start;
-  gap:1.2rem;
-  flex-wrap:wrap;
-  background:#fff;
-  border:1px solid var(--line);
-  border-radius:14px;
-  padding:1.1rem 1.2rem;
-  margin-bottom:.9rem;
-  transition:box-shadow .18s ease, border-color .18s ease;
-}
-.reg-card:hover{
-  box-shadow:0 10px 24px rgba(31,46,34,.07);
-  border-color:#cfc6ac;
-}
-.reg-card.is-removed{ background:rgba(196,90,63,.04); }
-.reg-card.is-restricted{ border-left:3px solid var(--terracotta-500); }
-
-.reg-card-left{
-  display:flex;
-  gap:.9rem;
-  align-items:flex-start;
-  min-width:0;
-}
-.reg-avatar{
-  width:50px; height:50px;
-  border-radius:50%;
-  object-fit:cover;
-  flex-shrink:0;
-  border:2px solid var(--paper-100);
-  box-shadow:0 0 0 1px var(--line);
-}
-.reg-idthumb-link{ flex-shrink:0; }
-.reg-idthumb{
-  width:58px; height:58px;
-  object-fit:cover;
-  border-radius:8px;
-  border:1px solid var(--line);
-  display:block;
-}
-.reg-idthumb-missing{
-  width:58px; height:58px;
-  background:var(--paper-100);
-  border:1px dashed var(--line);
-  border-radius:8px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  text-align:center;
-  font-size:.62rem;
-  color:var(--moss-600);
-  flex-shrink:0;
-  padding:.2rem;
-  line-height:1.2;
-}
-.reg-info{ min-width:0; }
-.reg-name{
-  font-family:var(--font-display);
-  font-weight:600;
-  font-size:1rem;
-  color:var(--moss-900);
-  display:block;
-}
-.reg-gender{
-  font-size:.78rem;
-  color:var(--moss-600);
-}
-.reg-meta-row{
-  font-size:.78rem;
-  color:var(--moss-600);
-  margin-top:.25rem;
-  display:flex;
-  flex-wrap:wrap;
-  gap:.15rem .7rem;
-}
-.reg-meta-row span{ white-space:nowrap; }
-
-.reg-card-right{
-  display:flex;
-  flex-direction:column;
-  gap:.55rem;
-  align-items:flex-end;
-  margin-left:auto;
-}
-.reg-badges{
-  display:flex;
-  flex-wrap:wrap;
-  gap:.35rem;
-  justify-content:flex-end;
-}
-.reg-badge{
-  display:inline-flex;
-  align-items:center;
-  gap:.3rem;
-  padding:.32rem .65rem;
-  border-radius:999px;
-  font-size:.74rem;
-  font-weight:600;
-  white-space:nowrap;
-}
-.reg-badge--success{ background:rgba(107,155,94,.14); color:var(--moss-700); }
-.reg-badge--verified{ background:linear-gradient(135deg,rgba(107,155,94,.22),rgba(63,91,61,.18)); color:var(--leaf-500); font-weight:700; }
-.reg-badge--pending{ background:rgba(212,162,76,.16); color:#8a6a1f; }
-.reg-badge--danger{ background:rgba(196,90,63,.13); color:var(--terracotta-500); }
-.reg-badge--removed{ background:rgba(196,90,63,.16); color:var(--terracotta-500); font-weight:700; }
-
-.reg-actions{
-  display:flex;
-  gap:.4rem;
-  flex-wrap:wrap;
-  justify-content:flex-end;
-}
-.reg-btn{
-  font-family:var(--font-body);
-  font-size:.76rem;
-  font-weight:600;
-  padding:.4rem .75rem;
-  border-radius:7px;
-  cursor:pointer;
-  transition:all .15s ease;
-  border:1px solid var(--line);
-  background:#fff;
-  color:var(--moss-700);
-  line-height:1.2;
-}
-.reg-btn:hover{ border-color:var(--moss-600); background:var(--paper-100); }
-.reg-btn:disabled{ opacity:.6; cursor:not-allowed; }
-.reg-btn--solid-success{ background:var(--leaf-500); border-color:var(--leaf-500); color:#fff; }
-.reg-btn--solid-success:hover{ background:var(--moss-700); border-color:var(--moss-700); }
-.reg-btn--outline-danger{ background:none; border-color:var(--terracotta-500); color:var(--terracotta-500); }
-.reg-btn--outline-danger:hover{ background:rgba(196,90,63,.08); }
-.reg-btn--outline-success{ background:none; border-color:var(--leaf-500); color:var(--leaf-500); }
-.reg-btn--outline-success:hover{ background:rgba(107,155,94,.08); }
-.reg-btn--solid-danger{ background:var(--terracotta-500); border-color:var(--terracotta-500); color:#fff; font-weight:600; }
-.reg-btn--solid-danger:hover{ background:#9a5119; border-color:#9a5119; }
-
-@media (max-width:640px){
-  .reg-stats{ grid-template-columns:repeat(2,1fr); }
-  .reg-card{ flex-direction:column; }
-  .reg-card-right{ align-items:flex-start; margin-left:0; width:100%; }
-  .reg-badges, .reg-actions{ justify-content:flex-start; }
-}
-
-/* ============================================
-   PASSWORD SETUP MODAL (shown on Profile page for
-   accounts without a password yet)
-   ============================================ */
-.pw-modal-title{
-  display:flex;
-  align-items:center;
-  gap:.5rem;
-  font-size:1.2rem;
-}
-.pw-modal-desc{
-  color:var(--moss-600);
-  font-size:.88rem;
-  line-height:1.55;
-  margin-bottom:1.2rem;
-}
-.pw-modal-field label{
-  display:block;
-  font-weight:600;
-  margin-bottom:.3rem;
-  font-size:.86rem;
-  color:var(--moss-900);
-}
-.pw-modal-field input{
-  width:100%;
-  padding:.7rem .85rem;
-  border:1px solid var(--line);
-  border-radius:9px;
-  font-family:var(--font-body);
-  font-size:.92rem;
-  margin-bottom:1rem;
-  background:#fff;
-}
-.pw-modal-field input:focus{
-  outline:none;
-  border-color:var(--leaf-500);
-  box-shadow:0 0 0 3px rgba(107,155,94,.15);
-}
-.pw-modal-actions{
-  display:flex;
-  gap:.7rem;
-  align-items:center;
-  margin-top:.3rem;
-}
-.pw-modal-skip{
-  background:none;
-  border:none;
-  color:var(--moss-600);
-  font-size:.86rem;
-  font-weight:600;
-  cursor:pointer;
-  padding:.75rem .5rem;
-}
-.pw-modal-skip:hover{ color:var(--terracotta-500); }
-#pw-modal-status{ margin-top:.8rem; font-size:.86rem; min-height:1.2em; }

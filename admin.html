@@ -72,15 +72,13 @@
     </div>
 
     <nav class="admin-nav">
+      <button id="tab-approvals" class="admin-nav-item" data-label="Approvals"><span class="admin-nav-icon">✅</span><span>Approvals</span></button>
       <button id="tab-resources" class="admin-nav-item" data-label="Resources"><span class="admin-nav-icon">📚</span><span>Resources</span></button>
       <button id="tab-blog" class="admin-nav-item" data-label="Blog"><span class="admin-nav-icon">✍️</span><span>Blog</span></button>
       <button id="tab-terms" class="admin-nav-item" data-label="Terms"><span class="admin-nav-icon">📖</span><span>Terms</span></button>
       <button id="tab-timeline" class="admin-nav-item" data-label="Timeline"><span class="admin-nav-icon">📅</span><span>Timeline</span></button>
-      <button id="tab-registrations" class="admin-nav-item" data-label="Registrations"><span class="admin-nav-icon">📝</span><span>Registrations</span></button>
       <button id="tab-messages" class="admin-nav-item" data-label="Messages"><span class="admin-nav-icon">💬</span><span>Messages</span></button>
-      <button id="tab-notify" class="admin-nav-item" data-label="Notify User"><span class="admin-nav-icon">🔔</span><span>Notify User</span></button>
       <button id="tab-classroom-codes" class="admin-nav-item" data-label="Classroom Codes"><span class="admin-nav-icon">🔑</span><span>Classroom Codes</span></button>
-      <button id="tab-coffee-unlocks" class="admin-nav-item" data-label="Coffee (bKash)"><span class="admin-nav-icon">☕</span><span>Coffee (bKash)</span></button>
       <button id="tab-ad-unlocks" class="admin-nav-item" data-label="Ad Unlocks"><span class="admin-nav-icon">🎬</span><span>Ad Unlocks</span></button>
       <button id="tab-danger" class="admin-nav-item admin-nav-item--danger" data-label="Danger Zone"><span class="admin-nav-icon">⚠️</span><span>Danger Zone</span></button>
     </nav>
@@ -99,7 +97,24 @@
 
     <div class="admin-content">
 
-      <div id="resources-panel" class="admin-panel-card">
+      <div id="approvals-panel" class="admin-panel-card">
+        <h2 class="admin-panel-heading">✅ Unified Approvals — Registrations, Resources & Blog Posts</h2>
+        <p style="font-size:.82rem;color:var(--moss-600);margin-top:-.8rem;margin-bottom:1.2rem;">
+          All new submissions in one place. Update status and content will vanish from this list once processed (approved, rejected, or archived).
+        </p>
+        <div class="form-field" style="margin-bottom:1.2rem;">
+          <label for="approval-filter">Filter by Type:</label>
+          <select id="approval-filter" style="padding:.5rem .7rem;border:1px solid var(--line);border-radius:6px;">
+            <option value="">All Types</option>
+            <option value="registration">New Registrations</option>
+            <option value="resource">New Resources</option>
+            <option value="blog">New Blog Posts</option>
+          </select>
+        </div>
+        <div id="admin-approvals-list"></div>
+      </div>
+
+      <div id="resources-panel" class="admin-panel-card hidden">
         <h2 class="admin-panel-heading">Resources — Pending / Approved / Rejected</h2>
         <div id="admin-resource-list"></div>
       </div>
@@ -173,23 +188,6 @@
 
       <div id="registrations-panel" class="admin-panel-card hidden">
         <h2 class="admin-panel-heading">Student Registrations — Verify ID</h2>
-        <p class="admin-panel-sub">Review each student's ID photo, verify their identity, and manage account access.</p>
-
-        <div id="reg-stats" class="reg-stats"></div>
-
-        <div class="reg-toolbar">
-          <div class="reg-search-wrap">
-            <input type="text" id="reg-search-input" class="reg-search-input" placeholder="Search by name, email, or Student ID…" autocomplete="off">
-          </div>
-          <div id="reg-filter-chips" class="reg-filter-chips">
-            <button type="button" class="reg-chip is-active" data-filter="all">All</button>
-            <button type="button" class="reg-chip" data-filter="unverified">🕓 ID Not Verified</button>
-            <button type="button" class="reg-chip" data-filter="verified">🟢 ID Verified</button>
-            <button type="button" class="reg-chip" data-filter="restricted">⛔ Restricted</button>
-            <button type="button" class="reg-chip" data-filter="removed">🚫 Removed</button>
-          </div>
-        </div>
-
         <div id="admin-registrations-list"></div>
       </div>
 
@@ -198,49 +196,9 @@
         <div id="admin-messages-list"></div>
       </div>
 
-      <div id="notify-panel" class="admin-panel-card hidden">
-        <h2 class="admin-panel-heading">Send a Message to a Student</h2>
-        <p style="font-size:.82rem;color:var(--moss-600);margin-top:-.8rem;margin-bottom:1.2rem;">
-          Sends a custom message straight to that student's Profile page inbox — they'll see it as a new notification next time they open their profile.
-        </p>
-
-        <div class="uc-panel" style="max-width:560px;margin-bottom:1.8rem;">
-          <label style="display:block;font-size:.8rem;font-weight:600;margin-bottom:.3rem;">Find student — by name, email, or Student ID</label>
-          <input type="text" id="notify-student-search" placeholder="Start typing to search…" autocomplete="off"
-            style="width:100%;padding:.6rem .8rem;border:1px solid var(--line);border-radius:8px;font-family:var(--font-body);font-size:.9rem;">
-          <div id="notify-student-results" class="hidden" style="margin-top:.5rem;border:1px solid var(--line);border-radius:8px;max-height:220px;overflow-y:auto;background:#fff;"></div>
-
-          <div id="notify-selected-student" class="hidden" style="margin-top:1rem;padding:.7rem .9rem;border:1px solid var(--line);border-radius:8px;background:var(--paper-100);display:flex;justify-content:space-between;align-items:center;gap:.6rem;">
-            <div style="font-size:.85rem;">
-              To: <strong id="notify-selected-name"></strong>
-              <span id="notify-selected-meta" style="color:var(--moss-600);"></span>
-            </div>
-            <button type="button" id="notify-selected-clear" style="background:none;border:none;color:var(--terracotta-500);cursor:pointer;font-size:.8rem;">✕ Change</button>
-          </div>
-
-          <label for="notify-message-textarea" style="display:block;font-size:.8rem;font-weight:600;margin:1rem 0 .3rem;">Message (no length limit)</label>
-          <textarea id="notify-message-textarea" rows="6" placeholder="Type your message to this student…"
-            style="width:100%;padding:.7rem .9rem;border:1px solid var(--line);border-radius:8px;font-family:var(--font-body);font-size:.9rem;resize:vertical;"></textarea>
-
-          <div style="margin-top:1rem;display:flex;align-items:center;gap:.8rem;">
-            <button type="button" id="notify-send-btn" class="btn-primary">🔔 Send Message</button>
-            <span id="notify-send-status" style="font-size:.85rem;"></span>
-          </div>
-        </div>
-
-        <h3 style="font-size:.95rem;margin-bottom:.7rem;">Recently Sent</h3>
-        <div id="admin-notifications-list"></div>
-      </div>
-
       <div id="classroom-codes-panel" class="admin-panel-card hidden">
         <h2 class="admin-panel-heading">Classroom Codes — Submitted by Students</h2>
         <div id="admin-classroom-codes-list"></div>
-      </div>
-
-      <div id="coffee-unlocks-panel" class="admin-panel-card hidden">
-        <h2 class="admin-panel-heading">Coffee (bKash) — Submitted by Students</h2>
-        <p style="color:var(--moss-600);font-size:.85rem;margin-top:-.5rem;margin-bottom:1rem;">Check the bKash number + transaction id against your bKash account, then confirm to unlock the student's target file for 6h.</p>
-        <div id="admin-coffee-unlocks-list"></div>
       </div>
 
       <div id="ad-unlocks-panel" class="admin-panel-card hidden">
@@ -267,7 +225,6 @@
             <button class="btn-danger danger-delete-btn" data-collection="timeline" data-label="Timeline Events">🗑 Delete ALL Timeline Events</button>
             <button class="btn-danger danger-delete-btn" data-collection="messages" data-label="Messages">🗑 Delete ALL Messages</button>
             <button class="btn-danger danger-delete-btn" data-collection="classroomCodes" data-label="Classroom Codes">🗑 Delete ALL Classroom Codes</button>
-            <button class="btn-danger danger-delete-btn" data-collection="coffeeUnlocks" data-label="Coffee (bKash) Unlocks">🗑 Delete ALL Coffee (bKash) Unlocks</button>
           </div>
           <p id="danger-result" class="hidden" style="font-weight:700;font-size:.9rem;"></p>
         </div>

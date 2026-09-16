@@ -29,276 +29,110 @@
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Work+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 <style>
-  /* ============================================
-     PROFILE — premium, mobile-app-first redesign
-     ============================================ */
-  :root{
-    --pf-radius-lg:22px;
-    --pf-radius-md:16px;
-    --pf-radius-sm:12px;
-    --pf-shadow-card:0 10px 30px rgba(31,46,34,.08);
-    --pf-shadow-soft:0 3px 12px rgba(31,46,34,.06);
-    --pf-shadow-pop:0 14px 34px rgba(31,46,34,.14);
-  }
-
-  .section-page{ padding-bottom:calc(2.5rem + env(safe-area-inset-bottom)); }
-
-  /* ---------- Hero header ----------
-     Two distinct rounded cards, cleanly separated by a gap — NOT fused
-     together. (An earlier version tried to butt them flush with a
-     flat-bottom/round-top pairing; because the header renders even
-     before the profile card exists in the DOM — during the loading
-     state — any radius mismatch between the two showed up as a broken
-     "notch" seam where they met. A real gap sidesteps that entirely
-     and reads as two intentional cards, which is the safer and more
-     robust pattern here.) */
-  .profile-page-head{
-    padding:1.5rem 1.4rem;
-    margin-bottom:1.1rem;
-    border-radius:26px;
-    position:relative; overflow:hidden; isolation:isolate;
-    box-shadow:var(--pf-shadow-pop);
-    background:
-      radial-gradient(circle at 12% 10%, rgba(214,171,74,.32), transparent 55%),
-      radial-gradient(circle at 90% 90%, rgba(107,155,94,.40), transparent 55%),
-      linear-gradient(150deg, var(--moss-900), var(--moss-700));
-  }
-  .profile-page-head .crumb{ color:rgba(255,255,255,.65); margin-bottom:.4rem; font-size:.8rem; }
-  .profile-page-head .crumb a{ color:rgba(255,255,255,.9); }
-  .profile-page-head h1{ color:#fff; margin:0; font-size:1.4rem; }
-
-  .profile-hero{
-    border-radius:26px;
-    overflow:hidden;
-    box-shadow:var(--pf-shadow-pop);
-    margin-bottom:1.4rem;
-    background:#fff;
-  }
   .profile-card{
-    display:flex; gap:1.1rem; align-items:center; padding:1.6rem 1.4rem 1.5rem;
+    display:flex; gap:1.2rem; align-items:center; padding:1.6rem;
+    border:1px solid var(--line); border-radius:20px; margin-bottom:1.6rem;
     background:
-      radial-gradient(circle at 12% 10%, rgba(214,171,74,.32), transparent 55%),
-      radial-gradient(circle at 90% 20%, rgba(107,155,94,.40), transparent 55%),
-      linear-gradient(150deg, var(--moss-900), var(--moss-700));
-    position:relative;
+      radial-gradient(circle at 100% 0%, rgba(214,171,74,.12), transparent 55%),
+      radial-gradient(circle at 0% 100%, rgba(107,155,94,.14), transparent 55%),
+      #fff;
+    box-shadow:0 10px 30px rgba(31,46,34,.07);
+    position:relative; overflow:hidden;
   }
-  .profile-avatar-wrap{ position:relative; flex-shrink:0; width:84px; height:84px; }
+  .profile-avatar-wrap{ position:relative; flex-shrink:0; width:80px; height:80px; }
   .profile-avatar{
-    width:84px; height:84px; border-radius:50%; object-fit:cover; flex-shrink:0; display:block;
-    border:3px solid rgba(255,255,255,.9); box-shadow:0 6px 18px rgba(0,0,0,.28);
+    width:80px; height:80px; border-radius:50%; object-fit:cover; flex-shrink:0; display:block;
+    border:3px solid #fff; box-shadow:0 4px 16px rgba(31,46,34,.18);
   }
   .profile-avatar-wrap.is-id-verified .profile-avatar{
-    border-color:var(--leaf-400);
-    box-shadow:0 0 0 3px rgba(136,179,121,.35), 0 6px 18px rgba(0,0,0,.28);
+    border-color:var(--leaf-500);
+    box-shadow:0 0 0 3px rgba(107,155,94,.25), 0 4px 16px rgba(31,46,34,.18);
   }
   .profile-avatar-edit-btn{
     position:absolute; bottom:-2px; right:-2px;
-    width:30px; height:30px; border-radius:50%;
+    width:28px; height:28px; border-radius:50%;
     background:var(--leaf-500); color:#fff; border:2px solid #fff;
     display:flex; align-items:center; justify-content:center;
-    font-size:.82rem; cursor:pointer;
-    box-shadow:0 3px 8px rgba(0,0,0,.3);
-    transition:background .16s ease, transform .12s ease;
+    font-size:.8rem; cursor:pointer;
+    box-shadow:0 2px 6px rgba(31,46,34,.25);
+    transition:background .16s ease, transform .16s ease;
   }
   .profile-avatar-edit-btn:hover{ background:var(--moss-700); transform:scale(1.06); }
-  .profile-avatar-edit-btn:active{ transform:scale(.94); }
   .profile-avatar-edit-btn:disabled{ opacity:.6; cursor:wait; transform:none; }
   .profile-avatar-wrap.is-uploading .profile-avatar{ opacity:.5; }
-  .profile-avatar-status{ font-size:.72rem; color:rgba(255,255,255,.75); margin-top:.3rem; min-height:1em; }
-  .profile-avatar-status.is-error{ color:#ffb199; }
+  .profile-avatar-status{ font-size:.72rem; color:var(--moss-600); margin-top:.3rem; min-height:1em; }
+  .profile-avatar-status.is-error{ color:var(--terracotta-500); }
   .profile-name-row{ display:flex; align-items:center; gap:.4rem; flex-wrap:wrap; }
-  .profile-name-row span:first-child{ color:#fff; }
-  #profile-email{ color:rgba(255,255,255,.72) !important; }
-  #profile-studentid{ color:#fff; }
   .profile-id-verified-badge{
     display:inline-flex; align-items:center; gap:.3rem;
-    font-size:.7rem; font-weight:700;
+    font-size:.72rem; font-weight:700;
     padding:.2rem .55rem; border-radius:999px;
-    background:rgba(255,255,255,.16);
-    color:#eaf5e6;
-    backdrop-filter:blur(4px);
+    background:linear-gradient(135deg, rgba(107,155,94,.22), rgba(63,91,61,.16));
+    color:var(--leaf-500);
+    box-shadow:0 1px 3px rgba(107,155,94,.25) inset;
   }
   .profile-status-pill{
-    display:inline-block; font-size:.72rem; font-weight:700; padding:.25rem .6rem;
-    border-radius:999px; margin-top:.4rem;
+    display:inline-block; font-size:.75rem; font-weight:700; padding:.25rem .6rem;
+    border-radius:999px; margin-top:.35rem;
   }
-  .profile-status-pill.verified{ background:rgba(136,179,121,.22); color:#c8e8bc; }
-  .profile-status-pill.unverified{ background:rgba(214,171,74,.24); color:#ffe6ab; }
-  .profile-status-pill.rejected{ background:rgba(196,90,63,.24); color:#ffc4b0; }
-
-  /* Quick-glance chip strip — horizontally scrollable, app-style snapshot
-     row so the essentials are visible without scrolling the page. */
-  .profile-quickstats{
-    display:flex; gap:.6rem; padding:.9rem 1.1rem 1.2rem;
-    overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none;
-    background:#fff; margin-top:-1px;
-  }
-  .profile-quickstats::-webkit-scrollbar{ display:none; }
-  .qs-chip{
-    flex:0 0 auto; min-width:104px; padding:.65rem .9rem; border-radius:16px;
-    background:var(--paper-100); border:1px solid var(--line); text-align:center;
-  }
-  .qs-chip .qs-num{ font-family:var(--font-mono); font-weight:700; font-size:1.15rem; color:var(--moss-700); }
-  .qs-chip .qs-label{ font-size:.68rem; color:var(--moss-600); margin-top:.1rem; }
-
-  /* ---------- Segmented tab bar ---------- */
-  .profile-tabs{
-    display:flex; gap:.4rem; padding:.35rem;
-    background:var(--paper-100); border:1px solid var(--line); border-radius:999px;
-    margin-bottom:1.4rem;
-    overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none;
-  }
-  .profile-tabs::-webkit-scrollbar{ display:none; }
-  .profile-tab{
-    flex:0 0 auto; display:inline-flex; align-items:center; gap:.35rem;
-    padding:.55rem .95rem; border-radius:999px; border:none; background:transparent;
-    font-family:var(--font-body); font-weight:600; font-size:.85rem; color:var(--moss-600);
-    cursor:pointer; white-space:nowrap; transition:background .16s ease, color .16s ease, transform .1s ease;
-  }
-  .profile-tab:active{ transform:scale(.96); }
-  .profile-tab.is-active{
-    background:linear-gradient(135deg, var(--moss-700), var(--moss-900));
-    color:#fff; box-shadow:0 4px 12px rgba(31,46,34,.25);
-  }
-  .profile-tab-panel{ display:none; animation:pfFadeIn .22s ease; }
-  .profile-tab-panel.is-active{ display:block; }
-  @keyframes pfFadeIn{ from{ opacity:0; transform:translateY(4px); } to{ opacity:1; transform:none; } }
-
-  .profile-section{ margin-top:2rem; }
-  .profile-section:first-child{ margin-top:0; }
-  .profile-section-head{
-    display:flex; align-items:center; justify-content:space-between; gap:.6rem;
-    margin-bottom:.9rem;
-  }
-  .profile-section-head h2{ font-size:1rem; margin:0; display:flex; align-items:center; gap:.4rem; }
-
-  /* ---------- Contribution stat cards ---------- */
+  .profile-status-pill.verified{ background:rgba(107,155,94,.15); color:var(--leaf-500); }
+  .profile-status-pill.unverified{ background:rgba(214,171,74,.18); color:var(--wheat-400); }
+  .profile-status-pill.rejected{ background:rgba(196,90,63,.15); color:var(--terracotta-500); }
   .credit-stats{
-    display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:.7rem; margin-bottom:.4rem;
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:.8rem; margin-bottom:1.8rem;
   }
   .credit-stat{
-    text-align:center; padding:1.1rem .6rem; border:1px solid var(--line); border-radius:var(--pf-radius-md);
-    background:#fff; box-shadow:var(--pf-shadow-soft); transition:transform .16s ease, box-shadow .16s ease;
+    text-align:center; padding:1.1rem .6rem; border:1px solid var(--line); border-radius:14px;
+    background:#fff; box-shadow:0 3px 10px rgba(31,46,34,.05);
   }
-  .credit-stat:active{ transform:scale(.97); }
   .credit-stat .num{ font-family:var(--font-mono); font-size:1.6rem; font-weight:700; color:var(--moss-700); }
-  .credit-stat .label{ font-size:.76rem; color:var(--moss-600); margin-top:.2rem; }
-
-  /* ---------- Uploads / posts rows ---------- */
+  .credit-stat .label{ font-size:.78rem; color:var(--moss-600); margin-top:.2rem; }
   .upload-row{
     display:flex; justify-content:space-between; align-items:center; gap:.8rem;
-    padding:.85rem 1rem; border:1px solid var(--line); border-radius:var(--pf-radius-sm); margin-bottom:.6rem;
-    background:#fff; box-shadow:var(--pf-shadow-soft); transition:transform .12s ease, box-shadow .16s ease;
+    padding:.8rem 1rem; border:1px solid var(--line); border-radius:12px; margin-bottom:.6rem; background:#fff;
   }
-  .upload-row:active{ transform:scale(.985); }
-  .upload-row .status-tag{ font-size:.7rem; font-weight:700; padding:.25rem .6rem; border-radius:999px; white-space:nowrap; }
+  .upload-row .status-tag{ font-size:.72rem; font-weight:700; padding:.2rem .55rem; border-radius:999px; white-space:nowrap; }
   .status-tag.approved{ background:rgba(107,155,94,.15); color:var(--leaf-500); }
   .status-tag.pending{ background:rgba(214,171,74,.18); color:var(--wheat-400); }
   .status-tag.rejected{ background:rgba(196,90,63,.15); color:var(--terracotta-500); }
 
   /* ============================================
-     INBOX — premium message-center redesign
+     LAYOUT REFRESH — page header band, clearer section
+     rhythm, and a responsive profile card that stacks on
+     narrow screens instead of cramping avatar + text.
      ============================================ */
-  .inbox-toolbar{ display:flex; align-items:center; gap:.5rem; }
-  .inbox-unread-badge{
-    display:inline-flex; align-items:center; justify-content:center;
-    min-width:1.15rem; height:1.15rem; padding:0 .35rem; border-radius:999px;
-    background:linear-gradient(135deg, var(--terracotta-400), var(--terracotta-500));
-    color:#fff; font-size:.66rem; font-weight:700;
-    vertical-align:middle; box-shadow:0 2px 5px rgba(181,101,29,.4);
+  .profile-page-head{
+    padding:1.6rem 1.6rem 1.8rem;
+    margin-bottom:1.4rem;
+    border-radius:20px;
+    position:relative; overflow:hidden; isolation:isolate;
+    background:
+      radial-gradient(circle at 12% 15%, rgba(214,171,74,.30), transparent 55%),
+      radial-gradient(circle at 88% 85%, rgba(107,155,94,.38), transparent 55%),
+      linear-gradient(135deg, var(--moss-900), var(--moss-700));
   }
-  .profile-tab .inbox-unread-badge{ margin-left:.15rem; }
+  .profile-page-head .crumb{ color:rgba(255,255,255,.7); margin-bottom:.5rem; }
+  .profile-page-head .crumb a{ color:rgba(255,255,255,.85); }
+  .profile-page-head h1{ color:#fff; margin:0; }
 
-  .inbox-filters{ display:flex; gap:.4rem; margin-bottom:1rem; }
-  .inbox-filter-chip{
-    padding:.4rem .85rem; border-radius:999px; border:1px solid var(--line); background:#fff;
-    font-family:var(--font-body); font-weight:600; font-size:.78rem; color:var(--moss-600); cursor:pointer;
-    transition:background .16s ease, color .16s ease, border-color .16s ease;
-  }
-  .inbox-filter-chip.is-active{
-    background:var(--moss-900); border-color:var(--moss-900); color:#fff;
-  }
-  .inbox-mark-all-btn{
-    background:#fff; border:1px solid var(--line); color:var(--leaf-500); font-weight:700; font-size:.78rem;
-    cursor:pointer; padding:.4rem .8rem; border-radius:999px; display:inline-flex; align-items:center; gap:.3rem;
-    transition:background .16s ease, transform .12s ease;
-  }
-  .inbox-mark-all-btn:hover{ background:rgba(107,155,94,.1); }
-  .inbox-mark-all-btn:active{ transform:scale(.95); }
-  .inbox-mark-all-btn:disabled{ opacity:.6; cursor:wait; }
+  .profile-card{ margin-bottom:1.8rem; }
 
-  .inbox-list-wrap{
-    border-radius:var(--pf-radius-lg); overflow:hidden; border:1px solid var(--line);
-    background:#fff; box-shadow:var(--pf-shadow-card);
+  .profile-section{ margin-top:2.2rem; }
+  .profile-section-head{
+    display:flex; align-items:baseline; justify-content:space-between; gap:.6rem;
+    margin-bottom:.9rem; padding-bottom:.5rem; border-bottom:1px solid var(--line);
   }
-  .inbox-item{
-    display:flex; align-items:flex-start; gap:.8rem;
-    padding:1rem 1.1rem; cursor:pointer; position:relative;
-    background:#fff; border-bottom:1px solid var(--paper-100);
-    transition:background .14s ease;
-  }
-  .inbox-item:last-child{ border-bottom:none; }
-  .inbox-item:hover{ background:var(--paper-50); }
-  .inbox-item:active{ background:var(--paper-100); }
-  .inbox-item.is-unread{ background:linear-gradient(90deg, rgba(196,90,63,.05), transparent 60%); }
-  .inbox-item-icon{
-    flex-shrink:0; width:42px; height:42px; border-radius:50%;
-    display:flex; align-items:center; justify-content:center; font-size:1.05rem;
-    background:linear-gradient(135deg, var(--moss-700), var(--moss-900)); color:#fff;
-    box-shadow:0 3px 8px rgba(31,46,34,.22);
-  }
-  .inbox-item.is-unread .inbox-item-icon{
-    background:linear-gradient(135deg, var(--terracotta-400), var(--terracotta-500));
-    box-shadow:0 3px 10px rgba(181,101,29,.35);
-  }
-  .inbox-item-main{ flex:1; min-width:0; }
-  .inbox-item-head{ display:flex; justify-content:space-between; align-items:center; gap:.6rem; margin-bottom:.2rem; }
-  .inbox-item-sender{ font-size:.86rem; font-weight:700; color:var(--moss-900); }
-  .inbox-item.is-unread .inbox-item-sender{ color:var(--terracotta-500); }
-  .inbox-item-time{ font-size:.7rem; color:var(--moss-600); flex-shrink:0; white-space:nowrap; }
-  .inbox-item-body{
-    font-size:.87rem; line-height:1.45; color:var(--moss-700); white-space:pre-wrap;
-    overflow:hidden; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical;
-  }
-  .inbox-item.is-read .inbox-item-body{ color:var(--moss-600); }
-  .inbox-item-dot{
-    flex-shrink:0; width:9px; height:9px; border-radius:50%; margin-top:.35rem;
-    background:var(--terracotta-500); box-shadow:0 0 0 3px rgba(196,90,63,.15);
-  }
-  .inbox-item.is-read .inbox-item-dot{ visibility:hidden; }
+  .profile-section-head h2{ font-size:1.05rem; margin:0; }
 
-  .inbox-empty-state{
-    display:flex; flex-direction:column; align-items:center; text-align:center;
-    padding:2.6rem 1.5rem; color:var(--moss-600);
-  }
-  .inbox-empty-state .ie-icon{
-    width:56px; height:56px; border-radius:50%; background:var(--paper-100);
-    display:flex; align-items:center; justify-content:center; font-size:1.5rem; margin-bottom:.8rem;
-  }
-  .inbox-empty-state p{ margin:0; font-size:.88rem; max-width:280px; }
-
-  /* ---------- Account panel ---------- */
-  .account-card{
-    border:1px solid var(--line); border-radius:var(--pf-radius-md); background:#fff;
-    box-shadow:var(--pf-shadow-soft); padding:1.3rem;
-  }
-  .danger-card{
-    border:1px solid rgba(196,90,63,.25); border-radius:var(--pf-radius-md);
-    background:rgba(196,90,63,.05); padding:1.2rem; margin-top:1.4rem;
-    display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap;
-  }
-  .danger-card p{ margin:0; font-size:.82rem; color:var(--moss-600); max-width:320px; }
+  .credit-stat{ transition:transform .16s ease, box-shadow .16s ease; }
+  .credit-stat:hover{ transform:translateY(-2px); box-shadow:0 8px 18px rgba(31,46,34,.09); }
+  .upload-row{ transition:box-shadow .16s ease; }
+  .upload-row:hover{ box-shadow:0 4px 14px rgba(31,46,34,.08); }
 
   @media (max-width:560px){
-    .container{ padding-left:.9rem; padding-right:.9rem; }
-    .profile-page-head{ padding:1.2rem 1.1rem; border-radius:20px; margin-bottom:1rem; }
-    .profile-page-head h1{ font-size:1.2rem; }
     .profile-card{ flex-direction:column; text-align:center; padding:1.3rem 1.1rem; }
     .profile-name-row{ justify-content:center; }
-    .profile-hero{ border-radius:20px; }
-    .profile-tabs{ margin-bottom:1.1rem; }
-    .credit-stats{ grid-template-columns:repeat(2,1fr); }
-    .danger-card{ flex-direction:column; align-items:stretch; text-align:center; }
+    .profile-page-head{ padding:1.3rem 1.1rem 1.5rem; border-radius:16px; }
   }
 </style>
 </head>
@@ -317,159 +151,96 @@
     <div id="profile-loading" style="color:var(--moss-600);padding:2rem 0;">Loading your profile…</div>
 
     <div id="profile-content" class="hidden">
-
-      <div class="profile-hero">
-        <div class="profile-card">
-          <div class="profile-avatar-wrap" id="profile-avatar-wrap">
-            <img id="profile-avatar" class="profile-avatar" src="" alt="">
-            <button type="button" class="profile-avatar-edit-btn" id="profile-avatar-edit-btn" title="Change profile photo" aria-label="Change profile photo">📷</button>
-            <input type="file" id="profile-avatar-input" accept="image/*" style="display:none;">
+      <div class="profile-card">
+        <div class="profile-avatar-wrap" id="profile-avatar-wrap">
+          <img id="profile-avatar" class="profile-avatar" src="" alt="">
+          <button type="button" class="profile-avatar-edit-btn" id="profile-avatar-edit-btn" title="Change profile photo" aria-label="Change profile photo">📷</button>
+          <input type="file" id="profile-avatar-input" accept="image/*" style="display:none;">
+        </div>
+        <div>
+          <div class="profile-name-row">
+            <span style="font-weight:700;font-size:1.25rem;" id="profile-name"></span>
+            <span id="profile-id-verified-badge" class="profile-id-verified-badge hidden">🟢 ID Verified</span>
           </div>
+          <div style="font-size:.85rem;color:var(--moss-600);" id="profile-email"></div>
+          <div style="font-size:.85rem;color:var(--moss-600);">Student ID: <strong id="profile-studentid"></strong></div>
+          <span id="profile-status-pill" class="profile-status-pill"></span>
+          <div id="profile-avatar-status" class="profile-avatar-status"></div>
+        </div>
+      </div>
+
+      <div id="profile-status-note" class="uc-panel hidden" style="margin-bottom:1.8rem;"></div>
+      <div id="resource-access-alert" class="uc-panel hidden" style="margin-bottom:1.8rem;border-color:var(--terracotta-500);background:rgba(196,90,63,.07);color:var(--terracotta-500);font-weight:600;"></div>
+
+      <div class="uc-panel" style="margin-bottom:1.8rem;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
           <div>
-            <div class="profile-name-row">
-              <span style="font-weight:700;font-size:1.25rem;" id="profile-name"></span>
-              <span id="profile-id-verified-badge" class="profile-id-verified-badge hidden">🟢 ID Verified</span>
-            </div>
-            <div style="font-size:.85rem;" id="profile-email"></div>
-            <div style="font-size:.85rem;color:rgba(255,255,255,.72);">Student ID: <strong id="profile-studentid"></strong></div>
-            <span id="profile-status-pill" class="profile-status-pill"></span>
-            <div id="profile-avatar-status" class="profile-avatar-status"></div>
+            <span id="access-badge" class="access-badge"></span>
+            <div id="access-detail" style="font-size:.82rem;color:var(--moss-600);margin-top:.3rem;"></div>
           </div>
         </div>
-
-        <!-- Quick-glance snapshot — access status and credits at a tap,
-             no scrolling needed, like a mobile app's profile summary. -->
-        <div class="profile-quickstats">
-          <div class="qs-chip"><div class="qs-num" id="stat-approved-quick">0</div><div class="qs-label">✅ Credits</div></div>
-          <div class="qs-chip"><div class="qs-num" id="stat-pending-quick">0</div><div class="qs-label">⏳ Pending</div></div>
-          <div class="qs-chip"><div class="qs-num" id="stat-total-quick">0</div><div class="qs-label">📁 Submitted</div></div>
-        </div>
-      </div>
-
-      <div id="profile-status-note" class="uc-panel hidden" style="margin-bottom:1.4rem;"></div>
-      <div id="resource-access-alert" class="uc-panel hidden" style="margin-bottom:1.4rem;border-color:var(--terracotta-500);background:rgba(196,90,63,.07);color:var(--terracotta-500);font-weight:600;"></div>
-
-      <!-- Segmented tab bar — mobile-app style navigation between profile areas -->
-      <div class="profile-tabs" role="tablist" id="profile-tabs">
-        <button type="button" class="profile-tab is-active" data-tab="overview" role="tab" aria-selected="true">🏠 Overview</button>
-        <button type="button" class="profile-tab" data-tab="uploads" role="tab" aria-selected="false">📁 Uploads</button>
-        <button type="button" class="profile-tab" data-tab="inbox" role="tab" aria-selected="false">📬 Inbox <span id="inbox-unread-badge" class="inbox-unread-badge hidden">0</span></button>
-        <button type="button" class="profile-tab" data-tab="posts" role="tab" aria-selected="false">📰 Posts</button>
-        <button type="button" class="profile-tab" data-tab="account" role="tab" aria-selected="false">⚙️ Account</button>
-      </div>
-
-      <!-- ===== OVERVIEW ===== -->
-      <div class="profile-tab-panel is-active" data-panel="overview">
-        <div class="uc-panel" style="margin-bottom:1.4rem;">
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
-            <div>
-              <span id="access-badge" class="access-badge"></span>
-              <div id="access-detail" style="font-size:.82rem;color:var(--moss-600);margin-top:.3rem;"></div>
-            </div>
-          </div>
-          <div id="access-scale-wrap" class="access-scale-wrap hidden">
-            <div class="access-scale-track"><div id="access-scale-fill" class="access-scale-fill"></div></div>
-            <div class="access-scale-labels">
-              <span id="access-scale-remaining"></span>
-              <span id="access-scale-until"></span>
-            </div>
-          </div>
-        </div>
-
-        <div id="access-timeline-wrap" class="uc-panel hidden" style="margin-bottom:1.4rem;">
-          <h2 style="font-size:1rem;margin-bottom:.7rem;">⏱ Access Breakdown — where your time comes from</h2>
-          <div id="access-timeline-total" class="access-timeline-total"></div>
-          <div id="access-timeline-list"></div>
-        </div>
-
-        <div class="profile-section" style="margin-top:0;">
-          <div class="profile-section-head"><h2>📊 My Contributions</h2></div>
-          <div class="credit-stats">
-            <div class="credit-stat"><div class="num" id="stat-total">0</div><div class="label">Total Submitted</div></div>
-            <div class="credit-stat"><div class="num" id="stat-approved">0</div><div class="label">✅ Approved (Credits)</div></div>
-            <div class="credit-stat"><div class="num" id="stat-pending">0</div><div class="label">⏳ Pending Review</div></div>
-            <div class="credit-stat"><div class="num" id="stat-rejected">0</div><div class="label">❌ Rejected</div></div>
+        <div id="access-scale-wrap" class="access-scale-wrap hidden">
+          <div class="access-scale-track"><div id="access-scale-fill" class="access-scale-fill"></div></div>
+          <div class="access-scale-labels">
+            <span id="access-scale-remaining"></span>
+            <span id="access-scale-until"></span>
           </div>
         </div>
       </div>
 
-      <!-- ===== UPLOADS ===== -->
-      <div class="profile-tab-panel" data-panel="uploads">
-        <div class="profile-section" style="margin-top:0;">
-          <div class="profile-section-head"><h2>📁 My Uploads</h2></div>
-          <div id="uploads-list"></div>
-          <div id="uploads-empty" class="uc-panel hidden">
-            <p>You haven't uploaded anything yet. Contributions to Resources or the Knowledge Hub will show up here.</p>
-          </div>
+      <div id="access-timeline-wrap" class="uc-panel hidden" style="margin-bottom:1.8rem;">
+        <h2 style="font-size:1rem;margin-bottom:.7rem;">⏱ Access Breakdown — where your time comes from</h2>
+        <div id="access-timeline-total" class="access-timeline-total"></div>
+        <div id="access-timeline-list"></div>
+      </div>
+
+      <div class="profile-section" style="margin-top:0;">
+        <div class="profile-section-head"><h2>📊 My Contributions</h2></div>
+        <div class="credit-stats">
+          <div class="credit-stat"><div class="num" id="stat-total">0</div><div class="label">Total Submitted</div></div>
+          <div class="credit-stat"><div class="num" id="stat-approved">0</div><div class="label">✅ Approved (Credits)</div></div>
+          <div class="credit-stat"><div class="num" id="stat-pending">0</div><div class="label">⏳ Pending Review</div></div>
+          <div class="credit-stat"><div class="num" id="stat-rejected">0</div><div class="label">❌ Rejected</div></div>
         </div>
       </div>
 
-      <!-- ===== INBOX ===== -->
-      <div class="profile-tab-panel" data-panel="inbox">
-        <div class="profile-section" style="margin-top:0;">
-          <div class="profile-section-head">
-            <h2>📬 Inbox</h2>
-            <div class="inbox-toolbar">
-              <button type="button" id="inbox-mark-all-read-btn" class="inbox-mark-all-btn hidden">✓ Mark all read</button>
-            </div>
-          </div>
-          <div class="inbox-filters">
-            <button type="button" class="inbox-filter-chip is-active" data-inbox-filter="all">All</button>
-            <button type="button" class="inbox-filter-chip" data-inbox-filter="unread">Unread</button>
-          </div>
-          <div class="inbox-list-wrap">
-            <div id="inbox-list"></div>
-            <div id="inbox-empty" class="hidden">
-              <div class="inbox-empty-state">
-                <div class="ie-icon">📭</div>
-                <p>No messages yet. Anything the admin sends you will show up here.</p>
-              </div>
-            </div>
-          </div>
+      <div class="profile-section">
+        <div class="profile-section-head"><h2>📁 My Uploads</h2></div>
+        <div id="uploads-list"></div>
+        <div id="uploads-empty" class="uc-panel hidden">
+          <p>You haven't uploaded anything yet. Contributions to Resources or the Knowledge Hub will show up here.</p>
         </div>
       </div>
 
-      <!-- ===== POSTS ===== -->
-      <div class="profile-tab-panel" data-panel="posts">
-        <div class="profile-section" style="margin-top:0;">
-          <div class="profile-section-head"><h2>📰 My Blog Posts</h2></div>
-          <div id="my-posts-list"></div>
-          <div id="my-posts-empty" class="uc-panel hidden">
-            <p>You haven't published any blog posts yet. Head to the <a href="blog.html" style="color:var(--leaf-500);font-weight:600;">Blog</a> to share something.</p>
-          </div>
+      <div class="profile-section">
+        <div class="profile-section-head"><h2>📰 My Blog Posts</h2></div>
+        <div id="my-posts-list"></div>
+        <div id="my-posts-empty" class="uc-panel hidden">
+          <p>You haven't published any blog posts yet. Head to the <a href="blog.html" style="color:var(--leaf-500);font-weight:600;">Blog</a> to share something.</p>
         </div>
       </div>
 
-      <!-- ===== ACCOUNT ===== -->
-      <div class="profile-tab-panel" data-panel="account">
-        <div class="profile-section" style="margin-top:0;">
-          <div class="profile-section-head"><h2>🔑 Login Password</h2></div>
-          <div class="account-card">
-            <div id="password-section-no-password" class="hidden">
-              <p style="color:var(--moss-600);font-size:.9rem;margin-bottom:1rem;">You currently log in with your Student ID and email. Set a password below for faster login — <strong>once you set one, you'll need your Student ID and password to log in</strong> (your email will no longer work for login).</p>
-            </div>
-            <div id="password-section-has-password" class="hidden">
-              <p style="color:var(--moss-600);font-size:.9rem;margin-bottom:1rem;">Change the password you use to log in.</p>
-            </div>
-            <div>
-              <label for="profile-new-password" style="display:block;font-weight:600;margin-bottom:.3rem;font-size:.9rem;">New password (min. 6 characters)</label>
-              <input type="password" id="profile-new-password" autocomplete="new-password" minlength="6"
-                style="width:100%;padding:.7rem .9rem;border:1px solid var(--line);border-radius:10px;font-family:var(--font-body);font-size:.95rem;margin-bottom:.9rem;">
-              <label for="profile-new-password-confirm" style="display:block;font-weight:600;margin-bottom:.3rem;font-size:.9rem;">Confirm new password</label>
-              <input type="password" id="profile-new-password-confirm" autocomplete="new-password" minlength="6"
-                style="width:100%;padding:.7rem .9rem;border:1px solid var(--line);border-radius:10px;font-family:var(--font-body);font-size:.95rem;margin-bottom:1rem;">
-              <button type="button" id="profile-password-submit-btn" style="background:var(--moss-700);color:#fff;border:none;padding:.75rem 1.4rem;border-radius:10px;font-weight:600;font-size:.95rem;cursor:pointer;width:100%;">Save Password</button>
-              <div id="profile-password-status" style="margin-top:.8rem;font-size:.9rem;min-height:1.2em;"></div>
-            </div>
-          </div>
+      <div class="profile-section">
+        <div class="profile-section-head"><h2>🔑 Login Password</h2></div>
+        <div id="password-section-no-password" class="hidden">
+          <p style="color:var(--moss-600);font-size:.9rem;margin-bottom:1rem;">You currently log in with your Student ID and email. Set a password below for faster login — <strong>once you set one, you'll need your Student ID and password to log in</strong> (your email will no longer work for login).</p>
         </div>
-
-        <div class="danger-card">
-          <p><strong style="color:var(--terracotta-500);">Log out</strong> of your Agri Core account on this device.</p>
-          <button type="button" id="profile-logout-btn" style="background:#fff;border:1px solid var(--terracotta-500);color:var(--terracotta-500);padding:.7rem 1.4rem;border-radius:10px;font-weight:700;cursor:pointer;">Log Out</button>
+        <div id="password-section-has-password" class="hidden">
+          <p style="color:var(--moss-600);font-size:.9rem;margin-bottom:1rem;">Change the password you use to log in.</p>
+        </div>
+        <div style="max-width:360px;">
+          <label for="profile-new-password" style="display:block;font-weight:600;margin-bottom:.3rem;font-size:.9rem;">New password (min. 6 characters)</label>
+          <input type="password" id="profile-new-password" autocomplete="new-password" minlength="6"
+            style="width:100%;padding:.7rem .9rem;border:1px solid var(--line);border-radius:8px;font-family:var(--font-body);font-size:.95rem;margin-bottom:.9rem;">
+          <label for="profile-new-password-confirm" style="display:block;font-weight:600;margin-bottom:.3rem;font-size:.9rem;">Confirm new password</label>
+          <input type="password" id="profile-new-password-confirm" autocomplete="new-password" minlength="6"
+            style="width:100%;padding:.7rem .9rem;border:1px solid var(--line);border-radius:8px;font-family:var(--font-body);font-size:.95rem;margin-bottom:1rem;">
+          <button type="button" id="profile-password-submit-btn" style="background:var(--moss-700);color:#fff;border:none;padding:.7rem 1.4rem;border-radius:8px;font-weight:600;font-size:.95rem;cursor:pointer;">Save Password</button>
+          <div id="profile-password-status" style="margin-top:.8rem;font-size:.9rem;min-height:1.2em;"></div>
         </div>
       </div>
 
+      <button type="button" id="profile-logout-btn" style="margin-top:2rem;background:none;border:1px solid var(--line);color:var(--terracotta-500);padding:.7rem 1.4rem;border-radius:8px;font-weight:600;cursor:pointer;">Log Out</button>
     </div>
 
     <div id="profile-logged-out" class="uc-panel hidden">
@@ -480,134 +251,11 @@
   </div>
 </section>
 
-<!-- ============================================
-     PASSWORD SETUP POPUP
-     Shown right after Profile loads whenever this account has no
-     password yet. The student can set one right here by typing
-     normally, or dismiss it (✕ / "Skip for now") and keep browsing
-     the rest of the profile — it'll simply be offered again next
-     time. It can also be set later from the Account tab. The moment
-     a password exists, this popup stops appearing for good.
-     ============================================ -->
-<div id="password-setup-modal" class="modal-overlay hidden">
-  <div class="modal-box" style="max-width:420px;">
-    <button type="button" class="modal-close" id="password-setup-modal-close" title="Skip for now">✕</button>
-    <div class="modal-body">
-      <h3 class="pw-modal-title">🔑 Set up a password</h3>
-      <p class="pw-modal-desc">
-        You're currently logging in with your Student ID and email. Set a password now for faster, more secure logins —
-        <strong>once you set one, you'll need your Student ID and password to log in</strong> (your email will no longer work for login).
-        You can skip this and set it up later from the <strong>Account</strong> tab.
-      </p>
-
-      <div class="pw-modal-field">
-        <label for="pw-modal-new-password">New password (min. 6 characters)</label>
-        <input type="password" id="pw-modal-new-password" autocomplete="new-password" minlength="6" placeholder="Type a new password">
-      </div>
-      <div class="pw-modal-field">
-        <label for="pw-modal-new-password-confirm">Confirm password</label>
-        <input type="password" id="pw-modal-new-password-confirm" autocomplete="new-password" minlength="6" placeholder="Retype the password">
-      </div>
-
-      <div class="pw-modal-actions">
-        <button type="button" id="pw-modal-submit-btn" class="btn-primary" style="flex:1;">Save Password</button>
-        <button type="button" id="pw-modal-skip-btn" class="pw-modal-skip">Skip for now</button>
-      </div>
-      <div id="pw-modal-status"></div>
-    </div>
-  </div>
-</div>
-
 <footer>
   <div class="container">
     <div class="footer-bottom">© Agri Core — All Rights Reserved.</div>
   </div>
 </footer>
-
-<script>
-  // Segmented tab navigation — plain, dependency-free, and independent of
-  // profile.js's async data loading (tabs work as soon as the DOM is
-  // ready; content within each panel fills in once Firestore responds).
-  (function () {
-    function initProfileTabs() {
-      const tabs = document.getElementById("profile-tabs");
-      if (!tabs) return;
-      const buttons = Array.from(tabs.querySelectorAll(".profile-tab"));
-      const panels = Array.from(document.querySelectorAll(".profile-tab-panel"));
-      buttons.forEach(btn => {
-        btn.addEventListener("click", () => {
-          const target = btn.dataset.tab;
-          buttons.forEach(b => {
-            const active = b === btn;
-            b.classList.toggle("is-active", active);
-            b.setAttribute("aria-selected", active ? "true" : "false");
-          });
-          panels.forEach(p => p.classList.toggle("is-active", p.dataset.panel === target));
-          btn.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" });
-        });
-      });
-    }
-
-    // Inbox filter chips (All / Unread) — purely visual filtering on top
-    // of whatever profile.js has already rendered into #inbox-list.
-    function initInboxFilters() {
-      const chips = document.querySelectorAll(".inbox-filter-chip");
-      if (!chips.length) return;
-      chips.forEach(chip => {
-        chip.addEventListener("click", () => {
-          chips.forEach(c => c.classList.toggle("is-active", c === chip));
-          const showUnreadOnly = chip.dataset.inboxFilter === "unread";
-          document.querySelectorAll("#inbox-list .inbox-item").forEach(item => {
-            const isUnread = item.classList.contains("is-unread");
-            item.style.display = (showUnreadOnly && !isUnread) ? "none" : "";
-          });
-        });
-      });
-      // Re-apply the current filter whenever the inbox list is redrawn
-      // (e.g. after a message is marked read via "Mark all read").
-      const listEl = document.getElementById("inbox-list");
-      if (listEl && window.MutationObserver) {
-        const observer = new MutationObserver(() => {
-          const activeChip = document.querySelector(".inbox-filter-chip.is-active");
-          if (activeChip && activeChip.dataset.inboxFilter === "unread") {
-            document.querySelectorAll("#inbox-list .inbox-item").forEach(item => {
-              item.style.display = item.classList.contains("is-unread") ? "" : "none";
-            });
-          }
-        });
-        observer.observe(listEl, { childList: true });
-      }
-    }
-
-    // Mirror the contribution stats into the hero's quick-glance chips
-    // once profile.js populates the underlying #stat-* elements.
-    function initQuickStatsMirror() {
-      const pairs = [["stat-total", "stat-total-quick"], ["stat-approved", "stat-approved-quick"], ["stat-pending", "stat-pending-quick"]];
-      const sourceIds = pairs.map(p => p[0]);
-      const targets = Object.fromEntries(pairs);
-      sourceIds.forEach(id => {
-        const el = document.getElementById(id);
-        if (!el || !window.MutationObserver) return;
-        const mirror = document.getElementById(targets[id]);
-        const sync = () => { if (mirror) mirror.textContent = el.textContent; };
-        sync();
-        new MutationObserver(sync).observe(el, { childList: true, characterData: true, subtree: true });
-      });
-    }
-
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", () => {
-        initProfileTabs();
-        initInboxFilters();
-        initQuickStatsMirror();
-      });
-    } else {
-      initProfileTabs();
-      initInboxFilters();
-      initQuickStatsMirror();
-    }
-  })();
-</script>
 
 <script type="module" src="js/profile.js"></script>
 <script type="module" src="js/session.js"></script>
