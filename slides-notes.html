@@ -63,29 +63,44 @@
             <a href="register.html?return=slides-notes.html%23unlock" id="hn-gate-register-link" class="btn-primary" style="display:block;width:100%;padding:.8rem;text-decoration:none;background:var(--moss-600);">📝 Register Now</a>
           </div>
 
-          <!-- STEP: CHOICE (shown once logged in) -->
-          <div id="hn-gate-step-choice" class="hidden">
-            <div class="unlock-choice-hero">
-              <div class="unlock-choice-icon">🔓</div>
-              <div><span class="unlock-choice-kicker">FILE UNLOCK</span><h2>Unlock this resource</h2><p>Use a credit instantly, or earn more credits using any of the three available methods. You can keep earning credits even when you already have a balance.</p></div>
+          <!-- STEP: UNLOCK MENU (shown once logged in, before the 3-way choice) -->
+          <div id="hn-gate-step-unlock" class="hidden" style="text-align:center;">
+            <div style="font-size:1.7rem;width:3.4rem;height:3.4rem;line-height:3.4rem;margin:0 auto .9rem;border-radius:50%;background:linear-gradient(135deg, var(--moss-900), var(--moss-700));box-shadow:0 10px 22px rgba(31,46,34,.28);">🔓</div>
+            <h2 style="font-size:1.35rem;margin-bottom:.3rem;">Unlock This File</h2>
+            <p style="color:var(--moss-600);font-size:.9rem;margin-bottom:1rem;line-height:1.6;">Use a credit from your wallet to unlock it instantly, or earn a new one.</p>
+
+            <div id="hn-unlock-loading" style="color:var(--moss-600);font-size:.85rem;padding:.4rem 0 1rem;">Checking your credit balance…</div>
+
+            <div id="hn-unlock-remaining-wrap" class="hidden unlock-credit-card">
+              <div class="unlock-credit-ring" id="hn-unlock-remaining-ring"><span id="hn-unlock-remaining-count">0</span><small>credits left</small></div>
+              <div class="unlock-credit-copy"><strong>Unlock Wallet</strong><span>Spend 1 credit to unlock this file right now.</span></div>
             </div>
-            <div class="credit-unlock-card" id="hn-credit-unlock-card">
-              <div><span class="credit-unlock-label">YOUR BALANCE</span><div class="credit-unlock-balance"><strong id="hn-choice-credit-count">0</strong><span>credits remaining</span></div><p id="hn-choice-credit-copy">1 credit unlocks this file for the available access period.</p></div>
-              <button type="button" id="hn-use-credit-btn" class="credit-unlock-btn">⚡ Unlock with remaining credit</button>
-            </div>
-            <div class="earn-credit-divider"><span>OR</span></div>
-            <div class="earn-credit-heading"><div><span class="unlock-choice-kicker">EARN NEW CREDIT</span><h3 id="hn-earn-credit-title">Earn new credit to unlock</h3></div><span class="earn-credit-note">Choose one method</span></div>
-            <div class="unlock-method-grid">
-              <button type="button" id="hn-choose-notes" class="unlock-method-card"><span class="unlock-method-icon">📤</span><span class="unlock-method-title">Unlock with Notes</span><span class="unlock-method-desc">Upload relevant academic material</span></button>
-              <button type="button" id="hn-choose-classroom" class="unlock-method-card"><span class="unlock-method-icon">🏫</span><span class="unlock-method-title">Google Classroom</span><span class="unlock-method-desc">Submit your classroom code for review</span></button>
-              <button type="button" id="hn-choose-coffee" class="unlock-method-card coffee"><span class="unlock-method-icon">☕</span><span class="unlock-method-title">Buy Me a Coffee</span><span class="unlock-method-desc">Support Agri Core and request access</span></button>
-            </div>
-            <p class="unlock-choice-footnote">The three earning methods remain available. Using a credit only unlocks this file and deducts one credit.</p>
+
+            <button type="button" id="hn-unlock-use-credit-btn" class="btn-primary hidden" style="display:block;width:100%;padding:.85rem;margin-bottom:.7rem;">🔓 Unlock with Remaining Credit</button>
+
+            <div id="hn-unlock-no-credit-note" class="hidden" style="background:rgba(214,171,74,.15);color:var(--wheat-400,#a3791f);border-radius:10px;padding:.7rem .85rem;font-size:.82rem;margin-bottom:.9rem;text-align:left;">⚠️ You're out of unlock credits right now. Earn a new one below to unlock this file.</div>
+
+            <div id="hn-unlock-status-msg" class="hidden" style="border-radius:10px;padding:.6rem .8rem;font-size:.83rem;margin-bottom:.9rem;font-weight:700;"></div>
+
+            <div class="unlock-divider"><span>or</span></div>
+
+            <button type="button" id="hn-unlock-earn-btn" class="btn-primary" style="display:block;width:100%;padding:.85rem;margin-top:.9rem;background:var(--moss-600);">⚡ Earn New Credit to Unlock</button>
+          </div>
+
+          <!-- STEP: CHOICE (shown once logged in, reached via "Earn New Credit to Unlock") -->
+          <div id="hn-gate-step-choice" class="hidden" style="text-align:center;">
+            <button type="button" id="hn-choice-back" class="step-back-link">← Back</button>
+            <div style="font-size:1.7rem;width:3.4rem;height:3.4rem;line-height:3.4rem;margin:0 auto .9rem;border-radius:50%;background:linear-gradient(135deg, var(--moss-900), var(--moss-700));box-shadow:0 10px 22px rgba(31,46,34,.28);">🔓</div>
+            <h2 style="font-size:1.35rem;margin-bottom:.3rem;">Unlock Resources</h2>
+            <p style="color:var(--moss-600);font-size:.9rem;margin-bottom:1.4rem;line-height:1.6;">Choose how you'd like to unlock access — this opens Hand Notes, Class Slides, and Images together.</p>
+            <button type="button" id="hn-choose-notes" class="btn-primary" style="display:block;width:100%;padding:.8rem;margin-bottom:.7rem;">📤 Unlock with Notes <span style="font-weight:400;opacity:.85;">— 36h per Hand Note unlock credit / lifetime folder for Slides & Images</span></button>
+            <button type="button" id="hn-choose-classroom" class="btn-primary" style="display:block;width:100%;padding:.8rem;background:var(--moss-600);margin-bottom:.7rem;">🏫 Unlock with Google Classroom <span style="font-weight:400;opacity:.85;">— 36h Hand Note folder / lifetime Slides & Images folder</span></button>
+            <button type="button" id="hn-choose-coffee" class="btn-primary" style="display:block;width:100%;padding:.8rem;background:#7a4a24;margin-bottom:.7rem;">☕ Buy Me a Coffee <span style="font-weight:400;opacity:.85;">— admin-approved custom access</span></button>
           </div>
 
           <!-- STEP: UNLOCK WITH NOTES (existing upload form) -->
           <div id="hn-gate-step-notes" class="hidden">
-            <button type="button" id="hn-notes-back" class="modal-close" title="Back" style="position:static;float:right;">✕</button>
+            <button type="button" id="hn-notes-back" class="step-back-link">← Back</button>
             <div style="text-align:center;">
               <div style="font-size:1.7rem;width:3.4rem;height:3.4rem;line-height:3.4rem;margin:0 auto .9rem;border-radius:50%;background:linear-gradient(135deg, var(--moss-900), var(--moss-700));box-shadow:0 10px 22px rgba(31,46,34,.28);">📤</div>
               <h2 style="font-size:1.35rem;margin-bottom:.3rem;">Unlock with Notes</h2>
@@ -175,7 +190,7 @@
 
           <!-- STEP: UNLOCK WITH GOOGLE CLASSROOM (new) -->
           <div id="hn-gate-step-classroom" class="hidden">
-            <button type="button" id="hn-classroom-back" class="modal-close" title="Back" style="position:static;float:right;">✕</button>
+            <button type="button" id="hn-classroom-back" class="step-back-link">← Back</button>
             <div style="text-align:center;">
               <div style="font-size:1.7rem;width:3.4rem;height:3.4rem;line-height:3.4rem;margin:0 auto .9rem;border-radius:50%;background:linear-gradient(135deg, var(--moss-900), var(--moss-700));box-shadow:0 10px 22px rgba(31,46,34,.28);">🏫</div>
               <h2 style="font-size:1.35rem;margin-bottom:.3rem;">Unlock with Google Classroom</h2>
@@ -201,7 +216,7 @@
 
           <!-- STEP: UNLOCK BY WATCHING AN AD (new) -->
           <div id="hn-gate-step-coffee" class="hidden">
-            <button type="button" id="hn-coffee-back" class="modal-close" title="Back" style="position:static;float:right;">✕</button>
+            <button type="button" id="hn-coffee-back" class="step-back-link">← Back</button>
             <div class="coffee-hero">
               <div class="coffee-hero-copy">
                 <span class="coffee-kicker">SUPPORT AGRI CORE</span>
@@ -509,8 +524,4 @@
 })();
 </script>
 </body>
-</html><style>
-.coffee-hero{display:grid;grid-template-columns:1fr 170px;gap:1rem;align-items:center;padding:1rem;border-radius:20px;background:linear-gradient(145deg,#fff9f1,#f5eadf);border:1px solid #ead8c4;overflow:hidden}.coffee-hero-copy{min-width:0}.coffee-kicker{font-size:.65rem;letter-spacing:.15em;font-weight:900;color:#8b5a2b}.coffee-hero h2{margin:.3rem 0 .45rem}.coffee-hero p{margin:0;color:#6f5843;font-size:.83rem;line-height:1.55}.coffee-art-wrap{height:150px;border-radius:16px;overflow:hidden;background:#e9dccd;box-shadow:0 12px 28px rgba(87,55,28,.16)}.coffee-art{width:100%;height:100%;object-fit:cover;display:block}.coffee-payment-card{margin-top:1rem;padding:1rem;border-radius:18px;background:#fff;border:1px solid var(--line);box-shadow:0 8px 24px rgba(31,46,34,.06)}.coffee-payment-label{font-size:.65rem;font-weight:900;letter-spacing:.11em;color:#8b5a2b;margin-bottom:.5rem}.coffee-number-row{display:flex;align-items:center;gap:.6rem}.coffee-number{flex:1;min-width:0;display:flex;justify-content:center;gap:.35rem;padding:.8rem .5rem;border-radius:12px;background:#f8f4ef;color:#633d1f;font:900 clamp(1.05rem,5vw,1.55rem) var(--font-mono);letter-spacing:.06em;white-space:nowrap}.coffee-copy-btn{border:1px solid #d8c5b1;background:#fff;color:#6f4525;border-radius:10px;padding:.75rem .8rem;font-weight:800;cursor:pointer}.coffee-payment-note{margin-top:.65rem;color:var(--moss-600);font-size:.76rem;line-height:1.5}@media(max-width:560px){.coffee-hero{grid-template-columns:1fr;text-align:center}.coffee-art-wrap{height:170px;order:-1}.coffee-number-row{align-items:stretch}.coffee-number{letter-spacing:.02em;padding:.75rem .25rem}.coffee-copy-btn{padding:.65rem .6rem}.coffee-payment-note{text-align:left}}
-
-.unlock-choice-hero{display:flex;gap:.9rem;align-items:center;padding:1rem;border:1px solid rgba(107,155,94,.18);border-radius:18px;background:linear-gradient(135deg,#f7fbf5,#fff);margin-bottom:1rem}.unlock-choice-icon{width:48px;height:48px;display:grid;place-items:center;border-radius:15px;background:linear-gradient(135deg,var(--moss-900),var(--moss-700));box-shadow:0 8px 18px rgba(31,46,34,.2);font-size:1.35rem;flex-shrink:0}.unlock-choice-kicker{font-size:.62rem;font-weight:900;letter-spacing:.13em;color:var(--leaf-500)}.unlock-choice-hero h2{margin:.18rem 0 .25rem;font-size:1.2rem;color:var(--moss-900)}.unlock-choice-hero p{margin:0;color:var(--moss-600);font-size:.78rem;line-height:1.5}.credit-unlock-card{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1rem;border-radius:18px;border:1px solid rgba(107,155,94,.3);background:linear-gradient(135deg,rgba(107,155,94,.12),#fff);box-shadow:0 8px 22px rgba(31,46,34,.06)}.credit-unlock-label{font-size:.6rem;font-weight:900;letter-spacing:.12em;color:var(--leaf-500)}.credit-unlock-balance{display:flex;align-items:baseline;gap:.35rem;margin:.18rem 0}.credit-unlock-balance strong{font:800 1.55rem var(--font-mono);color:var(--moss-900)}.credit-unlock-balance span{font-size:.73rem;color:var(--moss-600)}.credit-unlock-card p{margin:0;color:var(--moss-600);font-size:.72rem}.credit-unlock-btn{border:0;border-radius:12px;padding:.72rem .9rem;background:var(--moss-900);color:#fff;font:700 .74rem var(--font-sans,inherit);cursor:pointer;box-shadow:0 7px 16px rgba(31,46,34,.18);white-space:nowrap}.credit-unlock-btn:hover{transform:translateY(-1px)}.credit-unlock-btn:disabled{opacity:.55;cursor:not-allowed;transform:none}.credit-unlock-btn.credit-unlock-success{background:var(--leaf-500);box-shadow:0 0 0 4px rgba(107,155,94,.12),0 8px 20px rgba(31,46,34,.15)}.earn-credit-divider{display:flex;align-items:center;gap:.7rem;margin:1.1rem 0 .85rem;color:var(--moss-500);font-size:.62rem;font-weight:900;letter-spacing:.1em}.earn-credit-divider:before,.earn-credit-divider:after{content:"";height:1px;background:var(--line);flex:1}.earn-credit-divider span{padding:.2rem .4rem}.earn-credit-heading{display:flex;justify-content:space-between;align-items:end;gap:1rem;margin-bottom:.65rem}.earn-credit-heading h3{margin:.2rem 0 0;font-size:.98rem;color:var(--moss-900)}.earn-credit-note{font-size:.65rem;color:var(--moss-500)}.unlock-method-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.6rem}.unlock-method-card{border:1px solid var(--line);border-radius:15px;background:#fff;padding:.8rem;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:.3rem;transition:.18s ease;box-shadow:0 5px 15px rgba(31,46,34,.04)}.unlock-method-card:hover{transform:translateY(-2px);border-color:rgba(107,155,94,.45);box-shadow:0 10px 22px rgba(31,46,34,.08)}.unlock-method-card.coffee:hover{border-color:rgba(122,74,36,.38)}.unlock-method-icon{font-size:1.2rem}.unlock-method-title{font-size:.76rem;font-weight:800;color:var(--moss-900)}.unlock-method-desc{font-size:.64rem;line-height:1.4;color:var(--moss-600)}.unlock-choice-footnote{margin:.75rem 0 0;text-align:center;font-size:.64rem;color:var(--moss-500);line-height:1.45}@media(max-width:600px){.credit-unlock-card{align-items:stretch;flex-direction:column}.credit-unlock-btn{width:100%}.unlock-method-grid{grid-template-columns:1fr}.earn-credit-heading{align-items:start;flex-direction:column;gap:.2rem}}
-</style>
+</html>
