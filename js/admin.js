@@ -302,6 +302,7 @@ const blogCache = {};
 const tabs = {
   approvals: { btn: document.getElementById("tab-approvals"), panel: document.getElementById("approvals-panel"), load: loadApprovals },
   arrange: { btn: document.getElementById("tab-arrange"), panel: document.getElementById("arrange-panel"), load: loadArrangeFiles },
+  manualUnlock: { btn: document.getElementById("tab-manual-unlock"), panel: document.getElementById("manual-unlock-panel"), load: initManualUnlock },
   resources: { btn: document.getElementById("tab-resources"), panel: document.getElementById("resources-panel"), load: loadResources },
   blog: { btn: document.getElementById("tab-blog"), panel: document.getElementById("blog-panel"), load: loadBlogPosts },
   terms: { btn: document.getElementById("tab-terms"), panel: document.getElementById("terms-panel"), load: loadTerms },
@@ -330,6 +331,194 @@ Object.entries(tabs).forEach(([key, tab]) => {
 // Activate the first tab by default so the sidebar/topbar reflect the initial panel shown.
 tabs.approvals.btn.classList.add("is-active");
 if (adminPageTitle) adminPageTitle.textContent = tabs.approvals.btn.dataset.label || "Approvals";
+
+// ============================================
+// MANUAL UNLOCK — Grant Access to Users
+// ============================================
+async function initManualUnlock() {
+  const form = document.getElementById("manual-unlock-form");
+  const presetBtns = document.querySelectorAll(".mu-preset-btn");
+  const daysInput = document.getElementById("mu-days");
+  
+  if (!form) return;
+
+  // Preset day buttons
+  presetBtns.forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      daysInput.value = btn.dataset.days;
+      // Highlight selected
+      presetBtns.forEach(b => b.style.background = "white");
+      btn.style.background = "var(--leaf-50)";
+    });
+  });
+
+  // Form submit
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    
+    const email = document.getElementById("mu-user-email").value.trim().toLowerCase();
+    const days = parseInt(document.getElementById("mu-days").value);
+    const unlockType = document.getElementById("mu-unlock-type").value;
+    const reason = document.getElementById("mu-reason").value || "Admin manual unlock";
+
+    if (!email || !days || !unlockType) {
+      alert("Please fill all required fields");
+      return;
+    }
+
+    if (days < 1 || days > 365) {
+      alert("Days must be between 1 and 365");
+      return;
+    }
+
+    await grantManualUnlock(email, days, unlockType, reason);
+  });
+
+  // Load history
+  await loadUnlockHistory();
+}
+
+async function grantManualUnlock(email, days, unlockType, reason) {
+  try {
+    const db = getFirestore();
+    
+    // Find user by email
+    const usersSnap = await getDocs(
+      query(collection(db, "users"), where("emailNormalized", "==", email))
+    );
+
+    if (usersSnap.empty) {
+      alert("❌ User not found. Make sure email is registered.");
+      return;
+    }
+
+    const userId = usersSnap.docs[0].id;
+    const userData = usersSnap.docs[0].data();
+
+    // Calculate expiry
+    const expiryDate = new Date();
+    expiryDate.setDate(expiryDate.getDate() + days);
+
+    // Store unlock record
+    const unlocksRef = collection(db, "manualUnlocks");
+    await addDoc(unlocksRef, {
+      userId: userId,
+      userEmail: email,
+      studentName: userData.studentName || "Unknown",
+      unlockType: unlockType,
+      days: days,
+      reason: reason,
+      grantedAt: serverTimestamp(),
+      expiresAt: Timestamp.fromDate(expiryDate),
+      grantedBy: getCurrentUserEmail()
+    });
+
+    // Update student access
+    if (unlockType === "all_resources") {
+      // Grant access to all resources
+      const resourcesSnap = await getDocs(
+        query(collection(db, "resources"), where("status", "==", "approved"))
+      );
+
+      for (const resourceDoc of resourcesSnap.docs) {
+        const accessId = `${userId}_${resourceDoc.id}`;
+        await setDoc(doc(db, "studentAccess", accessId), {
+          userId: userId,
+          resourceId: resourceDoc.id,
+          unlockType: "manual_all",
+          unlockedAt: serverTimestamp(),
+          expiresAt: Timestamp.fromDate(expiryDate)
+        });
+      }
+    } else {
+      // Grant access to specific type
+      const resourcesSnap = await getDocs(
+        query(collection(db, "resources"), where("status", "==", "approved"))
+      );
+
+      for (const resourceDoc of resourcesSnap.docs) {
+        const data = resourceDoc.data();
+        
+        // Check if resource matches unlock type
+        if (unlockType === "hand_notes" && data.noteType !== "hand_notes") continue;
+        if (unlockType === "class_slides" && data.noteType !== "class_slide") continue;
+        if (unlockType === "images" && data.fileType !== "image") continue;
+
+        const accessId = `${userId}_${resourceDoc.id}`;
+        await setDoc(doc(db, "studentAccess", accessId), {
+          userId: userId,
+          resourceId: resourceDoc.id,
+          unlockType: `manual_${unlockType}`,
+          unlockedAt: serverTimestamp(),
+          expiresAt: Timestamp.fromDate(expiryDate)
+        });
+      }
+    }
+
+    alert(`✅ Access granted to ${userData.studentName} (${email}) for ${days} days!`);
+    
+    // Reset form
+    document.getElementById("manual-unlock-form").reset();
+    document.getElementById("mu-days").value = "";
+    document.querySelectorAll(".mu-preset-btn").forEach(b => b.style.background = "white");
+    
+    // Reload history
+    await loadUnlockHistory();
+
+  } catch (err) {
+    console.error("[Manual Unlock] Error:", err);
+    alert(`❌ Error granting access: ${err.message}`);
+  }
+}
+
+async function loadUnlockHistory() {
+  const historyEl = document.getElementById("mu-history");
+  if (!historyEl) return;
+
+  try {
+    const db = getFirestore();
+    
+    // Load recent manual unlocks
+    const unlocksSnap = await getDocs(
+      query(
+        collection(db, "manualUnlocks"),
+        orderBy("grantedAt", "desc"),
+        limit(50)
+      )
+    );
+
+    if (unlocksSnap.empty) {
+      historyEl.innerHTML = "<p style='color:var(--moss-600);font-size:.9rem;text-align:center;padding:1rem;'>No manual unlocks yet</p>";
+      return;
+    }
+
+    let html = "<h3 style='font-size:1rem;margin-bottom:1rem;'>Recent Unlocks</h3>";
+    html += "<div style='border-top:1px solid var(--line);'>";
+
+    unlocksSnap.docs.forEach(doc => {
+      const data = doc.data();
+      const granted = fmtAdminDate(data.grantedAt);
+      const expires = fmtAdminDate(data.expiresAt);
+      const typeEmoji = data.unlockType === "all_resources" ? "🔓" : data.unlockType === "hand_notes" ? "📝" : data.unlockType === "class_slides" ? "🖥️" : "🖼️";
+
+      html += `
+        <div style='padding:.8rem;border-bottom:1px solid var(--line);'>
+          <p style='margin:0 0 .3rem;font-weight:600;'>${typeEmoji} ${data.studentName}</p>
+          <p style='margin:0 0 .2rem;font-size:.85rem;color:var(--moss-600);'>${data.userEmail}</p>
+          <p style='margin:0 0 .2rem;font-size:.85rem;color:var(--moss-600);'>${data.days} days | Expires: ${expires}</p>
+          <p style='margin:0;font-size:.8rem;color:var(--moss-500);'>Reason: ${data.reason}</p>
+        </div>
+      `;
+    });
+
+    html += "</div>";
+    historyEl.innerHTML = html;
+
+  } catch (err) {
+    console.error("[Load History] Error:", err);
+  }
+}
 
 // ============================================
 // ARRANGE FILES — Categorize Existing Resources
@@ -614,6 +803,31 @@ async function rejectItem(type, id, container, filter) {
 // ============================================
 // RESOURCES
 // ============================================
+// ============================================
+// HELPER FUNCTIONS
+// ============================================
+function getCurrentUserEmail() {
+  const auth = getAuth();
+  return auth.currentUser?.email || "admin@system";
+}
+
+function fmtAdminDate(timestamp) {
+  if (!timestamp) return "N/A";
+  const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(date);
+}
+
+function esc(str) {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
 // ============================================
 // FILE-TYPE CATEGORIZATION — used to split the admin resources
 // list into separate PDF / Images / Other sections.
