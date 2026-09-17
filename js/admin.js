@@ -330,6 +330,7 @@ const timelineList = document.getElementById("admin-timeline-list");
 const regList = document.getElementById("admin-registrations-list");
 const msgList = document.getElementById("admin-messages-list");
 const classroomCodesList = document.getElementById("admin-classroom-codes-list");
+const adUnlocksList = document.getElementById("admin-ad-unlocks-list");
 const coffeeRequestsList = document.getElementById("admin-coffee-requests-list");
 const folderAccessList = document.getElementById("admin-folder-access-list");
 const blogList = document.getElementById("admin-blog-list");
@@ -1795,9 +1796,11 @@ async function loadClassroomCodes() {
             <div style="font-size:.76rem;color:var(--moss-500);margin-top:.1rem;">🕒 Submitted ${esc(formatMessageDateTime(item.submittedAt))}${item.approvedAt ? " · approved " + esc(formatMessageDateTime(item.approvedAt)) : ""}</div>
             ${isMaterialsRequest
               ? `<div style="font-size:.78rem;color:#8A6A1A;margin-top:.15rem;">📋 General code for sourcing materials — does not unlock any file</div>`
-              : item.targetFileId
-                ? `<div style="font-size:.78rem;color:var(--moss-500,#7a8f7d);margin-top:.15rem;">Unlocking one specific file</div>`
-                : `<div style="font-size:.78rem;color:var(--moss-500,#7a8f7d);margin-top:.15rem;">⚠️ No specific file — unlocks every file for this student</div>`}
+              : item.unlockScope === "folder"
+                ? `<div style="font-size:.78rem;color:var(--moss-500,#7a8f7d);margin-top:.15rem;">📁 Unlocking the whole ${esc(item.courseCode || "course")} folder${item.category ? ` (${esc(item.category)})` : ""}</div>`
+                : item.targetFileId
+                  ? `<div style="font-size:.78rem;color:var(--moss-500,#7a8f7d);margin-top:.15rem;">📄 Unlocking one specific file${item.courseCode ? ` — ${esc(item.courseCode)}${item.facultyName ? ` · ${esc(item.facultyName)}` : ""}` : ""}</div>`
+                  : `<div style="font-size:.78rem;color:var(--moss-500,#7a8f7d);margin-top:.15rem;">⚠️ No specific file — unlocks every file for this student</div>`}
           </div>
         </div>
         <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
@@ -1865,6 +1868,60 @@ async function loadClassroomCodes() {
     });
   } catch (err) {
     showLoadError(classroomCodesList, "classroom codes", err);
+  }
+}
+
+// ============================================
+// AD UNLOCKS ("Unlock by Watching an Ad" submissions, slides-notes.html)
+// ============================================
+// These already granted 6h access to their targetFileId the instant they
+// were created (see js/access.js's `kind === "ad"` branch) — there is no
+// approve/reject step here, only visibility for abuse monitoring and a
+// delete button to revoke a specific grant early if needed.
+async function loadAdUnlocks() {
+  if (!adUnlocksList) return;
+  adUnlocksList.innerHTML = `<p style="color:var(--moss-600);">Loading…</p>`;
+  try {
+    const q = query(collection(db, "adUnlocks"), orderBy("submittedAt", "desc"));
+    const snap = await getDocs(q);
+
+    if (snap.empty) { adUnlocksList.innerHTML = `<p style="color:var(--moss-600);">No ad unlocks yet.</p>`; return; }
+
+    adUnlocksList.innerHTML = "";
+    snap.forEach(d => {
+      const item = d.data();
+      const when = item.submittedAt?.toDate?.() ? item.submittedAt.toDate().toLocaleString() : "—";
+      const row = document.createElement("div");
+      row.className = "resource-row";
+      row.innerHTML = `
+        <div>
+          <span style="display:inline-block;font-size:.75rem;font-weight:700;padding:.15rem .5rem;border-radius:999px;background:#E4F2E7;color:var(--leaf-600,#2D4A35);">🎬 Unlocked instantly</span>
+          <div style="font-size:.85rem;color:var(--moss-700);margin-top:.35rem;">
+            ${item.fromName ? esc(item.fromName) : "Anonymous"}${item.fromEmail ? ` — ${esc(item.fromEmail)}` : ""}
+            <div style="font-size:.78rem;color:var(--moss-500,#7a8f7d);margin-top:.15rem;">Watched ${esc(String(item.watchedSeconds ?? "?"))}s · ${esc(when)} · file: <code>${esc(item.targetFileId || "—")}</code></div>
+          </div>
+        </div>
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
+          <button type="button" class="btn-danger delete-ad-unlock-btn" data-id="${d.id}" style="padding:.35rem .7rem;font-size:.78rem;">🗑 Revoke / Delete</button>
+        </div>`;
+      adUnlocksList.appendChild(row);
+    });
+
+    adUnlocksList.querySelectorAll(".delete-ad-unlock-btn").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        if (!confirm("Delete this ad-unlock record? This revokes the access it granted.")) return;
+        btn.disabled = true;
+        try {
+          await deleteDoc(doc(db, "adUnlocks", btn.dataset.id));
+          loadAdUnlocks();
+        } catch (err) {
+          console.error("[AgriAdmin] Failed to delete ad unlock:", err);
+          btn.disabled = false;
+        }
+      });
+    });
+  } catch (err) {
+    showLoadError(adUnlocksList, "ad unlocks", err);
   }
 }
 
