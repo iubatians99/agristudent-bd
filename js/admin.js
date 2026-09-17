@@ -1817,7 +1817,13 @@ async function loadClassroomCodes() {
       btn.addEventListener("click", async () => {
         btn.disabled = true;
         try {
-          await updateDoc(doc(db, "classroomCodes", btn.dataset.id), { status: "approved", approvedAt: serverTimestamp(), approvedBy:getCurrentUserEmail(), ...(isMaterialsRequest ? {} : { creditsGranted: 10 }) });
+          const codeDoc = await getDoc(doc(db, "classroomCodes", btn.dataset.id));
+          const codeData = codeDoc.exists() ? codeDoc.data() : {};
+          if (codeData.purpose === "materials_request") {
+            await updateDoc(doc(db, "classroomCodes", btn.dataset.id), { status: "approved", approvedAt: serverTimestamp(), approvedBy:getCurrentUserEmail() });
+          } else {
+            await updateDoc(doc(db, "classroomCodes", btn.dataset.id), { status: "approved", approvedAt: serverTimestamp(), approvedBy:getCurrentUserEmail(), creditsGranted: 10 });
+          }
           loadClassroomCodes();
         } catch (err) {
           console.error("[AgriAdmin] Failed to confirm classroom code:", err);

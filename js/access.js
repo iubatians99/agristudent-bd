@@ -2,10 +2,10 @@
 // RESOURCE ACCESS WINDOW
 // ============================================
 // Rules:
-//  • Access starts the moment a file/classroom code is uploaded — the
-//    student does NOT wait for admin review to start using their time.
-//  • Every uploaded resource file grants 24 hours; every classroom code
-//    grants 6 hours.
+//  • Uploaded files belong to their uploader forever.
+//  • Spending 1 credit unlocks exactly one target file for 6 hours.
+//  • An approved Google Classroom code unlocks exactly one target file for 48 hours.
+//  • Buy Me a Coffee is handled by admin-approved custom grants/credits.
 //  • Multiple uploads STACK in the order they were made: if you upload a
 //    second item while the first is still active, its window starts the
 //    instant the first one's finishes (rather than running in parallel or
@@ -19,8 +19,7 @@
 //    or switching devices never resets or loses the access window — only
 //    running out of time does.
 //  • A classroom code grants NO access until an admin reviews and
-//    confirms it (item.status becomes "approved") — unlike a resource
-//    upload, which grants access immediately.
+//    confirms it (item.status becomes "approved").
 //  • PER-FILE ACCESS: a submission can be tied to one specific file via
 //    `targetFileId`, set the moment a student clicks "Unlock" on that
 //    exact file (see js/resources.js `hnOpenGate`). Use
@@ -33,8 +32,8 @@
 import { sendReviewEmail } from "./email-config.js";
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
-export const ACCESS_PER_FILE_MS = 36 * 60 * 60 * 1000; // 36h per Hand Note file unlock
-export const ACCESS_PER_CLASSROOM_MS = 36 * 60 * 60 * 1000; // 36h per classroom-code unlock
+export const ACCESS_PER_FILE_MS = 6 * 60 * 60 * 1000; // 6h per credit-based file unlock
+export const ACCESS_PER_CLASSROOM_MS = 48 * 60 * 60 * 1000; // 48h per approved classroom-code unlock
 export const LIFETIME_ACCESS_MS = 100 * 365 * DAY_MS; // practical lifetime sentinel for folder access
 export const ACCESS_PER_AD_MS = 6 * 60 * 60 * 1000; // 6h per watched rewarded ad
 export const RESTRICTION_MS = 30 * DAY_MS;
@@ -63,9 +62,7 @@ function eventTime(item, preferred) {
 /**
  * Calculate resource access from upload/moderation records.
  *
- * Every non-rejected item (file upload OR classroom code) grants access
- * starting the instant it was uploaded — 24h per resource file, 6h per
- * classroom code — and grants STACK in upload order: each new grant starts
+ * File-credit unlocks grant 6h per target file and approved classroom codes grant 48h per target file. Uploader-owned files are lifetime grants. Other admin grants follow their explicit duration. Legacy time grants continue to stack in order.
  * the moment the running balance frees up (or at its own upload time if
  * that is later), so it always tops up remaining time rather than
  * replacing it. A rejected file drops out of the stack and instead opens
@@ -110,8 +107,23 @@ export function computeResourceAccessStatus(items, now = Date.now()) {
       continue;
     }
 
-    // A file-credit unlock consumes one uploaded Hand Note credit and
-    // unlocks exactly one target file for 36 hours.
+    // The uploader owns their own uploaded file forever. resources.js derives
+    // one explicit owner grant in memory for every individual uploaded file.
+    if (item?.kind === "owner_file") {
+      if (item?.revoked) continue;
+      grants.push({
+        item,
+        kind: "owner_file",
+        status: "granted",
+        time: eventTime(item, "grantedAt")?.getTime?.() || now,
+        durationMs: LIFETIME_ACCESS_MS,
+        lifetime: true
+      });
+      continue;
+    }
+
+    // A file-credit unlock consumes exactly one credit and opens exactly
+    // one target file for 6 hours.
     if (item?.kind === "file_unlock") {
       if (item?.revoked) continue;
       grants.push({
@@ -139,15 +151,15 @@ export function computeResourceAccessStatus(items, now = Date.now()) {
       if (status !== "approved") continue;
       const approvedAt = eventTime(item, "approvedAt");
       const submittedAt = eventTime(item, "submittedAt");
-      const classroomFolder = item?.unlockScope === "folder";
-      const lifetimeFolder = classroomFolder && ["class_slides", "images"].includes(item?.category);
+      // Every approved Classroom unlock is a single 48-hour grant for its
+      // exact target (file or course-folder key). It never becomes lifetime.
       grants.push({
         item,
-        kind: lifetimeFolder ? "folder_lifetime" : "classroom",
+        kind: "classroom",
         status: "approved",
         time: (approvedAt || submittedAt)?.getTime?.() || now,
-        durationMs: lifetimeFolder ? LIFETIME_ACCESS_MS : ACCESS_PER_CLASSROOM_MS,
-        lifetime: lifetimeFolder
+        durationMs: ACCESS_PER_CLASSROOM_MS,
+        lifetime: false
       });
       continue;
     }
@@ -185,11 +197,11 @@ export function computeResourceAccessStatus(items, now = Date.now()) {
       continue;
     }
 
-    // New Hand Note uploads create explicit file credits; new Class Slides
-    // and Images create explicit lifetime-folder grants. Do not double-count
-    // those source resource documents as blanket access. Legacy documents
-    // without unlockMode retain their historical behaviour for compatibility.
-    if (item?.unlockMode === "file_credit" || item?.unlockMode === "folder_lifetime") continue;
+    // New uploads use explicit per-file owner grants generated by
+    // resources.js. Do not turn the source resource document into a blanket
+    // access grant. Legacy documents without unlockMode retain their historical
+    // behaviour for compatibility.
+    if (item?.unlockMode === "file_credit" || item?.unlockMode === "folder_lifetime" || item?.unlockMode === "per_file_owner") continue;
     grants.push({
       item,
       kind: "resource",
@@ -340,7 +352,7 @@ export function renderAccessBadge({ badgeEl, detailEl }, access) {
   }
 
   if (access.active) {
-    badgeEl.textContent = access.lifetimeActive ? "♾️ Lifetime Folder Access" : "🔓 Resource Access Active";
+    badgeEl.textContent = access.lifetimeActive ? "♾️ Lifetime Access" : "🔓 Resource Access Active";
     badgeEl.className = "access-badge active";
     const expires = formatDate(access.accessUntil);
     detailEl.textContent = access.lifetimeActive ? "Class Slides / Images folder access is active until an admin locks it again." : `⏱ ${formatRemaining(access.msRemaining)} remaining · expires ${expires}`;

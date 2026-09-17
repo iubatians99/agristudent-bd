@@ -74,7 +74,7 @@
 .premium-card-list .upload-row{margin-bottom:0;transition:box-shadow .15s ease,border-color .15s ease}
 .premium-card-list .upload-row:hover{border-color:rgba(107,155,94,.35);box-shadow:0 6px 16px rgba(31,46,34,.08)}
 .premium-card-empty{text-align:center;padding:1.5rem .6rem;color:var(--moss-600);font-size:.83rem;border:1.5px dashed var(--line);border-radius:14px;background:rgba(31,46,34,.02)}
-.hidden{display:none!important}@media(max-width:680px){.profile-metrics{grid-template-columns:1fr}.profile-card-grid{grid-template-columns:1fr}.profile-access-card{grid-template-columns:1fr;text-align:center}.access-copy{text-align:center}.credit-balance-card{align-items:center}.profile-identity-card{grid-template-columns:1fr;text-align:center}.profile-avatar-wrap{margin:auto}.profile-name-row{justify-content:center}.profile-status-pill{margin-left:auto;margin-right:auto}.profile-meta{justify-items:center}.profile-page-head{padding:1.35rem 1rem}.profile-dashboard{gap:.8rem}}
+.hidden{display:none!important}.profile-password-site-note{font-size:.76rem;color:var(--moss-600);text-align:right}@media(max-width:680px){.profile-metrics{grid-template-columns:1fr}.profile-card-grid{grid-template-columns:1fr}.profile-access-card{grid-template-columns:1fr;text-align:center}.access-copy{text-align:center}.credit-balance-card{align-items:center}.profile-identity-card{grid-template-columns:1fr;text-align:center}.profile-avatar-wrap{margin:auto}.profile-name-row{justify-content:center}.profile-status-pill{margin-left:auto;margin-right:auto}.profile-meta{justify-items:center}.profile-page-head{padding:1.35rem 1rem}.profile-dashboard{gap:.8rem}.profile-identity-card{padding:1rem}.profile-name-row{font-size:.98rem}.profile-meta{font-size:.78rem}.profile-page-head h1{font-size:1.55rem}.profile-access-card{padding:1rem}.profile-access-card .access-day-circle{width:112px;height:112px}.credit-balance-card{padding:.9rem}.credit-panel-head{width:100%}.profile-password-site-note{width:100%;text-align:left}.upload-row{align-items:flex-start;flex-direction:column}.upload-row > *{max-width:100%}}@media(max-width:420px){.profile-metrics{gap:.55rem}.profile-metric{padding:.75rem}.profile-metric strong{font-size:1.25rem}.profile-identity-card{border-radius:18px}.profile-avatar,.profile-avatar-wrap{width:76px;height:76px}.profile-access-card .access-day-circle{width:100px;height:100px}.access-day-circle-inner strong{font-size:1.35rem}.credit-balance-ring{width:64px;min-width:64px;height:64px}.credit-balance-ring span{font-size:1.05rem}.profile-page-head{border-radius:18px}.profile-page-head h1{font-size:1.35rem}}
 </style>
 </head>
 <body>
@@ -83,7 +83,7 @@
 <script src="js/navbar-loader.js"></script>
 
 <section class="section-page">
-  <div class="container" style="max-width:720px;">
+  <div class="container profile-page-container" style="max-width:980px;">
     <div class="profile-page-head">
       <div class="crumb"><a href="index.html">Home</a> / Profile</div>
       <h1>👤 My Profile</h1>
@@ -164,7 +164,7 @@
         <div class="password-card">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap">
             <div><h2 style="margin:0;font-size:1rem">🔐 Password</h2><p id="password-card-copy" style="margin:.3rem 0 0">Manage your Agri Core login password.</p></div>
-            <button type="button" id="profile-password-open-btn" class="btn-primary">Set Password</button>
+            <span id="profile-password-open-btn" class="profile-password-site-note">Set it from the secure password popup.</span>
           </div>
           <div id="password-section-no-password" class="hidden"></div>
           <div id="password-section-has-password" class="hidden">
@@ -178,16 +178,6 @@
         </div>
         <div id="access-timeline-wrap" class="hidden"><div id="access-timeline-total"></div><div id="access-timeline-list"></div></div>
         <button type="button" id="profile-logout-btn" style="margin-top:.5rem;background:none;border:1px solid var(--line);color:var(--terracotta-500);padding:.7rem 1.4rem;border-radius:10px;font-weight:700;cursor:pointer;justify-self:start">Log Out</button>
-      </div>
-    </div>
-
-    <div id="profile-password-modal" class="password-modal hidden" aria-hidden="true">
-      <div class="password-modal-box">
-        <button type="button" id="profile-password-modal-close" aria-label="Close" style="float:right;border:0;background:none;font-size:1.2rem;cursor:pointer">✕</button>
-        <h2 style="margin:.2rem 0 .4rem">🔐 Set your password</h2><p style="color:var(--moss-600);font-size:.82rem;line-height:1.5">Create a secure password for your Agri Core account.</p>
-        <label for="profile-new-password" style="display:block;font-weight:700;margin:.9rem 0 .3rem;font-size:.85rem">New password</label><input type="password" id="profile-new-password" autocomplete="new-password" minlength="6" style="width:100%;padding:.75rem;border:1px solid var(--line);border-radius:10px">
-        <label for="profile-new-password-confirm" style="display:block;font-weight:700;margin:.8rem 0 .3rem;font-size:.85rem">Confirm password</label><input type="password" id="profile-new-password-confirm" autocomplete="new-password" minlength="6" style="width:100%;padding:.75rem;border:1px solid var(--line);border-radius:10px">
-        <button type="button" id="profile-password-submit-btn" class="btn-primary" style="width:100%;margin-top:1rem">Save Password</button><div id="profile-password-status" style="margin-top:.7rem;font-size:.8rem;min-height:1.2em"></div>
       </div>
     </div>
 
@@ -206,7 +196,6 @@
 </footer>
 
 <script type="module" src="js/profile.js"></script>
-<script type="module" src="js/session.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

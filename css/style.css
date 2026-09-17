@@ -2136,7 +2136,11 @@ body.viewer-layout {
 }
 .navbar-auth-logout:hover{ background:rgba(196,90,63,.08); }
 @media (max-width:700px){
-  .navbar-auth-slot span{ display:none; }
+  .navbar-auth-slot{gap:.35rem;max-width:145px;}
+  .navbar-auth-profile{gap:.35rem;min-width:0;max-width:92px;}
+  .navbar-auth-profile > span:last-child{display:block;max-width:54px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.72rem;}
+  .navbar-auth-avatar{width:30px;height:30px;}
+  .navbar-auth-logout{padding:.32rem .48rem;font-size:.68rem;}
 }
 @media (max-width:700px){
   .viewer-bar .title{ display:none; }
