@@ -249,62 +249,86 @@
     <div id="resource-content" class="locked">
       <button type="button" id="open-another-upload" class="btn-primary hidden" style="margin-bottom:2rem;">⬆️ Upload Another File</button>
 
-      <!-- THREE-CARD PREMIUM LAYOUT (visible as a preview even before unlock; -->
+      <!-- THREE-SECTION TABBED LAYOUT (visible as a preview even before unlock; -->
       <!-- the .locked class on #resource-content blurs it and shows the overlay below) -->
       <div class="resource-preview-wrap">
-        <div class="premium-cards-grid">
+
+        <!-- Tab switcher: one section at a time gets the full width, which reads
+             far better on a phone than three squeezed columns. Counts mirror the
+             per-card counters automatically (see the script at the end of this file). -->
+        <div class="resource-tabs" role="tablist" aria-label="Resource sections">
+          <button type="button" class="resource-tab is-active" role="tab" aria-selected="true" aria-controls="panel-handnotes" data-panel="panel-handnotes">
+            <span class="tab-emoji">📝</span><span>Hand Notes</span><span class="tab-badge" data-mirror="handnotes-count">0</span>
+          </button>
+          <button type="button" class="resource-tab" role="tab" aria-selected="false" aria-controls="panel-slides" data-panel="panel-slides">
+            <span class="tab-emoji">🖥️</span><span>Class Slides</span><span class="tab-badge" data-mirror="slides-count">0</span>
+          </button>
+          <button type="button" class="resource-tab" role="tab" aria-selected="false" aria-controls="panel-images" data-panel="panel-images">
+            <span class="tab-emoji">🖼️</span><span>Images</span><span class="tab-badge" data-mirror="image-count">0</span>
+          </button>
+        </div>
+
+        <p class="resource-tab-hint" id="resource-tab-hint">Single files — unlock one Hand Note at a time.</p>
+
+        <div class="premium-cards-grid is-tabbed">
 
           <!-- HAND NOTES FOLDER CARD -->
-          <div class="premium-card handnotes-card">
-            <div class="card-header">
-              <span class="card-icon">📝</span>
-              <span class="card-title">Hand Notes</span>
-              <span class="card-count" id="handnotes-count">(0)</span>
-            </div>
-            <div class="card-body">
-              <input type="text" id="handnotes-search" placeholder="Search by course code (e.g., AGR 371)" class="card-search" style="display:none;">
-              <div id="handnotes-list" class="file-list">
-                <p style="color:var(--moss-600);font-size:.9rem;text-align:center;padding:1rem;">Loading files…</p>
+          <div class="resource-tab-panel" id="panel-handnotes" role="tabpanel">
+            <div class="premium-card handnotes-card">
+              <div class="card-header">
+                <span class="card-icon">📝</span>
+                <span class="card-title">Hand Notes</span>
+                <span class="card-count" id="handnotes-count">(0)</span>
               </div>
-            </div>
-            <div class="card-footer">
-              <a href="#" class="view-all-link" id="handnotes-view-all" style="display:none;">View All →</a>
+              <div class="card-body">
+                <input type="text" id="handnotes-search" placeholder="Search by course code (e.g., AGR 371)" class="card-search" style="display:none;">
+                <div id="handnotes-list" class="file-list">
+                  <p style="color:var(--moss-600);font-size:.9rem;text-align:center;padding:1rem;">Loading files…</p>
+                </div>
+              </div>
+              <div class="card-footer">
+                <a href="#" class="view-all-link" id="handnotes-view-all" style="display:none;">View All →</a>
+              </div>
             </div>
           </div>
 
           <!-- CLASS LECTURE SLIDES FOLDER CARD -->
-          <div class="premium-card slides-card">
-            <div class="card-header">
-              <span class="card-icon">🖥️</span>
-              <span class="card-title">Class Lecture Slides</span>
-              <span class="card-count" id="slides-count">(0)</span>
-            </div>
-            <div class="card-body">
-              <input type="text" id="slides-search" placeholder="Search by course code (e.g., AGR 371)" class="card-search" style="display:none;">
-              <div id="slides-list" class="file-list">
-                <p style="color:var(--moss-600);font-size:.9rem;text-align:center;padding:1rem;">Loading files…</p>
+          <div class="resource-tab-panel" id="panel-slides" role="tabpanel" hidden>
+            <div class="premium-card slides-card">
+              <div class="card-header">
+                <span class="card-icon">🖥️</span>
+                <span class="card-title">Class Lecture Slides</span>
+                <span class="card-count" id="slides-count">(0)</span>
               </div>
-            </div>
-            <div class="card-footer">
-              <a href="#" class="view-all-link" id="slides-view-all" style="display:none;">View All →</a>
+              <div class="card-body">
+                <input type="text" id="slides-search" placeholder="Search by course code (e.g., AGR 371)" class="card-search" style="display:none;">
+                <div id="slides-list" class="file-list">
+                  <p style="color:var(--moss-600);font-size:.9rem;text-align:center;padding:1rem;">Loading files…</p>
+                </div>
+              </div>
+              <div class="card-footer">
+                <a href="#" class="view-all-link" id="slides-view-all" style="display:none;">View All →</a>
+              </div>
             </div>
           </div>
 
           <!-- IMAGE CARD -->
-          <div class="premium-card image-card">
-            <div class="card-header">
-              <span class="card-icon">🖼️</span>
-              <span class="card-title">Images</span>
-              <span class="card-count" id="image-count">(0)</span>
-            </div>
-            <div class="card-body">
-              <input type="text" id="image-search" placeholder="Search by course code (e.g., AGR 371)" class="card-search" style="display:none;">
-              <div id="image-grid" class="image-grid">
-                <p style="color:var(--moss-600);font-size:.9rem;text-align:center;padding:1rem;">Loading images…</p>
+          <div class="resource-tab-panel" id="panel-images" role="tabpanel" hidden>
+            <div class="premium-card image-card">
+              <div class="card-header">
+                <span class="card-icon">🖼️</span>
+                <span class="card-title">Images</span>
+                <span class="card-count" id="image-count">(0)</span>
               </div>
-            </div>
-            <div class="card-footer">
-              <a href="#" class="view-all-link" id="image-view-all" style="display:none;">See All Images →</a>
+              <div class="card-body">
+                <input type="text" id="image-search" placeholder="Search by course code (e.g., AGR 371)" class="card-search" style="display:none;">
+                <div id="image-grid" class="image-grid">
+                  <p style="color:var(--moss-600);font-size:.9rem;text-align:center;padding:1rem;">Loading images…</p>
+                </div>
+              </div>
+              <div class="card-footer">
+                <a href="#" class="view-all-link" id="image-view-all" style="display:none;">See All Images →</a>
+              </div>
             </div>
           </div>
 
@@ -472,5 +496,66 @@
 <script type="module" src="js/resources.js"></script>
 <script type="module" src="js/session.js"></script>
 <script src="js/main.js"></script>
+
+<script>
+// ============================================
+// HAND NOTES / CLASS SLIDES / IMAGES — TAB SWITCHER
+// --------------------------------------------------
+// Purely presentational. Every element ID the loaders in js/resources.js and
+// js/slides-notes-loading-fix.js look for still exists in the DOM at all
+// times — hidden panels are only visually hidden — so none of that logic
+// needed to change.
+// ============================================
+(function () {
+  const tabs = document.querySelectorAll(".resource-tab");
+  const panels = document.querySelectorAll(".resource-tab-panel");
+  const hint = document.getElementById("resource-tab-hint");
+  if (!tabs.length) return;
+
+  const HINTS = {
+    "panel-handnotes": "Single files — unlock one Hand Note at a time.",
+    "panel-slides": "Unlocking any slide opens every slide in that course's folder.",
+    "panel-images": "Tap any image to open it full size."
+  };
+
+  function activate(tab) {
+    const target = tab.dataset.panel;
+    tabs.forEach(t => {
+      const on = t === tab;
+      t.classList.toggle("is-active", on);
+      t.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    panels.forEach(p => { p.hidden = p.id !== target; });
+    if (hint) hint.textContent = HINTS[target] || "";
+  }
+
+  tabs.forEach(tab => tab.addEventListener("click", () => activate(tab)));
+
+  // Left/right arrow keys move between tabs, as expected of a tablist.
+  document.querySelector(".resource-tabs")?.addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+    const arr = Array.from(tabs);
+    const i = arr.indexOf(document.activeElement);
+    if (i === -1) return;
+    e.preventDefault();
+    const next = arr[(i + (e.key === "ArrowRight" ? 1 : arr.length - 1)) % arr.length];
+    next.focus();
+    activate(next);
+  });
+
+  // The loaders write counts into the "(12)" span inside each card header.
+  // Rather than touching that code, mirror those values into the tab badges
+  // whenever they change.
+  document.querySelectorAll(".tab-badge[data-mirror]").forEach(badge => {
+    const source = document.getElementById(badge.dataset.mirror);
+    if (!source) return;
+    const sync = () => {
+      badge.textContent = (source.textContent || "").replace(/[()\s]/g, "") || "0";
+    };
+    sync();
+    new MutationObserver(sync).observe(source, { childList: true, characterData: true, subtree: true });
+  });
+})();
+</script>
 </body>
 </html>

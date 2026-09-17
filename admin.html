@@ -9,6 +9,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Work+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<!-- SheetJS — parses the .xlsx/.xls/.csv file used by Bulk Upload Terms -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 
@@ -72,14 +74,14 @@
     </div>
 
     <nav class="admin-nav">
-      <button id="tab-approvals" class="admin-nav-item" data-label="Approvals"><span class="admin-nav-icon">✅</span><span>Approvals</span></button>
-      <button id="tab-arrange" class="admin-nav-item" data-label="Arrange Files"><span class="admin-nav-icon">🗂️</span><span>Arrange Files</span></button>
-      <button id="tab-manual-unlock" class="admin-nav-item" data-label="Manual Unlock"><span class="admin-nav-icon">🔓</span><span>Manual Unlock</span></button>
       <button id="tab-resources" class="admin-nav-item" data-label="Resources"><span class="admin-nav-icon">📚</span><span>Resources</span></button>
       <button id="tab-blog" class="admin-nav-item" data-label="Blog"><span class="admin-nav-icon">✍️</span><span>Blog</span></button>
       <button id="tab-terms" class="admin-nav-item" data-label="Terms"><span class="admin-nav-icon">📖</span><span>Terms</span></button>
+      <button id="tab-registrations" class="admin-nav-item" data-label="Registered Users"><span class="admin-nav-icon">👥</span><span>Registered Users</span></button>
+      <button id="tab-manual-unlock" class="admin-nav-item" data-label="Manual Unlock"><span class="admin-nav-icon">🔓</span><span>Manual Unlock</span></button>
       <button id="tab-timeline" class="admin-nav-item" data-label="Timeline"><span class="admin-nav-icon">📅</span><span>Timeline</span></button>
       <button id="tab-messages" class="admin-nav-item" data-label="Messages"><span class="admin-nav-icon">💬</span><span>Messages</span></button>
+      <button id="tab-notify-user" class="admin-nav-item" data-label="Notify User"><span class="admin-nav-icon">🔔</span><span>Notify User</span></button>
       <button id="tab-classroom-codes" class="admin-nav-item" data-label="Classroom Codes"><span class="admin-nav-icon">🔑</span><span>Classroom Codes</span></button>
       <button id="tab-ad-unlocks" class="admin-nav-item" data-label="Ad Unlocks"><span class="admin-nav-icon">🎬</span><span>Ad Unlocks</span></button>
       <button id="tab-danger" class="admin-nav-item admin-nav-item--danger" data-label="Danger Zone"><span class="admin-nav-icon">⚠️</span><span>Danger Zone</span></button>
@@ -98,52 +100,6 @@
     </header>
 
     <div class="admin-content">
-
-      <div id="approvals-panel" class="admin-panel-card">
-        <h2 class="admin-panel-heading">✅ Unified Approvals — Registrations, Resources & Blog Posts</h2>
-        <p style="font-size:.82rem;color:var(--moss-600);margin-top:-.8rem;margin-bottom:1.2rem;">
-          All new submissions in one place. Update status and content will vanish from this list once processed (approved, rejected, or archived).
-        </p>
-        <div class="form-field" style="margin-bottom:1.2rem;">
-          <label for="approval-filter">Filter by Type:</label>
-          <select id="approval-filter" style="padding:.5rem .7rem;border:1px solid var(--line);border-radius:6px;">
-            <option value="">All Types</option>
-            <option value="registration">New Registrations</option>
-            <option value="resource">New Resources</option>
-            <option value="blog">New Blog Posts</option>
-          </select>
-        </div>
-        <div id="admin-approvals-list"></div>
-      </div>
-
-      <div id="arrange-panel" class="admin-panel-card hidden">
-        <h2 class="admin-panel-heading">🗂️ Arrange Existing Files — Categorize & Organize</h2>
-        <p style="font-size:.82rem;color:var(--moss-600);margin-top:-.8rem;margin-bottom:1.2rem;">
-          Categorize old uploaded files that don't have proper folder assignments. Shows all uncategorized resources.
-        </p>
-        
-        <div style="border:1px solid #e2b8b8;background:#fff5f5;border-radius:8px;padding:.9rem 1rem;margin-bottom:1.2rem;">
-          <strong style="font-size:.85rem;color:#8a3b3b;">📋 How to Use</strong>
-          <p style="font-size:.78rem;color:#8a3b3b;margin:.35rem 0 .7rem;line-height:1.5;">
-            1. Each file below is missing a folder type (Hand Notes, Class Slides, or Images)<br/>
-            2. Select the correct category from the dropdown<br/>
-            3. Click "Save" to update<br/>
-            4. File will disappear from this list once categorized
-          </p>
-        </div>
-
-        <div class="form-field" style="margin-bottom:1.2rem;">
-          <label for="arrange-filter">Filter by File Type:</label>
-          <select id="arrange-filter" style="padding:.5rem .7rem;border:1px solid var(--line);border-radius:6px;">
-            <option value="">All Files</option>
-            <option value="pdf">PDFs</option>
-            <option value="image">Images</option>
-            <option value="ppt">Presentations</option>
-          </select>
-        </div>
-
-        <div id="admin-arrange-list"></div>
-      </div>
 
       <div id="manual-unlock-panel" class="admin-panel-card hidden">
         <h2 class="admin-panel-heading">🔓 Manual Unlock — Give Access to Users</h2>
@@ -194,8 +150,25 @@
         <div id="mu-history" style="margin-top:2rem;"></div>
       </div>
 
-      <div id="resources-panel" class="admin-panel-card hidden">
+      <div id="resources-panel" class="admin-panel-card">
         <h2 class="admin-panel-heading">Resources — Pending / Approved / Rejected</h2>
+        <div class="admin-filter-bar">
+          <label for="resource-status-filter">Status</label>
+          <select id="resource-status-filter" class="admin-filter-select">
+            <option value="">All statuses</option>
+            <option value="pending">🕓 Pending</option>
+            <option value="approved">✅ Approved</option>
+            <option value="rejected">❌ Rejected</option>
+          </select>
+          <label for="resource-section-filter">Section</label>
+          <select id="resource-section-filter" class="admin-filter-select">
+            <option value="">All sections</option>
+            <option value="hand_notes">📝 Hand Notes</option>
+            <option value="class_slide">🖥️ Class Slides</option>
+            <option value="image">🖼️ Images</option>
+          </select>
+          <span id="resource-filter-count" class="admin-filter-count"></span>
+        </div>
         <div id="admin-resource-list"></div>
       </div>
 
@@ -204,13 +177,16 @@
         <p style="font-size:.82rem;color:var(--moss-600);margin-top:-.8rem;margin-bottom:1.2rem;">
           Every post is live on the public timeline the moment it's submitted (watermarked "Not verified"). Approving it just swaps the watermark for an "Approved" badge; rejecting it hides it from the public timeline. Deleting removes it everywhere, including its likes and comments.
         </p>
-        <div style="border:1px solid #e2b8b8;background:#fff5f5;border-radius:8px;padding:.9rem 1rem;margin-bottom:1.2rem;">
-          <strong style="font-size:.85rem;color:#8a3b3b;">⚠️ Reset all Love reactions</strong>
-          <p style="font-size:.78rem;color:#8a3b3b;margin:.35rem 0 .7rem;">
-            Clears every like a student has ever given (deletes all blogLikes records) and sets every post's like count back to 0, site-wide. Use this once to wipe out counts left over from a past bug — it cannot be undone.
-          </p>
-          <button type="button" id="reset-blog-reactions-btn" style="background:#c0392b;color:#fff;border:none;border-radius:6px;padding:.5rem .9rem;font-size:.8rem;font-weight:600;cursor:pointer;">Reset all reactions to 0</button>
-          <span id="reset-blog-reactions-status" style="font-size:.78rem;color:#8a3b3b;margin-left:.6rem;"></span>
+        <div class="admin-filter-bar">
+          <label for="blog-status-filter">Status</label>
+          <select id="blog-status-filter" class="admin-filter-select">
+            <option value="">All statuses</option>
+            <option value="pending">🕓 Not Verified (Pending)</option>
+            <option value="pending_edit">📝 Edited — Pending Review</option>
+            <option value="approved">✅ Approved</option>
+            <option value="rejected">❌ Rejected</option>
+          </select>
+          <span id="blog-filter-count" class="admin-filter-count"></span>
         </div>
         <div id="admin-blog-list"></div>
       </div>
@@ -220,14 +196,82 @@
 
         <div class="bulk-upload-box" style="border:1px solid var(--line);padding:1rem;border-radius:8px;background:#fff;margin-bottom:1.6rem;">
           <h3 style="font-size:1rem;margin-bottom:.4rem;">📦 Bulk Upload Terms</h3>
-          <p style="font-size:.8rem;color:var(--moss-600);margin-bottom:.8rem;">
-            Select multiple term images at once. Each one gets its own name &amp; description below,
-            and is published straight to the Knowledge Hub as <strong>approved</strong> when you upload.
+          <p style="font-size:.8rem;color:var(--moss-600);margin-bottom:.9rem;">
+            Add many terms at once. Everything you add here is previewed first, and only published to the
+            Knowledge Hub as <strong>approved</strong> once you hit Upload.
           </p>
-          <input type="file" id="bulk-term-images" accept="image/*" multiple>
-          <div id="bulk-term-rows" style="margin-top:1rem;display:flex;flex-direction:column;gap:.8rem;"></div>
-          <button id="bulk-term-upload-btn" class="btn-primary hidden" style="margin-top:1rem;">⬆️ Upload All</button>
+
+          <div class="bulk-mode-tabs">
+            <button type="button" class="bulk-mode-tab is-active" data-bulk-mode="sheet">📄 From a Sheet</button>
+            <button type="button" class="bulk-mode-tab" data-bulk-mode="images">🖼️ From Images</button>
+          </div>
+
+          <!-- MODE 1: sheet (CSV / XLSX) -->
+          <div id="bulk-mode-sheet" class="bulk-mode-panel">
+            <div class="bulk-help">
+              <strong>How it works</strong>
+              <p>
+                Upload a <code>.csv</code>, <code>.xlsx</code> or <code>.xls</code> file with one term per row.
+                The first row must be the column headers. Recognised columns (any order, capitals don't matter):
+              </p>
+              <ul>
+                <li><code>name</code> — the term (also accepts <em>term</em> / <em>title</em>) — <strong>required</strong></li>
+                <li><code>description</code> — the meaning (also accepts <em>definition</em> / <em>details</em>)</li>
+                <li><code>image</code> — an image link, or the filename of an image you pick below (also accepts <em>imageUrl</em> / <em>photo</em>)</li>
+              </ul>
+              <p style="margin-bottom:0;">
+                Image links are pulled in for you — no need to download anything first. If your sheet lists
+                filenames instead (like <code>rhizobium.jpg</code>), just pick those images in the box underneath and
+                they'll be matched up by name.
+              </p>
+              <button type="button" id="bulk-term-template-btn" class="bulk-ghost-btn">⬇️ Download a blank template (.csv)</button>
+            </div>
+
+            <div class="bulk-field">
+              <label for="bulk-term-sheet">1. Choose your sheet file</label>
+              <input type="file" id="bulk-term-sheet" accept=".csv,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+            </div>
+
+            <div class="bulk-field">
+              <label for="bulk-term-sheet-images">2. Optional — pick the image files your sheet names</label>
+              <input type="file" id="bulk-term-sheet-images" accept="image/*" multiple>
+              <small>Only needed if the image column holds filenames rather than links.</small>
+            </div>
+
+            <div id="bulk-sheet-summary" class="bulk-summary hidden"></div>
+          </div>
+
+          <!-- MODE 2: plain image picker (the original flow) -->
+          <div id="bulk-mode-images" class="bulk-mode-panel hidden">
+            <div class="bulk-field">
+              <label for="bulk-term-images">Choose term images</label>
+              <input type="file" id="bulk-term-images" accept="image/*" multiple>
+              <small>Each image becomes one term — the filename is used as a starting name, which you can edit below.</small>
+            </div>
+          </div>
+
+          <!-- Shared preview + upload -->
+          <div id="bulk-term-preview-wrap" class="hidden">
+            <h4 class="bulk-preview-heading">👀 Preview — check before publishing</h4>
+            <div id="bulk-term-rows"></div>
+          </div>
+
+          <div class="bulk-actions">
+            <button id="bulk-term-upload-btn" class="btn-primary hidden">⬆️ Upload All</button>
+            <button type="button" id="bulk-term-clear-btn" class="bulk-ghost-btn hidden">Clear</button>
+          </div>
           <div id="bulk-term-status" style="margin-top:.8rem;font-size:.85rem;"></div>
+        </div>
+
+        <div class="admin-filter-bar">
+          <label for="term-status-filter">Status</label>
+          <select id="term-status-filter" class="admin-filter-select">
+            <option value="">All statuses</option>
+            <option value="pending">🕓 Pending</option>
+            <option value="approved">✅ Approved</option>
+            <option value="rejected">❌ Rejected</option>
+          </select>
+          <span id="term-filter-count" class="admin-filter-count"></span>
         </div>
 
         <div id="admin-term-list"></div>
@@ -267,13 +311,66 @@
       </div>
 
       <div id="registrations-panel" class="admin-panel-card hidden">
-        <h2 class="admin-panel-heading">Student Registrations — Verify ID</h2>
+        <h2 class="admin-panel-heading">Registered Users — Verify ID &amp; Manage Accounts</h2>
+        <div class="admin-filter-bar">
+          <label for="registration-status-filter">Status</label>
+          <select id="registration-status-filter" class="admin-filter-select">
+            <option value="">All users</option>
+            <option value="verified">🟢 ID Verified</option>
+            <option value="unverified">🕓 ID Not Verified</option>
+            <option value="restricted">⛔ Restricted</option>
+            <option value="removed">🚫 Removed</option>
+            <option value="active">✅ Active (not restricted or removed)</option>
+          </select>
+          <input type="search" id="registration-search" class="admin-filter-search" placeholder="Search name, email or ID…">
+          <span id="registration-filter-count" class="admin-filter-count"></span>
+        </div>
         <div id="admin-registrations-list"></div>
       </div>
 
       <div id="messages-panel" class="admin-panel-card hidden">
         <h2 class="admin-panel-heading">Help Messages</h2>
         <div id="admin-messages-list"></div>
+      </div>
+
+      <div id="notify-user-panel" class="admin-panel-card hidden">
+        <h2 class="admin-panel-heading">🔔 Notify User — Send a Message to a Student</h2>
+        <p style="font-size:.82rem;color:var(--moss-600);margin-top:-.8rem;margin-bottom:1.2rem;">
+          Search for a registered student by name, email, or Student ID, then send them a message —
+          it appears in their Profile → Inbox, and you'll see below the moment they've read it.
+        </p>
+
+        <div class="notify-user-search-wrap" style="max-width:520px;margin-bottom:1rem;position:relative;">
+          <input type="search" id="nu-search-input" class="admin-filter-search" style="width:100%;" placeholder="Search name, email or Student ID…" autocomplete="off">
+          <div id="nu-search-results" class="hidden" style="position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 28px rgba(31,46,34,.14);max-height:280px;overflow-y:auto;z-index:20;"></div>
+        </div>
+
+        <div id="nu-selected-user" class="hidden" style="display:flex;align-items:center;gap:.7rem;padding:.7rem .9rem;border:1px solid var(--leaf-500);background:rgba(107,155,94,.08);border-radius:10px;margin-bottom:1.2rem;max-width:520px;">
+          <img id="nu-selected-avatar" src="" alt="" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;">
+          <div style="flex:1;min-width:0;">
+            <div id="nu-selected-name" style="font-weight:700;font-size:.9rem;"></div>
+            <div id="nu-selected-meta" style="font-size:.78rem;color:var(--moss-600);"></div>
+          </div>
+          <button type="button" id="nu-selected-clear" style="background:none;border:1px solid var(--line);border-radius:6px;padding:.3rem .6rem;font-size:.75rem;cursor:pointer;">✕ Change</button>
+        </div>
+
+        <form id="nu-compose-form" style="max-width:520px;">
+          <div class="form-field">
+            <label for="nu-subject">Subject</label>
+            <input type="text" id="nu-subject" maxlength="200" placeholder="e.g. About your recent upload" required>
+          </div>
+          <div class="form-field">
+            <label for="nu-body">Message</label>
+            <textarea id="nu-body" maxlength="5000" rows="5" placeholder="Write your message to this student…" required></textarea>
+          </div>
+          <button type="submit" class="btn-primary" id="nu-send-btn">✉️ Send Message</button>
+          <p id="nu-status" style="margin-top:.7rem;font-size:.88rem;min-height:1.2em;"></p>
+        </form>
+
+        <div class="admin-section-divider" style="margin:2rem 0 1.2rem;border-top:1px solid var(--line);"></div>
+
+        <h3 style="font-size:1rem;margin-bottom:.9rem;">📤 Sent Messages</h3>
+        <div id="nu-sent-list"></div>
       </div>
 
       <div id="classroom-codes-panel" class="admin-panel-card hidden">
@@ -305,6 +402,7 @@
             <button class="btn-danger danger-delete-btn" data-collection="timeline" data-label="Timeline Events">🗑 Delete ALL Timeline Events</button>
             <button class="btn-danger danger-delete-btn" data-collection="messages" data-label="Messages">🗑 Delete ALL Messages</button>
             <button class="btn-danger danger-delete-btn" data-collection="classroomCodes" data-label="Classroom Codes">🗑 Delete ALL Classroom Codes</button>
+            <button class="btn-danger danger-delete-btn" data-collection="adminMessages" data-label="Notify User Messages">🗑 Delete ALL Notify User Messages</button>
           </div>
           <p id="danger-result" class="hidden" style="font-weight:700;font-size:.9rem;"></p>
         </div>

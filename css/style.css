@@ -2149,6 +2149,12 @@ body.viewer-layout {
   color:var(--moss-700);
 }
 .navbar-auth-avatar{ width:26px; height:26px; border-radius:50%; object-fit:cover; }
+.navbar-auth-avatar-wrap{ position:relative; display:inline-flex; line-height:0; }
+.navbar-inbox-dot{
+  position:absolute; top:-2px; right:-2px;
+  width:9px; height:9px; border-radius:50%;
+  background:var(--terracotta-500); border:2px solid #fff;
+}
 .navbar-auth-logout{
   background:none; border:1px solid var(--line); border-radius:8px;
   padding:.35rem .7rem; font-size:.78rem; font-weight:600; cursor:pointer; color:var(--terracotta-500);
@@ -2746,4 +2752,255 @@ body.viewer-layout {
   .admin-user-chip{ display:none; }
   .admin-content{ padding:1.2rem 1rem 2.5rem; }
   .admin-topbar{ padding:1rem 1.2rem; }
+}
+
+/* ============================================
+   ADMIN — STATUS FILTER BARS
+   Shared by the Resources, Blog, Terms and
+   Registered Users panels.
+   ============================================ */
+.admin-filter-bar{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:.5rem .8rem;
+  padding:.75rem .9rem;
+  margin-bottom:1.3rem;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:var(--paper-100);
+}
+.admin-filter-bar label{
+  font-size:.78rem;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+  color:var(--moss-600);
+}
+.admin-filter-select,
+.admin-filter-search{
+  padding:.45rem .7rem;
+  border:1px solid var(--line);
+  border-radius:6px;
+  background:#fff;
+  font-family:var(--font-body);
+  font-size:.86rem;
+  color:var(--moss-900);
+  cursor:pointer;
+}
+.admin-filter-search{ cursor:text; min-width:210px; flex:1 1 210px; }
+.admin-filter-select:focus,
+.admin-filter-search:focus{ outline:none; border-color:var(--leaf-500); }
+.admin-filter-count{
+  margin-left:auto;
+  font-size:.78rem;
+  font-weight:600;
+  color:var(--moss-600);
+  font-family:var(--font-mono);
+  white-space:nowrap;
+}
+.admin-empty-state{
+  padding:2rem 1rem;
+  text-align:center;
+  color:var(--moss-600);
+  font-size:.9rem;
+  border:1px dashed var(--line);
+  border-radius:10px;
+}
+
+/* ============================================
+   ADMIN — BULK UPLOAD TERMS (sheet + images)
+   ============================================ */
+.bulk-mode-tabs{
+  display:flex;
+  gap:.4rem;
+  margin-bottom:1rem;
+  border-bottom:1px solid var(--line);
+}
+.bulk-mode-tab{
+  background:none;
+  border:none;
+  border-bottom:2px solid transparent;
+  padding:.55rem .9rem;
+  margin-bottom:-1px;
+  font-family:var(--font-body);
+  font-size:.86rem;
+  font-weight:600;
+  color:var(--moss-600);
+  cursor:pointer;
+  transition:color .2s, border-color .2s;
+}
+.bulk-mode-tab:hover{ color:var(--leaf-500); }
+.bulk-mode-tab.is-active{ color:var(--moss-900); border-bottom-color:var(--leaf-500); }
+
+.bulk-help{
+  border:1px solid var(--line);
+  border-left:3px solid var(--leaf-500);
+  background:var(--paper-100);
+  border-radius:8px;
+  padding:.85rem 1rem;
+  margin-bottom:1rem;
+  font-size:.8rem;
+  color:var(--moss-700, #3f5b3d);
+  line-height:1.55;
+}
+.bulk-help strong{ display:block; font-size:.85rem; margin-bottom:.3rem; color:var(--moss-900); }
+.bulk-help p{ margin:.3rem 0 .5rem; }
+.bulk-help ul{ margin:.2rem 0 .6rem 1.1rem; padding:0; }
+.bulk-help li{ margin-bottom:.2rem; }
+.bulk-help code{
+  font-family:var(--font-mono);
+  font-size:.76rem;
+  background:rgba(107,155,94,.14);
+  padding:.08rem .35rem;
+  border-radius:4px;
+}
+.bulk-field{ margin-bottom:.9rem; }
+.bulk-field label{
+  display:block;
+  font-size:.82rem;
+  font-weight:600;
+  color:var(--moss-900);
+  margin-bottom:.35rem;
+}
+.bulk-field small{
+  display:block;
+  margin-top:.3rem;
+  font-size:.76rem;
+  color:var(--moss-600);
+}
+.bulk-ghost-btn{
+  background:none;
+  border:1px solid var(--line);
+  border-radius:6px;
+  padding:.45rem .8rem;
+  font-family:var(--font-body);
+  font-size:.8rem;
+  font-weight:600;
+  color:var(--moss-700, #3f5b3d);
+  cursor:pointer;
+  transition:border-color .2s, color .2s;
+}
+.bulk-ghost-btn:hover{ border-color:var(--leaf-500); color:var(--leaf-500); }
+.bulk-summary{
+  border:1px solid var(--line);
+  border-radius:8px;
+  padding:.7rem .9rem;
+  margin-top:.4rem;
+  font-size:.82rem;
+  color:var(--moss-700, #3f5b3d);
+  background:#fff;
+}
+.bulk-summary .bulk-warn{ color:var(--terracotta-500); font-weight:600; }
+.bulk-preview-heading{
+  font-size:.9rem;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+  color:var(--moss-600);
+  border-bottom:1px solid var(--line);
+  padding-bottom:.4rem;
+  margin:1.3rem 0 .8rem;
+}
+#bulk-term-rows{
+  display:flex;
+  flex-direction:column;
+  gap:.8rem;
+  max-height:520px;
+  overflow-y:auto;
+  padding-right:.2rem;
+}
+.bulk-actions{ display:flex; gap:.6rem; align-items:center; margin-top:1rem; flex-wrap:wrap; }
+.bulk-term-row .bulk-term-index{
+  font-family:var(--font-mono);
+  font-size:.72rem;
+  font-weight:700;
+  color:var(--moss-600);
+  min-width:1.6rem;
+  padding-top:.4rem;
+}
+.bulk-term-row .bulk-term-thumb-missing{
+  width:56px; height:56px;
+  border-radius:6px;
+  flex-shrink:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:.62rem;
+  text-align:center;
+  line-height:1.2;
+  color:var(--moss-600);
+  background:#fff;
+  border:1px dashed var(--line);
+}
+.bulk-term-row.has-error{ border-color:var(--terracotta-500); background:rgba(196,90,63,.05); }
+
+/* ============================================
+   HAND NOTES / SLIDES / IMAGES — TABBED LAYOUT
+   ============================================ */
+.resource-tabs{
+  display:flex;
+  gap:.5rem;
+  flex-wrap:wrap;
+  margin-bottom:1.2rem;
+  padding:.4rem;
+  border:1.5px solid var(--line);
+  border-radius:12px;
+  background:var(--paper-100);
+}
+.resource-tab{
+  flex:1 1 150px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:.45rem;
+  padding:.75rem .9rem;
+  border:none;
+  border-radius:9px;
+  background:transparent;
+  font-family:var(--font-body);
+  font-size:.92rem;
+  font-weight:600;
+  color:var(--moss-700, #3f5b3d);
+  cursor:pointer;
+  transition:background .25s, color .25s, box-shadow .25s;
+}
+.resource-tab:hover{ background:rgba(107,155,94,.12); }
+.resource-tab.is-active{
+  background:linear-gradient(135deg, var(--moss-900), var(--moss-700));
+  color:#fff;
+  box-shadow:0 4px 14px rgba(31,46,34,.18);
+}
+.resource-tab .tab-emoji{ font-size:1.05rem; }
+.resource-tab .tab-badge{
+  font-family:var(--font-mono);
+  font-size:.72rem;
+  font-weight:700;
+  padding:.12rem .5rem;
+  border-radius:20px;
+  background:rgba(31,46,34,.09);
+  color:inherit;
+}
+.resource-tab.is-active .tab-badge{ background:rgba(255,255,255,.2); }
+
+.resource-tab-panel[hidden]{ display:none; }
+
+/* In tab mode each card owns the full width, so drop the hover-lift and
+   let the body breathe instead of squeezing three columns together. */
+.premium-cards-grid.is-tabbed{ display:block; margin-bottom:2rem; }
+.premium-cards-grid.is-tabbed .premium-card{ height:auto; }
+.premium-cards-grid.is-tabbed .premium-card:hover{ transform:none; box-shadow:0 2px 8px rgba(31,46,34,.06); }
+.premium-cards-grid.is-tabbed .card-body{ max-height:min(60vh, 560px); }
+.premium-cards-grid.is-tabbed .card-search{ margin-bottom:.9rem; }
+
+.resource-tab-hint{
+  font-size:.82rem;
+  color:var(--moss-600);
+  margin:-.5rem 0 1rem;
+  line-height:1.5;
+}
+
+@media (max-width:640px){
+  .resource-tab{ flex:1 1 100%; justify-content:flex-start; padding:.65rem .8rem; }
+  .admin-filter-count{ margin-left:0; width:100%; }
+  .admin-filter-search{ min-width:0; }
 }

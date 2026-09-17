@@ -134,6 +134,79 @@
     .profile-name-row{ justify-content:center; }
     .profile-page-head{ padding:1.3rem 1.1rem 1.5rem; border-radius:16px; }
   }
+
+  /* ============================================
+     PREMIUM POLISH — richer card surfaces, a
+     section-icon chip so each block of the page
+     reads at a glance, and a subtle hover lift
+     that makes the whole profile feel considered
+     rather than a plain stacked form.
+     ============================================ */
+  .profile-page-head::after{
+    content:"";
+    position:absolute; inset:0;
+    background-image:radial-gradient(rgba(255,255,255,.14) 1px, transparent 1px);
+    background-size:14px 14px;
+    opacity:.5; pointer-events:none;
+  }
+  .profile-card{
+    box-shadow:0 14px 34px rgba(31,46,34,.09), inset 0 1px 0 rgba(255,255,255,.6);
+    border-color:rgba(107,155,94,.18);
+  }
+  .uc-panel{ transition:box-shadow .18s ease, transform .18s ease; }
+  .profile-section-head{
+    display:flex; align-items:center; gap:.6rem; justify-content:flex-start;
+  }
+  .profile-section-icon{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:30px; height:30px; border-radius:9px; flex-shrink:0;
+    background:linear-gradient(150deg, rgba(107,155,94,.20), rgba(214,171,74,.16));
+    font-size:.95rem;
+  }
+  .profile-section-head h2{ display:flex; align-items:center; gap:.55rem; }
+  .profile-section-badge-count{
+    display:inline-flex; align-items:center; justify-content:center;
+    min-width:20px; height:20px; padding:0 .35rem;
+    border-radius:999px; background:var(--terracotta-500); color:#fff;
+    font-size:.7rem; font-weight:800; font-family:var(--font-mono);
+  }
+
+  /* --- Inbox --- */
+  .inbox-panel{ padding:0; overflow:hidden; }
+  .inbox-row{
+    border-bottom:1px solid var(--line);
+    background:#fff;
+    transition:background .15s ease;
+  }
+  .inbox-row:last-child{ border-bottom:none; }
+  .inbox-row.is-unread{ background:rgba(107,155,94,.05); }
+  .inbox-row-head{
+    display:flex; align-items:center; gap:.7rem;
+    padding:.95rem 1.1rem; cursor:pointer;
+  }
+  .inbox-row-head:hover{ background:rgba(63,91,61,.04); }
+  .inbox-row-dot{
+    width:8px; height:8px; border-radius:50%; flex-shrink:0;
+    background:transparent;
+  }
+  .inbox-row.is-unread .inbox-row-dot{ background:var(--leaf-500); box-shadow:0 0 0 3px rgba(107,155,94,.18); }
+  .inbox-row-headline{ flex:1; min-width:0; display:flex; flex-direction:column; gap:.15rem; }
+  .inbox-row-subject{ font-weight:600; font-size:.92rem; color:var(--moss-900); }
+  .inbox-row.is-unread .inbox-row-subject{ font-weight:800; }
+  .inbox-row-date{ font-size:.74rem; color:var(--moss-600); }
+  .inbox-row-chevron{ color:var(--moss-500); transition:transform .18s ease; flex-shrink:0; }
+  .inbox-row.is-open .inbox-row-chevron{ transform:rotate(180deg); }
+  .inbox-row-body{
+    padding:0 1.1rem 1.1rem 2.4rem;
+    font-size:.9rem; color:var(--moss-700); line-height:1.6;
+    white-space:pre-wrap;
+  }
+  .inbox-row-footer{
+    margin-top:.6rem; font-size:.75rem; color:var(--moss-500); font-style:italic;
+  }
+  #inbox-unread-badge{
+    margin-left:.15rem;
+  }
 </style>
 </head>
 <body>
@@ -194,8 +267,18 @@
         <div id="access-timeline-list"></div>
       </div>
 
-      <div class="profile-section" style="margin-top:0;">
-        <div class="profile-section-head"><h2>📊 My Contributions</h2></div>
+      <div class="profile-section" id="inbox" style="margin-top:0;">
+        <div class="profile-section-head"><h2><span class="profile-section-icon">📥</span>Inbox</h2><span id="inbox-unread-badge" class="profile-section-badge-count hidden">0</span></div>
+        <div class="uc-panel inbox-panel">
+          <div id="inbox-list"></div>
+          <div id="inbox-empty" class="hidden" style="padding:1.6rem 1.1rem;text-align:center;">
+            <p style="color:var(--moss-600);">No messages yet. Anything the admin sends you will show up here.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="profile-section">
+        <div class="profile-section-head"><h2><span class="profile-section-icon">📊</span>My Contributions</h2></div>
         <div class="credit-stats">
           <div class="credit-stat"><div class="num" id="stat-total">0</div><div class="label">Total Submitted</div></div>
           <div class="credit-stat"><div class="num" id="stat-approved">0</div><div class="label">✅ Approved (Credits)</div></div>
@@ -205,7 +288,7 @@
       </div>
 
       <div class="profile-section">
-        <div class="profile-section-head"><h2>📁 My Uploads</h2></div>
+        <div class="profile-section-head"><h2><span class="profile-section-icon">📁</span>My Uploads</h2></div>
         <div id="uploads-list"></div>
         <div id="uploads-empty" class="uc-panel hidden">
           <p>You haven't uploaded anything yet. Contributions to Resources or the Knowledge Hub will show up here.</p>
@@ -213,7 +296,7 @@
       </div>
 
       <div class="profile-section">
-        <div class="profile-section-head"><h2>📰 My Blog Posts</h2></div>
+        <div class="profile-section-head"><h2><span class="profile-section-icon">📰</span>My Blog Posts</h2></div>
         <div id="my-posts-list"></div>
         <div id="my-posts-empty" class="uc-panel hidden">
           <p>You haven't published any blog posts yet. Head to the <a href="blog.html" style="color:var(--leaf-500);font-weight:600;">Blog</a> to share something.</p>
@@ -221,7 +304,7 @@
       </div>
 
       <div class="profile-section">
-        <div class="profile-section-head"><h2>🔑 Login Password</h2></div>
+        <div class="profile-section-head"><h2><span class="profile-section-icon">🔑</span>Login Password</h2></div>
         <div id="password-section-no-password" class="hidden">
           <p style="color:var(--moss-600);font-size:.9rem;margin-bottom:1rem;">You currently log in with your Student ID and email. Set a password below for faster login — <strong>once you set one, you'll need your Student ID and password to log in</strong> (your email will no longer work for login).</p>
         </div>

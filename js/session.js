@@ -14,7 +14,9 @@
 // ============================================
 import { normalizeEmail, normalizeStudentId } from "./identity.js";
 import { db } from "./firebase-config.js";
-import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { hashPassword, isPasswordValid } from "./password.js";
+import { fetchMessagesForUser } from "./inbox.js";
 
 const SESSION_KEY = "agri_session_v1";
 
@@ -86,8 +88,11 @@ function renderAuthSlot() {
 
   const displayName = (session.fullName || session.email).split(" ")[0];
   slot.innerHTML = `
-    <a href="profile.html" class="navbar-auth-profile" title="${session.fullName || session.email}">
-      <img src="${session.avatarUrl}" alt="" class="navbar-auth-avatar">
+    <a href="profile.html#inbox" class="navbar-auth-profile" title="${session.fullName || session.email}">
+      <span class="navbar-auth-avatar-wrap">
+        <img src="${session.avatarUrl}" alt="" class="navbar-auth-avatar">
+        <span id="navbar-inbox-dot" class="navbar-inbox-dot hidden" title="You have unread messages"></span>
+      </span>
       <span>${displayName}</span>
     </a>
     <button type="button" class="navbar-auth-logout" id="navbar-logout-btn">Logout</button>
@@ -100,6 +105,15 @@ function renderAuthSlot() {
       window.location.href = "index.html";
     });
   }
+
+  // Best-effort — a failed/slow inbox check should never block the navbar.
+  fetchMessagesForUser(session.regId)
+    .then((messages) => {
+      const unread = messages.filter(m => !m.read).length;
+      const dot = document.getElementById("navbar-inbox-dot");
+      if (dot) dot.classList.toggle("hidden", unread === 0);
+    })
+    .catch((err) => console.warn("[Session] inbox badge check failed:", err));
 }
 
 function whenNavbarReady(fn) {
@@ -190,10 +204,107 @@ async function checkAccountRestriction() {
     const until = reg.accountRestrictedUntil?.toDate?.()?.getTime?.() || Number(reg.accountRestrictedUntil) || 0;
     if (until && until > Date.now()) {
       showAccountFreezeScreen(until, reg.accountRestrictedReason || "");
+      return;
     }
+
+    maybeShowPasswordSetupPopup(session.regId, reg);
   } catch (err) {
     console.error("[Session] account restriction check failed:", err);
   }
+}
+
+// ============================================
+// PASSWORD SETUP POPUP — shown site-wide, the very first thing a
+// logged-in student sees on any page, for as long as their account has
+// no passwordHash yet (a fresh registration, or a legacy account that
+// logged in the old email-only way). Replaces the old flow where a
+// password was optional and buried in Profile settings; setting one
+// here NEVER emails the plaintext password anywhere (js/login.js and
+// js/profile.js don't either — see their password-save handlers).
+// A "Maybe later" dismissal only lasts for this browser tab/session —
+// it reappears next time they open the site until a password is set.
+// ============================================
+function pwdPopupDismissKey(regId) {
+  return `agri_pwd_popup_dismissed_${regId}`;
+}
+
+function maybeShowPasswordSetupPopup(regId, reg) {
+  if (!regId || reg.passwordHash) return;
+  if (document.getElementById("pwd-setup-overlay")) return;
+  try {
+    if (sessionStorage.getItem(pwdPopupDismissKey(regId))) return;
+  } catch { /* storage unavailable — just show it */ }
+
+  const overlay = document.createElement("div");
+  overlay.id = "pwd-setup-overlay";
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="modal-box" style="max-width:420px;">
+      <div class="modal-body">
+        <h3>🔐 Set Up a Password</h3>
+        <p class="modal-desc" style="max-height:none;">
+          Secure your account with a password so you can log in faster next time — just your
+          Student ID and this password, no email step needed.
+        </p>
+        <form id="pwd-setup-form" style="margin-top:1rem;">
+          <div class="form-field">
+            <label for="pwd-setup-new">New password (min. 6 characters)</label>
+            <input type="password" id="pwd-setup-new" autocomplete="new-password" minlength="6" required>
+          </div>
+          <div class="form-field" style="margin-bottom:.6rem;">
+            <label for="pwd-setup-confirm">Confirm password</label>
+            <input type="password" id="pwd-setup-confirm" autocomplete="new-password" minlength="6" required>
+          </div>
+          <button type="submit" class="btn-primary" id="pwd-setup-submit" style="width:100%;">Set Password</button>
+          <button type="button" id="pwd-setup-later" style="width:100%;background:none;border:none;color:var(--moss-600);padding:.7rem 0 0;cursor:pointer;font-size:.85rem;text-decoration:underline;">Maybe later</button>
+          <p id="pwd-setup-status" style="margin-top:.6rem;font-size:.85rem;min-height:1.2em;"></p>
+        </form>
+      </div>
+    </div>`;
+  document.documentElement.appendChild(overlay);
+
+  const statusEl = overlay.querySelector("#pwd-setup-status");
+  function showStatus(msg, isError = false) {
+    statusEl.textContent = msg;
+    statusEl.style.color = isError ? "var(--terracotta-500, #C1704D)" : "var(--moss-600, #5b6f57)";
+  }
+
+  overlay.querySelector("#pwd-setup-later").addEventListener("click", () => {
+    try { sessionStorage.setItem(pwdPopupDismissKey(regId), "1"); } catch { /* ignore */ }
+    overlay.remove();
+  });
+
+  overlay.querySelector("#pwd-setup-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const password = overlay.querySelector("#pwd-setup-new").value;
+    const confirm = overlay.querySelector("#pwd-setup-confirm").value;
+
+    if (!isPasswordValid(password)) {
+      showStatus("Password must be at least 6 characters.", true);
+      return;
+    }
+    if (password !== confirm) {
+      showStatus("Passwords don't match.", true);
+      return;
+    }
+
+    const submitBtn = overlay.querySelector("#pwd-setup-submit");
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Saving…";
+    showStatus("Saving your password…");
+
+    try {
+      const passwordHash = await hashPassword(password, reg.email);
+      await updateDoc(doc(db, "registrations", regId), { passwordHash });
+      showStatus("✅ Password saved!");
+      setTimeout(() => overlay.remove(), 900);
+    } catch (err) {
+      console.error("[Session] password setup failed:", err);
+      showStatus("Something went wrong saving your password. Please try again.", true);
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Set Password";
+    }
+  });
 }
 
 checkAccountRestriction();

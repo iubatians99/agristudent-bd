@@ -3,7 +3,7 @@ import { collection, query, where, getDocs, doc, updateDoc } from "https://www.g
 import { normalizeEmail, normalizeStudentId } from "./identity.js";
 import { getSession, saveSession } from "./session.js";
 import { hashPassword, isPasswordValid } from "./password.js";
-import { initEmailNotifications, sendOtpEmail, sendCredentialsEmail } from "./email-config.js";
+import { initEmailNotifications, sendOtpEmail } from "./email-config.js";
 import { startOtp, verifyOtp, resendCooldownRemaining, clearOtp } from "./otp.js";
 
 initEmailNotifications();
@@ -413,8 +413,6 @@ resetPasswordSubmitBtn.addEventListener("click", async () => {
     const passwordHash = await hashPassword(password, reg.email);
     await updateDoc(doc(db, "registrations", id), { passwordHash });
     reg.passwordHash = passwordHash;
-
-    sendCredentialsEmail({ toEmail: reg.email, toName: reg.fullName, studentId: reg.studentIdNumber, password });
 
     loginToSession(id, reg);
 

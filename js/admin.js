@@ -9,6 +9,7 @@ import { initEmailNotifications, sendReviewEmail } from "./email-config.js";
 import { normalizeEmail, normalizeStudentId } from "./identity.js";
 import { computeResourceAccessStatus } from "./access.js";
 import { initAdminNotifications, stopAdminNotifications, initAdminNotifyBell, clearAdminNotifyBadge } from "./admin-notify.js";
+import { sendMessageToUser, fetchAllSentMessages, formatMessageDateTime } from "./inbox.js";
 
 initEmailNotifications();
 
@@ -85,6 +86,40 @@ function fmtAdminDate(val) {
   const day = String(d.getDate()).padStart(2, "0");
   const month = String(d.getMonth() + 1).padStart(2, "0");
   return `${day}/${month}/${d.getFullYear()}`;
+}
+
+// ============================================
+// STATUS FILTER HELPERS
+// ============================================
+// Every filterable panel (Resources, Blog, Terms, Registered Users) shows a
+// small "showing X of Y" counter beside its dropdown, so it's always obvious
+// when a filter is hiding rows rather than the data simply being empty.
+function setFilterCount(elId, shown, total, noun) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const plural = total === 1 ? noun : `${noun}s`;
+  el.textContent = shown === total
+    ? `${total} ${plural}`
+    : `Showing ${shown} of ${total} ${plural}`;
+}
+
+function debounce(fn, ms) {
+  let timer;
+  return (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), ms);
+  };
+}
+
+// Re-runs a panel's loader whenever one of its filter controls changes.
+// "change" covers the selects; typing in a search box is debounced.
+function wireFilterControls(ids, reload) {
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("change", reload);
+    if (el.tagName === "INPUT") el.addEventListener("input", debounce(reload, 250));
+  });
 }
 
 // ============================================
@@ -300,20 +335,27 @@ const registrationsCache = {};
 const blogCache = {};
 
 const tabs = {
-  approvals: { btn: document.getElementById("tab-approvals"), panel: document.getElementById("approvals-panel"), load: loadApprovals },
-  arrange: { btn: document.getElementById("tab-arrange"), panel: document.getElementById("arrange-panel"), load: loadArrangeFiles },
-  manualUnlock: { btn: document.getElementById("tab-manual-unlock"), panel: document.getElementById("manual-unlock-panel"), load: initManualUnlock },
   resources: { btn: document.getElementById("tab-resources"), panel: document.getElementById("resources-panel"), load: loadResources },
   blog: { btn: document.getElementById("tab-blog"), panel: document.getElementById("blog-panel"), load: loadBlogPosts },
   terms: { btn: document.getElementById("tab-terms"), panel: document.getElementById("terms-panel"), load: loadTerms },
+  registrations: { btn: document.getElementById("tab-registrations"), panel: document.getElementById("registrations-panel"), load: loadRegistrations },
+  manualUnlock: { btn: document.getElementById("tab-manual-unlock"), panel: document.getElementById("manual-unlock-panel"), load: initManualUnlock },
   timeline: { btn: document.getElementById("tab-timeline"), panel: document.getElementById("timeline-panel"), load: loadTimeline },
   messages: { btn: document.getElementById("tab-messages"), panel: document.getElementById("messages-panel"), load: loadMessages },
+  notifyUser: { btn: document.getElementById("tab-notify-user"), panel: document.getElementById("notify-user-panel"), load: loadNotifyUser },
   classroomCodes: { btn: document.getElementById("tab-classroom-codes"), panel: document.getElementById("classroom-codes-panel"), load: loadClassroomCodes },
   adUnlocks: { btn: document.getElementById("tab-ad-unlocks"), panel: document.getElementById("ad-unlocks-panel"), load: loadAdUnlocks },
   danger: { btn: document.getElementById("tab-danger"), panel: document.getElementById("danger-panel"), load: () => {} }
 };
 
 const adminPageTitle = document.getElementById("admin-page-title");
+
+// Status filters — each one just re-runs its panel's loader, which reads the
+// current dropdown value itself.
+wireFilterControls(["resource-status-filter", "resource-section-filter"], () => loadResources());
+wireFilterControls(["blog-status-filter"], () => loadBlogPosts());
+wireFilterControls(["term-status-filter"], () => loadTerms());
+wireFilterControls(["registration-status-filter", "registration-search"], () => loadRegistrations());
 
 Object.entries(tabs).forEach(([key, tab]) => {
   tab.btn.addEventListener("click", () => {
@@ -329,8 +371,8 @@ Object.entries(tabs).forEach(([key, tab]) => {
 });
 
 // Activate the first tab by default so the sidebar/topbar reflect the initial panel shown.
-tabs.approvals.btn.classList.add("is-active");
-if (adminPageTitle) adminPageTitle.textContent = tabs.approvals.btn.dataset.label || "Approvals";
+tabs.resources.btn.classList.add("is-active");
+if (adminPageTitle) adminPageTitle.textContent = tabs.resources.btn.dataset.label || "Resources";
 
 // ============================================
 // MANUAL UNLOCK — Grant Access to Users
@@ -521,289 +563,6 @@ async function loadUnlockHistory() {
 }
 
 // ============================================
-// ARRANGE FILES — Categorize Existing Resources
-// ============================================
-async function loadArrangeFiles() {
-  const listEl = document.getElementById("admin-arrange-list");
-  const filterEl = document.getElementById("arrange-filter");
-  if (!listEl || !filterEl) return;
-
-  listEl.innerHTML = "<p style='text-align:center;color:var(--moss-600);padding:2rem;'>Loading uncategorized files…</p>";
-
-  try {
-    // Fetch all approved resources that don't have noteType or need categorization
-    const resSnap = await getDocs(
-      query(
-        collection(db, "resources"),
-        where("status", "==", "approved"),
-        orderBy("uploadedAt", "desc")
-      )
-    );
-
-    // Filter out resources that already have proper categorization
-    const uncategorized = resSnap.docs
-      .map(d => ({ id: d.id, ...d.data() }))
-      .filter(r => !r.noteType || r.noteType === "others" || r.noteType === "");
-
-    if (uncategorized.length === 0) {
-      listEl.innerHTML = "<p style='text-align:center;color:var(--moss-600);padding:2rem;'>✅ All files are properly categorized!</p>";
-      return;
-    }
-
-    // Setup filter listener
-    filterEl.addEventListener("change", () => {
-      const filter = filterEl.value;
-      renderArrangeTable(uncategorized, filter, listEl);
-    });
-
-    renderArrangeTable(uncategorized, "", listEl);
-  } catch (err) {
-    console.error("[Admin] Error loading arrange files:", err);
-    listEl.innerHTML = `<p style='color:var(--terracotta-500);'>Error loading files: ${err.message}</p>`;
-  }
-}
-
-function renderArrangeTable(items, filter, container) {
-  let filtered = items;
-  if (filter) {
-    filtered = items.filter(item => item.fileType === filter);
-  }
-
-  if (filtered.length === 0) {
-    container.innerHTML = "<p style='text-align:center;color:var(--moss-600);padding:2rem;'>No files need categorization</p>";
-    return;
-  }
-
-  let html = "<div style='display:flex;flex-direction:column;gap:1rem;'>";
-
-  filtered.forEach(item => {
-    const fileIcon = item.fileType === "pdf" ? "📄" : item.fileType === "image" ? "🖼️" : "📊";
-    const currentType = item.noteType || "—";
-
-    html += `
-      <div style='border:1px solid var(--line);padding:1rem;border-radius:8px;background:#fff;'>
-        <div style='display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;margin-bottom:.8rem;flex-wrap:wrap;'>
-          <div>
-            <p style='margin:0;font-weight:600;'>${fileIcon} ${esc(item.courseCode)} — ${esc(item.courseName)}</p>
-            <p style='margin:.3rem 0 0;font-size:.85rem;color:var(--moss-600);'>${esc(item.facultyName)}</p>
-            <p style='margin:.2rem 0 0;font-size:.8rem;color:var(--moss-500);'>Uploaded: ${fmtAdminDate(item.uploadedAt)}</p>
-          </div>
-          <div style='background:var(--leaf-50);border:1px solid var(--leaf-300);border-radius:6px;padding:.4rem .6rem;font-size:.8rem;color:var(--moss-700);font-weight:600;'>
-            Current: ${currentType}
-          </div>
-        </div>
-
-        <div style='display:grid;grid-template-columns:1fr 1fr;gap:.8rem;'>
-          <div>
-            <label style='display:block;font-size:.8rem;font-weight:600;margin-bottom:.3rem;'>Assign to Folder:</label>
-            <select id='noteType-${item.id}' style='padding:.5rem .6rem;border:1px solid var(--line);border-radius:6px;width:100%;'>
-              <option value=''>— Select Folder —</option>
-              <option value='hand_notes'>📝 Hand Notes</option>
-              <option value='class_slide'>🖥️ Class Lecture Slides</option>
-              <option value='image'>🖼️ Images</option>
-            </select>
-          </div>
-          <div>
-            <label style='display:block;font-size:.8rem;font-weight:600;margin-bottom:.3rem;'>File Type:</label>
-            <select id='fileType-${item.id}' style='padding:.5rem .6rem;border:1px solid var(--line);border-radius:6px;width:100%;'>
-              <option value='${item.fileType}' selected>${item.fileType}</option>
-              <option value='pdf'>📄 PDF</option>
-              <option value='image'>🖼️ Image</option>
-              <option value='ppt'>📊 PPT</option>
-            </select>
-          </div>
-        </div>
-
-        <button class='save-arrange-btn' data-id='${item.id}' style='background:var(--leaf-500);color:white;border:none;padding:.6rem 1rem;border-radius:6px;cursor:pointer;font-weight:600;margin-top:.8rem;width:100%;'>💾 Save Categorization</button>
-      </div>
-    `;
-  });
-
-  html += "</div>";
-  container.innerHTML = html;
-
-  // Add event listeners
-  container.querySelectorAll(".save-arrange-btn").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      const id = btn.dataset.id;
-      const noteType = document.getElementById(`noteType-${id}`).value;
-      const fileType = document.getElementById(`fileType-${id}`).value;
-
-      if (!noteType) {
-        alert("Please select a folder type");
-        return;
-      }
-
-      await saveArrangement(id, noteType, fileType, container, filter);
-    });
-  });
-}
-
-async function saveArrangement(id, noteType, fileType, container, filter) {
-  try {
-    await updateDoc(doc(db, "resources", id), {
-      noteType: noteType,
-      fileType: fileType,
-      arrangedAt: serverTimestamp()
-    });
-
-    alert("✅ File categorized successfully!");
-    loadArrangeFiles();
-  } catch (err) {
-    alert(`Error saving categorization: ${err.message}`);
-  }
-}
-
-// ============================================
-// UNIFIED APPROVALS
-// ============================================
-async function loadApprovals() {
-  const listEl = document.getElementById("admin-approvals-list");
-  const filterEl = document.getElementById("approval-filter");
-  if (!listEl || !filterEl) return;
-
-  listEl.innerHTML = "<p style='text-align:center;color:var(--moss-600);padding:2rem;'>Loading approvals…</p>";
-
-  try {
-    // Load pending registrations
-    const regSnap = await getDocs(
-      query(collection(db, "registrations"), where("status", "==", "unverified"), orderBy("createdAt", "desc"))
-    );
-
-    // Load pending resources
-    const resSnap = await getDocs(
-      query(collection(db, "resources"), where("status", "==", "pending"), orderBy("uploadedAt", "desc"))
-    );
-
-    // Load pending blog posts
-    const blogSnap = await getDocs(
-      query(collection(db, "blogPosts"), where("status", "==", "unverified"), orderBy("submittedAt", "desc"))
-    );
-
-    const registrations = regSnap.docs.map(d => ({ id: d.id, type: "registration", ...d.data() }));
-    const resources = resSnap.docs.map(d => ({ id: d.id, type: "resource", ...d.data() }));
-    const blogs = blogSnap.docs.map(d => ({ id: d.id, type: "blog", ...d.data() }));
-
-    const allApprovals = [...registrations, ...resources, ...blogs];
-
-    // Setup filter listener
-    filterEl.addEventListener("change", () => {
-      const filter = filterEl.value;
-      renderApprovalsTable(allApprovals, filter, listEl);
-    });
-
-    renderApprovalsTable(allApprovals, "", listEl);
-  } catch (err) {
-    console.error("[Admin] Error loading approvals:", err);
-    listEl.innerHTML = `<p style='color:var(--terracotta-500);'>Error loading approvals: ${err.message}</p>`;
-  }
-}
-
-function renderApprovalsTable(items, filter, container) {
-  let filtered = items;
-  if (filter) {
-    filtered = items.filter(item => item.type === filter);
-  }
-
-  if (filtered.length === 0) {
-    container.innerHTML = "<p style='text-align:center;color:var(--moss-600);padding:2rem;'>No pending items to review</p>";
-    return;
-  }
-
-  let html = "<table style='width:100%;border-collapse:collapse;font-size:.9rem;'>";
-  html += "<thead style='background:var(--leaf-50);border-bottom:2px solid var(--line);'>";
-  html += "<tr>";
-  html += "<th style='padding:.8rem;text-align:left;font-weight:600;'>Type</th>";
-  html += "<th style='padding:.8rem;text-align:left;font-weight:600;'>Details</th>";
-  html += "<th style='padding:.8rem;text-align:left;font-weight:600;'>Submitted</th>";
-  html += "<th style='padding:.8rem;text-align:center;font-weight:600;'>Actions</th>";
-  html += "</tr></thead><tbody>";
-
-  filtered.forEach(item => {
-    const rowId = `approval-${item.type}-${item.id}`;
-    let typeEmoji = item.type === "registration" ? "📝" : item.type === "resource" ? "📚" : "✍️";
-    let details = "";
-
-    if (item.type === "registration") {
-      details = `<strong>${esc(item.studentName || "")}</strong> (${esc(item.emailNormalized || "")})<br/><small>${esc(item.studentId || "")}</small>`;
-    } else if (item.type === "resource") {
-      details = `<strong>${esc(item.courseCode || "")}</strong> - ${esc(item.courseName || "")}<br/><small>${esc(item.facultyName || "")}</small>`;
-    } else if (item.type === "blog") {
-      details = `<strong>${esc(item.title || "")}</strong><br/><small>by ${esc(item.authorEmail || "")}</small>`;
-    }
-
-    const submitted = fmtAdminDate(item.createdAt || item.uploadedAt || item.submittedAt);
-
-    html += `<tr id='${rowId}' style='border-bottom:1px solid var(--line);'>`;
-    html += `<td style='padding:.8rem;'>${typeEmoji} ${item.type}</td>`;
-    html += `<td style='padding:.8rem;'>${details}</td>`;
-    html += `<td style='padding:.8rem;'>${submitted}</td>`;
-    html += `<td style='padding:.8rem;text-align:center;'>`;
-    html += `<button class='approve-btn' data-type='${item.type}' data-id='${item.id}' style='background:var(--leaf-500);color:white;border:none;padding:.4rem .6rem;border-radius:4px;cursor:pointer;font-size:.8rem;margin-right:.3rem;'>✅ Approve</button>`;
-    html += `<button class='reject-btn' data-type='${item.type}' data-id='${item.id}' style='background:var(--terracotta-500);color:white;border:none;padding:.4rem .6rem;border-radius:4px;cursor:pointer;font-size:.8rem;'>❌ Reject</button>`;
-    html += `</td></tr>`;
-  });
-
-  html += "</tbody></table>";
-  container.innerHTML = html;
-
-  // Add event listeners
-  container.querySelectorAll(".approve-btn").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      const type = btn.dataset.type;
-      const id = btn.dataset.id;
-      await approveItem(type, id, container, filter);
-    });
-  });
-
-  container.querySelectorAll(".reject-btn").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      const type = btn.dataset.type;
-      const id = btn.dataset.id;
-      await rejectItem(type, id, container, filter);
-    });
-  });
-}
-
-async function approveItem(type, id, container, filter) {
-  try {
-    if (type === "registration") {
-      await updateDoc(doc(db, "registrations", id), { status: "verified" });
-    } else if (type === "resource") {
-      await updateDoc(doc(db, "resources", id), { status: "approved" });
-      const doc_data = (await getDocs(query(collection(db, "resources"), where("__name__", "==", id)))).docs[0].data();
-      await syncStudentAccessStatus(db, doc_data.uploaderEmail);
-    } else if (type === "blog") {
-      await updateDoc(doc(db, "blogPosts", id), { status: "verified" });
-    }
-    loadApprovals();
-  } catch (err) {
-    alert(`Error approving ${type}: ${err.message}`);
-  }
-}
-
-async function rejectItem(type, id, container, filter) {
-  const reason = prompt(`Enter reason for rejecting this ${type}:`);
-  if (reason === null) return;
-
-  try {
-    if (type === "registration") {
-      await deleteDoc(doc(db, "registrations", id));
-    } else if (type === "resource") {
-      await updateDoc(doc(db, "resources", id), { status: "rejected", rejectionReason: reason });
-    } else if (type === "blog") {
-      await updateDoc(doc(db, "blogPosts", id), { status: "rejected", rejectionReason: reason });
-    }
-    loadApprovals();
-  } catch (err) {
-    alert(`Error rejecting ${type}: ${err.message}`);
-  }
-}
-
-// ============================================
-// RESOURCES
-// ============================================
-// ============================================
 // HELPER FUNCTIONS
 // ============================================
 function getCurrentUserEmail() {
@@ -823,16 +582,31 @@ function getFileExt(name) {
   return parts.length > 1 ? parts.pop().toLowerCase() : "";
 }
 
-// Decide which bucket a whole resource entry belongs in, based on the
-// file types it contains. If it has a PDF, it's grouped under PDFs;
-// else if it has an image, under Images; otherwise Other.
+// Decide which of the three student-facing sections a resource belongs in.
+// This deliberately mirrors the exact split used by the public Hand Notes
+// page (js/resources.js → loadThreeCardLayout), so what the admin sees here
+// is what students see there:
+//   fileType "image"            → 🖼️ Images
+//   noteType "hand_notes"       → 📝 Hand Notes
+//   anything else               → 🖥️ Class Slides
+// Falls back to sniffing the file extension for very old docs that were
+// saved before fileType existed.
 function getResourceCategory(item) {
-  const files = item.fileUrls || [];
-  const exts = files.map(f => getFileExt(f.name || f.url));
-  if (exts.some(e => e === "pdf")) return "pdf";
-  if (exts.some(e => IMAGE_EXTS.includes(e))) return "image";
-  return "other";
+  if (item.fileType === "image") return "image";
+
+  if (!item.fileType) {
+    const exts = (item.fileUrls || []).map(f => getFileExt(f.name || f.url));
+    if (exts.length && exts.every(e => IMAGE_EXTS.includes(e))) return "image";
+  }
+
+  return item.noteType === "hand_notes" ? "hand_notes" : "class_slide";
 }
+
+const RESOURCE_SECTIONS = [
+  { key: "hand_notes",  title: "Hand Notes",   icon: "📝" },
+  { key: "class_slide", title: "Class Slides", icon: "🖥️" },
+  { key: "image",       title: "Images",       icon: "🖼️" }
+];
 
 function buildResourceRowHTML(d) {
   const item = d.data ? d.data() : d.item;
@@ -845,6 +619,7 @@ function buildResourceRowHTML(d) {
         ${item.examType ? " · " + esc(item.examType) : ""} · ${esc(item.facultyName) || ""}
       </div>
       <div style="font-size:.78rem;color:var(--moss-600);margin-top:.2rem;">By: ${esc(item.uploaderName) || "—"} (${esc(item.uploaderEmail) || "no email"})${item.uploaderStudentId ? ` · Student ID: <strong>${esc(item.uploaderStudentId)}</strong>` : ""}</div>
+      <div style="font-size:.76rem;color:var(--moss-500);margin-top:.15rem;">🕒 Uploaded ${esc(formatMessageDateTime(item.uploadedAt || item.submittedAt))} — resource access starts counting from this moment</div>
       <div style="margin-top:.4rem;display:flex;flex-wrap:wrap;gap:.3rem;align-items:center;">
         ${(item.fileUrls || []).map((f, i) => `
           <span style="display:inline-flex;align-items:center;gap:.25rem;">
@@ -892,18 +667,40 @@ async function loadResources() {
 
     if (snap.empty) { list.innerHTML = `<p style="color:var(--moss-600);">No resources submitted yet.</p>`; return; }
 
-    const buckets = { pdf: [], image: [], other: [] };
+    // Filters are read fresh on every load, so changing either dropdown
+    // just re-runs this function.
+    const statusFilter = document.getElementById("resource-status-filter")?.value || "";
+    const sectionFilter = document.getElementById("resource-section-filter")?.value || "";
+
+    const buckets = { hand_notes: [], class_slide: [], image: [] };
+    let total = 0;
+    let shown = 0;
+
     snap.forEach(d => {
       const item = d.data();
       resourcesCache[d.id] = item;
-      buckets[getResourceCategory(item)].push({ id: d.id, item });
+      total++;
+
+      const status = item.status || "pending";
+      if (statusFilter && status !== statusFilter) return;
+
+      const section = getResourceCategory(item);
+      if (sectionFilter && section !== sectionFilter) return;
+
+      buckets[section].push({ id: d.id, item });
+      shown++;
     });
 
-    list.innerHTML = [
-      buildResourceSectionHTML("PDF Documents", "📄", buckets.pdf),
-      buildResourceSectionHTML("Images", "🖼️", buckets.image),
-      buildResourceSectionHTML("Other Files", "📁", buckets.other)
-    ].join("");
+    setFilterCount("resource-filter-count", shown, total, "resource");
+
+    if (shown === 0) {
+      list.innerHTML = `<div class="admin-empty-state">No resources match this filter. Try widening it above.</div>`;
+      return;
+    }
+
+    list.innerHTML = RESOURCE_SECTIONS
+      .map(s => buildResourceSectionHTML(s.title, s.icon, buckets[s.key]))
+      .join("");
 
     list.querySelectorAll(".edit-btn").forEach(btn => {
       btn.addEventListener("click", () => {
@@ -1107,60 +904,6 @@ function buildBlogRowHTML(id, item) {
     </div>`;
 }
 
-// ============================================
-// RESET ALL BLOG REACTIONS
-// ------------------------------------------------------------------
-// A past bug let an "unlike" fire for a like a student never actually
-// made (deleting nothing, but still decrementing likesCount), which
-// could leave counts wrong — including negative — for posts that were
-// affected before the underlying bug was fixed. There's no way to tell,
-// after the fact, which of the existing blogLikes docs are genuine and
-// which are left over from that bug, so the only clean way to guarantee
-// every count is trustworthy again is a full one-time wipe: delete
-// every blogLikes doc and zero out likesCount on every post. Going
-// forward, real reactions build the count back up correctly.
-// ============================================
-const resetReactionsBtn = document.getElementById("reset-blog-reactions-btn");
-const resetReactionsStatus = document.getElementById("reset-blog-reactions-status");
-
-resetReactionsBtn?.addEventListener("click", async () => {
-  if (!confirm("This deletes EVERY like on EVERY blog post and resets all like counts to 0. This cannot be undone. Continue?")) return;
-  resetReactionsBtn.disabled = true;
-  resetReactionsStatus.textContent = "Resetting…";
-  try {
-    const [likesSnap, postsSnap] = await Promise.all([
-      getDocs(collection(db, "blogLikes")),
-      getDocs(collection(db, "blogPosts"))
-    ]);
-
-    // Firestore batches cap out at 500 writes, so chunk both deletes and
-    // the likesCount resets into batches of 400 to stay well under that.
-    const allRefs = [
-      ...likesSnap.docs.map(d => ({ ref: d.ref, type: "delete" })),
-      ...postsSnap.docs
-        .filter(d => (d.data().likesCount || 0) !== 0)
-        .map(d => ({ ref: d.ref, type: "zero" }))
-    ];
-
-    for (let i = 0; i < allRefs.length; i += 400) {
-      const batch = writeBatch(db);
-      allRefs.slice(i, i + 400).forEach(({ ref, type }) => {
-        if (type === "delete") batch.delete(ref);
-        else batch.update(ref, { likesCount: 0 });
-      });
-      await batch.commit();
-    }
-
-    resetReactionsStatus.textContent = `Done — cleared ${likesSnap.size} like${likesSnap.size === 1 ? "" : "s"} across ${postsSnap.size} post${postsSnap.size === 1 ? "" : "s"}.`;
-    loadBlogPosts();
-  } catch (err) {
-    console.error("[AgriAdmin] reset all reactions failed:", err);
-    resetReactionsStatus.textContent = "Something went wrong — please try again.";
-  } finally {
-    resetReactionsBtn.disabled = false;
-  }
-});
-
 async function loadBlogPosts() {
   blogList.innerHTML = `<p style="color:var(--moss-600);">Loading…</p>`;
   try {
@@ -1173,12 +916,30 @@ async function loadBlogPosts() {
     // buckets.pending via the `|| buckets.pending` fallback, so an edited
     // (possibly already-approved) post looked identical to a brand-new,
     // never-reviewed submission with no way to tell them apart.
+    const statusFilter = document.getElementById("blog-status-filter")?.value || "";
+
     const buckets = { pending: [], pending_edit: [], approved: [], rejected: [] };
+    let total = 0;
+    let shown = 0;
+
     snap.forEach(d => {
       const item = d.data();
       blogCache[d.id] = item;
-      (buckets[item.status] || buckets.pending).push({ id: d.id, item });
+      total++;
+      // Anything with an unrecognised status is treated as pending, both for
+      // bucketing and for filtering, so the two always agree.
+      const status = buckets[item.status] ? item.status : "pending";
+      if (statusFilter && status !== statusFilter) return;
+      buckets[status].push({ id: d.id, item });
+      shown++;
     });
+
+    setFilterCount("blog-filter-count", shown, total, "post");
+
+    if (shown === 0) {
+      blogList.innerHTML = `<div class="admin-empty-state">No blog posts match this filter. Try widening it above.</div>`;
+      return;
+    }
 
     const section = (title, icon, items) => {
       if (items.length === 0) return "";
@@ -1272,10 +1033,20 @@ async function loadTerms() {
 
     if (snap.empty) { termList.innerHTML = `<p style="color:var(--moss-600);">No terms submitted yet.</p>`; return; }
 
+    const statusFilter = document.getElementById("term-status-filter")?.value || "";
+    let total = 0;
+    let shown = 0;
+
     termList.innerHTML = "";
     snap.forEach(d => {
       const item = d.data();
       termsCache[d.id] = item;
+      total++;
+
+      const status = item.status || "pending";
+      if (statusFilter && status !== statusFilter) return;
+      shown++;
+
       const row = document.createElement("div");
       row.className = "resource-row";
       row.innerHTML = `
@@ -1301,6 +1072,13 @@ async function loadTerms() {
         </div>`;
       termList.appendChild(row);
     });
+
+    setFilterCount("term-filter-count", shown, total, "term");
+
+    if (shown === 0) {
+      termList.innerHTML = `<div class="admin-empty-state">No terms match this filter. Try widening it above.</div>`;
+      return;
+    }
 
     termList.querySelectorAll(".edit-btn").forEach(btn => {
       btn.addEventListener("click", () => {
@@ -1448,6 +1226,29 @@ async function loadTimeline() {
 // ============================================
 // REGISTRATIONS (student ID verification)
 // ============================================
+// A registration has no single "status" field — its state is spread across
+// idVerified, accountRestrictedUntil and removed — so the filter maps each
+// dropdown option onto the right combination. A restriction that has already
+// expired doesn't count as restricted.
+function matchesRegistrationFilter(item, filter) {
+  if (!filter) return true;
+
+  const until = item.accountRestrictedUntil?.toDate
+    ? item.accountRestrictedUntil.toDate()
+    : (item.accountRestrictedUntil ? new Date(item.accountRestrictedUntil) : null);
+  const isRestricted = !!(until && until.getTime() > Date.now());
+  const isRemoved = !!item.removed;
+
+  switch (filter) {
+    case "verified":   return !!item.idVerified;
+    case "unverified": return !item.idVerified;
+    case "restricted": return isRestricted;
+    case "removed":    return isRemoved;
+    case "active":     return !isRestricted && !isRemoved;
+    default:           return true;
+  }
+}
+
 async function loadRegistrations() {
   regList.innerHTML = `<p style="color:var(--moss-600);">Loading…</p>`;
   try {
@@ -1456,10 +1257,26 @@ async function loadRegistrations() {
 
     if (snap.empty) { regList.innerHTML = `<p style="color:var(--moss-600);">No registrations yet.</p>`; return; }
 
+    const statusFilter = document.getElementById("registration-status-filter")?.value || "";
+    const searchTerm = (document.getElementById("registration-search")?.value || "").trim().toLowerCase();
+    let total = 0;
+    let shown = 0;
+
     regList.innerHTML = "";
     snap.forEach(d => {
       const item = d.data();
       registrationsCache[d.id] = item;
+      total++;
+
+      if (!matchesRegistrationFilter(item, statusFilter)) return;
+
+      if (searchTerm) {
+        const haystack = [item.fullName, item.email, item.studentIdNumber]
+          .map(v => String(v || "").toLowerCase()).join(" ");
+        if (!haystack.includes(searchTerm)) return;
+      }
+      shown++;
+
       const row = document.createElement("div");
       row.className = "resource-row";
       row.innerHTML = `
@@ -1478,6 +1295,21 @@ async function loadRegistrations() {
           ${item.idVerified
             ? `<span style="display:inline-flex;align-items:center;gap:.35rem;padding:.35rem .65rem;border-radius:999px;background:linear-gradient(135deg,rgba(107,155,94,.22),rgba(63,91,61,.18));color:var(--leaf-500);font-size:.78rem;font-weight:700;">🟢 ID Verified</span>`
             : `<span style="display:inline-flex;align-items:center;gap:.35rem;padding:.35rem .65rem;border-radius:999px;background:rgba(214,171,74,.15);color:var(--wheat-400);font-size:.78rem;font-weight:600;">🕓 ID Not Verified</span>`}
+          ${(() => {
+            const now = Date.now();
+            const accessUntilMs = item.accessUntil?.toDate?.()?.getTime?.() || 0;
+            const restrictedUntilMs = item.restrictedUntil?.toDate?.()?.getTime?.() || 0;
+            if (item.restricted && restrictedUntilMs > now) {
+              return `<span style="display:inline-flex;align-items:center;gap:.35rem;padding:.35rem .65rem;border-radius:999px;background:rgba(196,90,63,.12);color:var(--terracotta-500);font-size:.78rem;font-weight:600;">🚫 Uploads Restricted until ${esc(formatMessageDateTime(item.restrictedUntil))}</span>`;
+            }
+            if (accessUntilMs > now) {
+              return `<span style="display:inline-flex;align-items:center;gap:.35rem;padding:.35rem .65rem;border-radius:999px;background:rgba(107,155,94,.15);color:var(--leaf-500);font-size:.78rem;font-weight:600;">🔓 Resource Access until ${esc(formatMessageDateTime(item.accessUntil))}</span>`;
+            }
+            if (item.lastAccessSyncAt) {
+              return `<span style="display:inline-flex;align-items:center;gap:.35rem;padding:.35rem .65rem;border-radius:999px;background:rgba(214,171,74,.15);color:var(--wheat-400);font-size:.78rem;font-weight:600;">🔒 No Active Access</span>`;
+            }
+            return "";
+          })()}
           ${item.accountRestrictedUntil ? `<span class="account-restriction-badge" style="display:inline-flex;align-items:center;gap:.35rem;padding:.35rem .65rem;border-radius:999px;background:rgba(196,90,63,.12);color:var(--terracotta-500);font-size:.78rem;font-weight:600;">⛔ Restricted until ${esc(fmtAdminDate(item.accountRestrictedUntil))}</span>` : ""}
           ${item.removed ? `<span class="user-removed-badge" style="display:inline-flex;align-items:center;gap:.35rem;padding:.35rem .65rem;border-radius:999px;background:rgba(196,90,63,.14);color:var(--terracotta-500);font-size:.78rem;font-weight:700;">🚫 Removed${item.removedAt ? ` · ${esc(fmtAdminDate(item.removedAt))}` : ""}</span>` : ""}
           <div style="display:flex;gap:.4rem;flex-wrap:wrap;justify-content:flex-end;">
@@ -1497,6 +1329,13 @@ async function loadRegistrations() {
         </div>`;
       regList.appendChild(row);
     });
+
+    setFilterCount("registration-filter-count", shown, total, "user");
+
+    if (shown === 0) {
+      regList.innerHTML = `<div class="admin-empty-state">No registered users match this filter. Try widening it above.</div>`;
+      return;
+    }
 
     regList.querySelectorAll(".remove-user-btn").forEach(btn => {
       btn.addEventListener("click", async () => {
@@ -1676,6 +1515,7 @@ async function loadMessages() {
       row.innerHTML = `
         <div>
           <strong>${esc(item.name)}</strong> <span style="font-size:.8rem;color:var(--moss-600);">(${esc(item.email)})</span>
+          <div style="font-size:.78rem;color:var(--moss-500);margin-top:.15rem;">🕒 ${esc(formatMessageDateTime(item.submittedAt))}</div>
           <div style="font-size:.85rem;color:var(--moss-700);margin-top:.3rem;max-width:480px;">${esc(item.message)}</div>
         </div>`;
       msgList.appendChild(row);
@@ -1684,6 +1524,179 @@ async function loadMessages() {
     showLoadError(msgList, "messages", err);
   }
 }
+
+// ============================================
+// NOTIFY USER — search a student, send them a message, and track
+// whether they've read it (js/inbox.js). One-way admin -> student
+// channel: shows up in the student's Profile -> Inbox.
+// ============================================
+let nuAllUsers = null;      // cached { id, ...data } list of registrations, loaded lazily
+let nuSelected = null;      // { id, data } of the currently selected recipient
+
+async function loadAllRegistrationsForSearch() {
+  if (nuAllUsers) return nuAllUsers;
+  const snap = await getDocs(query(collection(db, "registrations"), orderBy("submittedAt", "desc")));
+  nuAllUsers = snap.docs.map(d => ({ id: d.id, data: d.data() }));
+  return nuAllUsers;
+}
+
+function nuRenderSearchResults(matches) {
+  const box = document.getElementById("nu-search-results");
+  if (!matches.length) {
+    box.innerHTML = `<div style="padding:.7rem .9rem;font-size:.85rem;color:var(--moss-600);">No matching students.</div>`;
+    box.classList.remove("hidden");
+    return;
+  }
+  box.innerHTML = matches.slice(0, 8).map(({ id, data }) => `
+    <button type="button" class="nu-result-item" data-id="${esc(id)}"
+      style="display:flex;align-items:center;gap:.6rem;width:100%;text-align:left;padding:.6rem .9rem;background:none;border:none;border-bottom:1px solid var(--line);cursor:pointer;">
+      <img src="${esc(data.avatarUrl) || (data.gender === 'female' ? 'assets/avatar-female.svg' : 'assets/avatar-male.svg')}" alt="" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;">
+      <span style="min-width:0;">
+        <span style="display:block;font-weight:600;font-size:.85rem;">${esc(data.fullName) || "—"}</span>
+        <span style="display:block;font-size:.75rem;color:var(--moss-600);">${esc(data.email) || "—"}${data.studentIdNumber ? " · ID: " + esc(data.studentIdNumber) : ""}</span>
+      </span>
+    </button>`).join("");
+  box.classList.remove("hidden");
+
+  box.querySelectorAll(".nu-result-item").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const match = matches.find(m => m.id === btn.dataset.id);
+      if (match) nuSelectUser(match.id, match.data);
+      box.classList.add("hidden");
+      document.getElementById("nu-search-input").value = "";
+    });
+  });
+}
+
+function nuSelectUser(id, data) {
+  nuSelected = { id, data };
+  document.getElementById("nu-selected-user").classList.remove("hidden");
+  document.getElementById("nu-selected-avatar").src = data.avatarUrl || (data.gender === "female" ? "assets/avatar-female.svg" : "assets/avatar-male.svg");
+  document.getElementById("nu-selected-name").textContent = data.fullName || "—";
+  document.getElementById("nu-selected-meta").textContent = `${data.email || "—"}${data.studentIdNumber ? " · ID: " + data.studentIdNumber : ""}`;
+}
+
+function nuClearSelection() {
+  nuSelected = null;
+  document.getElementById("nu-selected-user").classList.add("hidden");
+}
+
+function nuStatus(msg, isError = false) {
+  const el = document.getElementById("nu-status");
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = isError ? "var(--terracotta-500)" : "var(--moss-600)";
+}
+
+function nuRenderSentList(messages) {
+  const listEl = document.getElementById("nu-sent-list");
+  if (!listEl) return;
+  if (!messages.length) {
+    listEl.innerHTML = `<p style="color:var(--moss-600);">No messages sent yet.</p>`;
+    return;
+  }
+  listEl.innerHTML = messages.map(item => {
+    const readBadge = item.read
+      ? `<span style="display:inline-flex;align-items:center;gap:.3rem;padding:.25rem .6rem;border-radius:999px;background:rgba(107,155,94,.15);color:var(--leaf-500);font-size:.75rem;font-weight:700;">✅ Read${item.readAt ? " · " + esc(formatMessageDateTime(item.readAt)) : ""}</span>`
+      : `<span style="display:inline-flex;align-items:center;gap:.3rem;padding:.25rem .6rem;border-radius:999px;background:rgba(214,171,74,.18);color:var(--wheat-400);font-size:.75rem;font-weight:700;">📬 Unread</span>`;
+    return `
+      <div class="resource-row">
+        <div style="min-width:0;">
+          <strong>${esc(item.subject)}</strong>
+          <div style="font-size:.78rem;color:var(--moss-600);margin-top:.2rem;">To: ${esc(item.toName) || "—"} (${esc(item.toEmail) || "—"})</div>
+          <div style="font-size:.78rem;color:var(--moss-500);margin-top:.15rem;">🕒 Sent ${esc(formatMessageDateTime(item.sentAt))}${item.sentBy ? " · by " + esc(item.sentBy) : ""}</div>
+          <p style="font-size:.85rem;color:var(--moss-900);margin:.5rem 0 0;max-width:480px;">${esc(item.body)}</p>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:.4rem;">
+          ${readBadge}
+        </div>
+      </div>`;
+  }).join("");
+}
+
+async function loadNotifyUser() {
+  const sentList = document.getElementById("nu-sent-list");
+  if (sentList) sentList.innerHTML = `<p style="color:var(--moss-600);">Loading…</p>`;
+  try {
+    const messages = await fetchAllSentMessages();
+    nuRenderSentList(messages);
+  } catch (err) {
+    if (sentList) showLoadError(sentList, "sent messages", err);
+  }
+}
+
+function initNotifyUser() {
+  const searchInput = document.getElementById("nu-search-input");
+  const resultsBox = document.getElementById("nu-search-results");
+  const clearBtn = document.getElementById("nu-selected-clear");
+  const form = document.getElementById("nu-compose-form");
+  if (!searchInput || !form) return;
+
+  let debounceTimer;
+  searchInput.addEventListener("input", () => {
+    clearTimeout(debounceTimer);
+    const term = searchInput.value.trim().toLowerCase();
+    if (!term) { resultsBox.classList.add("hidden"); return; }
+    debounceTimer = setTimeout(async () => {
+      try {
+        const all = await loadAllRegistrationsForSearch();
+        const matches = all.filter(({ data }) => {
+          const haystack = [data.fullName, data.email, data.studentIdNumber].map(v => String(v || "").toLowerCase()).join(" ");
+          return haystack.includes(term);
+        });
+        nuRenderSearchResults(matches);
+      } catch (err) {
+        console.error("[AgriAdmin] user search failed:", err);
+        resultsBox.innerHTML = `<div style="padding:.7rem .9rem;font-size:.85rem;color:var(--terracotta-500);">Search failed. Please try again.</div>`;
+        resultsBox.classList.remove("hidden");
+      }
+    }, 200);
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".notify-user-search-wrap")) resultsBox.classList.add("hidden");
+  });
+
+  clearBtn?.addEventListener("click", nuClearSelection);
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!nuSelected) {
+      nuStatus("Please search for and select a student first.", true);
+      return;
+    }
+    const subject = document.getElementById("nu-subject").value;
+    const body = document.getElementById("nu-body").value;
+    const sendBtn = document.getElementById("nu-send-btn");
+
+    sendBtn.disabled = true;
+    sendBtn.textContent = "Sending…";
+    nuStatus("Sending…");
+
+    try {
+      await sendMessageToUser({
+        toRegId: nuSelected.id,
+        toEmail: nuSelected.data.email,
+        toName: nuSelected.data.fullName,
+        subject,
+        body,
+        sentBy: currentAdminEmail
+      });
+      nuStatus(`✅ Message sent to ${nuSelected.data.fullName || nuSelected.data.email}.`);
+      form.reset();
+      nuClearSelection();
+      loadNotifyUser();
+    } catch (err) {
+      console.error("[AgriAdmin] failed to send message:", err);
+      nuStatus(err.message || "Something went wrong sending this message.", true);
+    } finally {
+      sendBtn.disabled = false;
+      sendBtn.textContent = "✉️ Send Message";
+    }
+  });
+}
+
+initNotifyUser();
 
 // ============================================
 // CLASSROOM CODES ("Send Us Classroom Code" submissions, resources.html)
@@ -1722,6 +1735,7 @@ async function loadClassroomCodes() {
           <span style="margin-left:.5rem;font-size:.75rem;font-weight:700;padding:.15rem .5rem;border-radius:999px;${statusStyle}">${statusLabel}</span>
           <div style="font-size:.85rem;color:var(--moss-700);margin-top:.35rem;">
             ${item.fromName ? esc(item.fromName) : "Anonymous"}${item.fromEmail ? ` — ${esc(item.fromEmail)}` : ""}
+            <div style="font-size:.76rem;color:var(--moss-500);margin-top:.1rem;">🕒 Submitted ${esc(formatMessageDateTime(item.submittedAt))}${item.approvedAt ? " · approved " + esc(formatMessageDateTime(item.approvedAt)) : ""}</div>
             ${isMaterialsRequest
               ? `<div style="font-size:.78rem;color:#8A6A1A;margin-top:.15rem;">📋 General code for sourcing materials — does not unlock any file</div>`
               : item.targetFileId
@@ -2059,18 +2073,45 @@ editModalForm.addEventListener("submit", async (e) => {
 
 // ============================================
 // BULK UPLOAD TERMS
+// ------------------------------------------------------------------
+// Two ways in, both ending at the same confirm-then-publish preview:
+//
+//   1. "From a Sheet"  — a .csv/.xlsx/.xls with one term per row. The
+//      image column may hold either a direct link or the filename of an
+//      image picked in the second file input, which is matched by name.
+//   2. "From Images"   — the original flow: pick images, each becomes one
+//      term seeded with a name derived from its filename.
+//
+// Nothing is written to Firestore until the admin reviews the preview and
+// presses Upload, so a bad sheet costs nothing.
 // ============================================
-const bulkTermImagesInput = document.getElementById("bulk-term-images");
-const bulkTermRows = document.getElementById("bulk-term-rows");
-const bulkTermUploadBtn = document.getElementById("bulk-term-upload-btn");
-const bulkTermStatus = document.getElementById("bulk-term-status");
+const bulkTermImagesInput   = document.getElementById("bulk-term-images");
+const bulkTermSheetInput    = document.getElementById("bulk-term-sheet");
+const bulkTermSheetImages   = document.getElementById("bulk-term-sheet-images");
+const bulkTermRows          = document.getElementById("bulk-term-rows");
+const bulkTermPreviewWrap   = document.getElementById("bulk-term-preview-wrap");
+const bulkTermUploadBtn     = document.getElementById("bulk-term-upload-btn");
+const bulkTermClearBtn      = document.getElementById("bulk-term-clear-btn");
+const bulkTermStatus        = document.getElementById("bulk-term-status");
+const bulkSheetSummary      = document.getElementById("bulk-sheet-summary");
+const bulkTermTemplateBtn   = document.getElementById("bulk-term-template-btn");
 
-let bulkTermFiles = [];
+// One entry per previewed term:
+//   { name, description, file, imageUrl, thumb, error }
+// `file` is a local File (upload the bytes), `imageUrl` is a remote link
+// (hand the URL to Cloudinary instead) — exactly one of the two is set.
+let bulkTermEntries = [];
+// Object URLs created for local-file thumbnails, revoked on clear so a big
+// sheet run doesn't leak them.
+let bulkObjectUrls = [];
 
 function filenameToTitle(name) {
-  return name.replace(/\.[^/.]+$/, "").replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+  return String(name || "").replace(/\.[^/.]+$/, "").replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
 }
 
+// ------------------------------------------------------------------
+// CLOUDINARY
+// ------------------------------------------------------------------
 function uploadFileToCloudinary(file, onProgress) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -2095,72 +2136,374 @@ function uploadFileToCloudinary(file, onProgress) {
   });
 }
 
-bulkTermImagesInput.addEventListener("change", () => {
-  bulkTermFiles = Array.from(bulkTermImagesInput.files || []);
+// Cloudinary can fetch a remote image itself when "file" is a URL string —
+// the download happens on their servers, so the browser never touches the
+// other site and CORS never comes into it. If their fetch fails (dead link,
+// hotlink protection), we fall back to saving the original URL as-is.
+async function uploadRemoteUrlToCloudinary(url) {
+  const data = new FormData();
+  data.append("file", url);
+  data.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+  const res = await fetch(CLOUDINARY_UPLOAD_URL, { method: "POST", body: data });
+  if (!res.ok) throw new Error(`Couldn't fetch that image link (${res.status})`);
+  const json = await res.json();
+  if (!json.secure_url) throw new Error("Image link returned no usable image.");
+  return json.secure_url;
+}
+
+// ------------------------------------------------------------------
+// MODE TABS
+// ------------------------------------------------------------------
+document.querySelectorAll(".bulk-mode-tab").forEach(tab => {
+  tab.addEventListener("click", () => {
+    const mode = tab.dataset.bulkMode;
+    document.querySelectorAll(".bulk-mode-tab").forEach(t => t.classList.toggle("is-active", t === tab));
+    document.getElementById("bulk-mode-sheet").classList.toggle("hidden", mode !== "sheet");
+    document.getElementById("bulk-mode-images").classList.toggle("hidden", mode !== "images");
+    clearBulkTerms();
+  });
+});
+
+function clearBulkTerms() {
+  bulkObjectUrls.forEach(u => URL.revokeObjectURL(u));
+  bulkObjectUrls = [];
+  bulkTermEntries = [];
   bulkTermRows.innerHTML = "";
+  bulkTermPreviewWrap.classList.add("hidden");
+  bulkTermUploadBtn.classList.add("hidden");
+  bulkTermClearBtn.classList.add("hidden");
+  bulkSheetSummary.classList.add("hidden");
+  bulkSheetSummary.innerHTML = "";
+  bulkTermStatus.textContent = "";
+  if (bulkTermSheetInput) bulkTermSheetInput.value = "";
+  if (bulkTermSheetImages) bulkTermSheetImages.value = "";
+  if (bulkTermImagesInput) bulkTermImagesInput.value = "";
+}
+
+bulkTermClearBtn?.addEventListener("click", clearBulkTerms);
+
+// ------------------------------------------------------------------
+// BLANK TEMPLATE
+// ------------------------------------------------------------------
+bulkTermTemplateBtn?.addEventListener("click", () => {
+  const csv = [
+    "name,description,image",
+    '"Rhizobium","Nitrogen-fixing bacteria that form nodules on legume roots.","https://example.com/rhizobium.jpg"',
+    '"Photosynthesis","How green plants turn light energy into chemical energy.","photosynthesis.jpg"',
+    '"Loam Soil","A balanced mix of sand, silt and clay — ideal for most crops.",""'
+  ].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "agri-terms-template.csv";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
+
+// ------------------------------------------------------------------
+// SHEET PARSING
+// ------------------------------------------------------------------
+// Header matching is deliberately forgiving: case, spaces, underscores and
+// dashes are all stripped before comparing, so "Image URL", "image_url" and
+// "imageurl" are the same column.
+const COLUMN_ALIASES = {
+  name:        ["name", "term", "title", "word", "keyword"],
+  description: ["description", "desc", "definition", "meaning", "details", "detail", "about"],
+  image:       ["image", "imageurl", "imagelink", "img", "photo", "picture", "pic", "url", "link"]
+};
+
+function normalizeHeader(h) {
+  return String(h || "").toLowerCase().replace(/[\s_\-.]+/g, "");
+}
+
+function mapColumns(headerRow) {
+  const map = { name: -1, description: -1, image: -1 };
+  headerRow.forEach((raw, i) => {
+    const h = normalizeHeader(raw);
+    if (!h) return;
+    for (const [field, aliases] of Object.entries(COLUMN_ALIASES)) {
+      if (map[field] === -1 && aliases.includes(h)) { map[field] = i; return; }
+    }
+  });
+  return map;
+}
+
+function isHttpUrl(val) {
+  return /^https?:\/\//i.test(String(val || "").trim());
+}
+
+// Local images are looked up by full filename and by filename-without-
+// extension, so a sheet saying "rhizobium" still matches "rhizobium.jpg".
+function buildLocalImageIndex(files) {
+  const index = new Map();
+  files.forEach(f => {
+    const full = f.name.toLowerCase();
+    index.set(full, f);
+    const stem = full.replace(/\.[^/.]+$/, "");
+    if (!index.has(stem)) index.set(stem, f);
+  });
+  return index;
+}
+
+async function readSheetRows(file) {
+  if (typeof XLSX === "undefined") {
+    throw new Error("The spreadsheet reader didn't load. Check your connection and refresh the page.");
+  }
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type: "array" });
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  if (!sheet) throw new Error("That file has no sheets in it.");
+  // header:1 gives raw rows so we can find the header ourselves rather than
+  // trusting SheetJS's own key inference.
+  return XLSX.utils.sheet_to_json(sheet, { header: 1, blankrows: false, defval: "" });
+}
+
+async function handleSheetSelected() {
+  const sheetFile = bulkTermSheetInput?.files?.[0];
+  if (!sheetFile) return;
+
+  bulkTermStatus.textContent = "";
+  bulkSheetSummary.classList.remove("hidden");
+  bulkSheetSummary.innerHTML = "Reading your sheet…";
+
+  try {
+    const rows = await readSheetRows(sheetFile);
+    if (rows.length < 2) throw new Error("That sheet needs a header row plus at least one term.");
+
+    const cols = mapColumns(rows[0]);
+    if (cols.name === -1) {
+      throw new Error("Couldn't find a name column. Add a header called \"name\" (or \"term\" / \"title\") to the first row.");
+    }
+
+    const localFiles = Array.from(bulkTermSheetImages?.files || []);
+    const localIndex = buildLocalImageIndex(localFiles);
+
+    bulkObjectUrls.forEach(u => URL.revokeObjectURL(u));
+    bulkObjectUrls = [];
+    bulkTermEntries = [];
+
+    let skippedBlank = 0;
+    let missingImages = 0;
+    let matchedLocal = 0;
+    let linkedRemote = 0;
+
+    rows.slice(1).forEach(row => {
+      const name = String(row[cols.name] ?? "").trim();
+      if (!name) { skippedBlank++; return; }
+
+      const description = cols.description === -1 ? "" : String(row[cols.description] ?? "").trim();
+      const imageRef = cols.image === -1 ? "" : String(row[cols.image] ?? "").trim();
+
+      const entry = { name, description, file: null, imageUrl: "", thumb: "", error: "" };
+
+      if (!imageRef) {
+        entry.error = "No image given";
+        missingImages++;
+      } else if (isHttpUrl(imageRef)) {
+        entry.imageUrl = imageRef;
+        entry.thumb = imageRef;
+        linkedRemote++;
+      } else {
+        const match = localIndex.get(imageRef.toLowerCase())
+          || localIndex.get(imageRef.toLowerCase().replace(/\.[^/.]+$/, ""));
+        if (match) {
+          entry.file = match;
+          entry.thumb = URL.createObjectURL(match);
+          bulkObjectUrls.push(entry.thumb);
+          matchedLocal++;
+        } else {
+          entry.error = `No image file named "${imageRef}"`;
+          missingImages++;
+        }
+      }
+
+      bulkTermEntries.push(entry);
+    });
+
+    if (!bulkTermEntries.length) throw new Error("No usable rows — every row was missing a name.");
+
+    const bits = [`<strong>${bulkTermEntries.length}</strong> term${bulkTermEntries.length === 1 ? "" : "s"} read from <em>${esc(sheetFile.name)}</em>.`];
+    if (linkedRemote)  bits.push(`${linkedRemote} image link${linkedRemote === 1 ? "" : "s"} to fetch.`);
+    if (matchedLocal)  bits.push(`${matchedLocal} image${matchedLocal === 1 ? "" : "s"} matched to files you picked.`);
+    if (skippedBlank)  bits.push(`${skippedBlank} blank row${skippedBlank === 1 ? "" : "s"} skipped.`);
+    if (missingImages) bits.push(`<span class="bulk-warn">${missingImages} row${missingImages === 1 ? "" : "s"} still need an image — fix below or they'll be skipped.</span>`);
+    if (cols.description === -1) bits.push(`No description column found — descriptions left blank.`);
+    bulkSheetSummary.innerHTML = bits.join(" ");
+
+    renderBulkPreview();
+  } catch (err) {
+    console.error("[AgriAdmin] sheet parse failed:", err);
+    bulkSheetSummary.innerHTML = `<span class="bulk-warn">⚠️ ${esc(err.message || "Couldn't read that file.")}</span>`;
+    bulkTermEntries = [];
+    bulkTermRows.innerHTML = "";
+    bulkTermPreviewWrap.classList.add("hidden");
+    bulkTermUploadBtn.classList.add("hidden");
+  }
+}
+
+bulkTermSheetInput?.addEventListener("change", handleSheetSelected);
+// Re-running the parse after images are picked lets filename matching catch
+// up without making the admin re-select the sheet.
+bulkTermSheetImages?.addEventListener("change", () => {
+  if (bulkTermSheetInput?.files?.length) handleSheetSelected();
+});
+
+// ------------------------------------------------------------------
+// IMAGES-ONLY MODE
+// ------------------------------------------------------------------
+bulkTermImagesInput?.addEventListener("change", () => {
+  const files = Array.from(bulkTermImagesInput.files || []);
+  bulkObjectUrls.forEach(u => URL.revokeObjectURL(u));
+  bulkObjectUrls = [];
   bulkTermStatus.textContent = "";
 
-  if (!bulkTermFiles.length) {
+  bulkTermEntries = files.map(file => {
+    const thumb = URL.createObjectURL(file);
+    bulkObjectUrls.push(thumb);
+    return { name: filenameToTitle(file.name), description: "", file, imageUrl: "", thumb, error: "" };
+  });
+
+  if (!bulkTermEntries.length) {
+    bulkTermPreviewWrap.classList.add("hidden");
     bulkTermUploadBtn.classList.add("hidden");
+    bulkTermClearBtn.classList.add("hidden");
+    return;
+  }
+  renderBulkPreview();
+});
+
+// ------------------------------------------------------------------
+// PREVIEW
+// ------------------------------------------------------------------
+function renderBulkPreview() {
+  bulkTermRows.innerHTML = bulkTermEntries.map((entry, idx) => {
+    const thumb = entry.thumb
+      ? `<img src="${esc(entry.thumb)}" alt="" onerror="this.outerHTML='&lt;div class=&quot;bulk-term-thumb-missing&quot;&gt;link broken&lt;/div&gt;'">`
+      : `<div class="bulk-term-thumb-missing">no image</div>`;
+
+    const source = entry.file
+      ? `📎 ${esc(entry.file.name)}`
+      : entry.imageUrl
+        ? `🔗 image link`
+        : `<span style="color:var(--terracotta-500);">${esc(entry.error || "No image")}</span>`;
+
+    return `
+      <div class="bulk-term-row${entry.error ? " has-error" : ""}" data-index="${idx}">
+        <span class="bulk-term-index">${idx + 1}</span>
+        ${thumb}
+        <div class="bulk-term-fields">
+          <input type="text" class="bulk-term-name" placeholder="Term name" value="${esc(entry.name)}">
+          <textarea class="bulk-term-desc" placeholder="Short description (optional)" rows="2">${esc(entry.description)}</textarea>
+          <input type="text" class="bulk-term-image" placeholder="Paste an image link for this term" value="${esc(entry.file ? "" : entry.imageUrl)}"${entry.file ? " disabled" : ""}>
+          <small style="font-size:.72rem;color:var(--moss-600);">${source}</small>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:.4rem;align-items:flex-end;">
+          <span class="bulk-term-status">${entry.error ? "⚠️ Needs image" : "Ready"}</span>
+          <button type="button" class="bulk-term-remove" data-index="${idx}" title="Drop this row" style="background:none;border:none;color:var(--terracotta-500);cursor:pointer;font-size:.9rem;">✕</button>
+        </div>
+      </div>`;
+  }).join("");
+
+  // Typing into a row updates the entry straight away, so edits survive a
+  // re-render and are what actually gets published.
+  bulkTermRows.querySelectorAll(".bulk-term-row").forEach(row => {
+    const idx = Number(row.dataset.index);
+    row.querySelector(".bulk-term-name")?.addEventListener("input", e => {
+      bulkTermEntries[idx].name = e.target.value;
+    });
+    row.querySelector(".bulk-term-desc")?.addEventListener("input", e => {
+      bulkTermEntries[idx].description = e.target.value;
+    });
+    row.querySelector(".bulk-term-image")?.addEventListener("input", e => {
+      const val = e.target.value.trim();
+      bulkTermEntries[idx].imageUrl = val;
+      bulkTermEntries[idx].error = val ? "" : "No image given";
+      row.classList.toggle("has-error", !val);
+      const statusEl = row.querySelector(".bulk-term-status");
+      if (statusEl) statusEl.textContent = val ? "Ready" : "⚠️ Needs image";
+    });
+  });
+
+  bulkTermRows.querySelectorAll(".bulk-term-remove").forEach(btn => {
+    btn.addEventListener("click", () => {
+      bulkTermEntries.splice(Number(btn.dataset.index), 1);
+      if (!bulkTermEntries.length) { clearBulkTerms(); return; }
+      renderBulkPreview();
+    });
+  });
+
+  bulkTermPreviewWrap.classList.remove("hidden");
+  bulkTermUploadBtn.classList.remove("hidden");
+  bulkTermClearBtn.classList.remove("hidden");
+}
+
+// ------------------------------------------------------------------
+// PUBLISH
+// ------------------------------------------------------------------
+bulkTermUploadBtn?.addEventListener("click", async () => {
+  if (!bulkTermEntries.length) return;
+
+  const ready = bulkTermEntries.filter(e => e.name.trim() && (e.file || e.imageUrl));
+  if (!ready.length) {
+    bulkTermStatus.textContent = "Nothing to publish — every row is missing a name or an image.";
+    bulkTermStatus.style.color = "var(--terracotta-500)";
     return;
   }
 
-  bulkTermFiles.forEach((file, idx) => {
-    const row = document.createElement("div");
-    row.className = "bulk-term-row";
-    row.dataset.index = String(idx);
-    const objectUrl = URL.createObjectURL(file);
-    row.innerHTML = `
-      <img src="${objectUrl}" alt="">
-      <div class="bulk-term-fields">
-        <input type="text" class="bulk-term-name" placeholder="Term name" value="${esc(filenameToTitle(file.name))}">
-        <textarea class="bulk-term-desc" placeholder="Short description (optional)" rows="2"></textarea>
-      </div>
-      <span class="bulk-term-status">Ready</span>`;
-    bulkTermRows.appendChild(row);
-  });
-
-  bulkTermUploadBtn.classList.remove("hidden");
-});
-
-bulkTermUploadBtn.addEventListener("click", async () => {
-  const rows = Array.from(bulkTermRows.querySelectorAll(".bulk-term-row"));
-  if (!rows.length) return;
+  const skipped = bulkTermEntries.length - ready.length;
+  if (!confirm(
+    `Publish ${ready.length} term${ready.length === 1 ? "" : "s"} to the Knowledge Hub as approved?` +
+    (skipped ? `\n\n${skipped} row${skipped === 1 ? "" : "s"} will be skipped (missing a name or image).` : "")
+  )) return;
 
   bulkTermUploadBtn.disabled = true;
+  bulkTermClearBtn.disabled = true;
   bulkTermUploadBtn.textContent = "Uploading…";
   bulkTermStatus.textContent = "";
 
   let successCount = 0;
   let failCount = 0;
 
-  for (const row of rows) {
-    const idx = Number(row.dataset.index);
-    const file = bulkTermFiles[idx];
-    const nameInput = row.querySelector(".bulk-term-name");
-    const descInput = row.querySelector(".bulk-term-desc");
-    const statusEl = row.querySelector(".bulk-term-status");
-    const name = nameInput.value.trim();
+  const rowEls = Array.from(bulkTermRows.querySelectorAll(".bulk-term-row"));
 
-    if (!name) {
-      statusEl.textContent = "⚠️ Name required";
-      statusEl.style.color = "var(--terracotta-500)";
-      failCount++;
+  for (let i = 0; i < bulkTermEntries.length; i++) {
+    const entry = bulkTermEntries[i];
+    const rowEl = rowEls[i];
+    const statusEl = rowEl?.querySelector(".bulk-term-status");
+    const setStatus = (text, color) => {
+      if (!statusEl) return;
+      statusEl.textContent = text;
+      statusEl.style.color = color;
+    };
+
+    const name = entry.name.trim();
+    if (!name || (!entry.file && !entry.imageUrl)) {
+      setStatus("⏭️ Skipped", "var(--moss-600)");
       continue;
     }
 
-    statusEl.textContent = "Uploading…";
-    statusEl.style.color = "var(--moss-600)";
-    nameInput.disabled = true;
-    descInput.disabled = true;
+    setStatus("Uploading…", "var(--moss-600)");
+    rowEl?.querySelectorAll("input, textarea").forEach(el => { el.disabled = true; });
 
     try {
-      const imageUrl = await uploadFileToCloudinary(file, (pct) => {
-        statusEl.textContent = `Uploading ${pct}%`;
-      });
+      let imageUrl;
+      if (entry.file) {
+        imageUrl = await uploadFileToCloudinary(entry.file, pct => setStatus(`Uploading ${pct}%`, "var(--moss-600)"));
+      } else {
+        setStatus("Fetching link…", "var(--moss-600)");
+        try {
+          imageUrl = await uploadRemoteUrlToCloudinary(entry.imageUrl);
+        } catch (fetchErr) {
+          // Cloudinary couldn't pull it in — keep the original link so the
+          // term still publishes rather than failing outright.
+          console.warn("[AgriAdmin] remote image fetch failed, keeping original link:", fetchErr);
+          imageUrl = entry.imageUrl;
+        }
+      }
+
       await addDoc(collection(db, "terms"), {
         name,
-        description: descInput.value.trim(),
+        description: entry.description.trim(),
         imageUrl,
         uploaderEmail: currentAdminEmail || "admin",
         status: "approved",
@@ -2168,22 +2511,25 @@ bulkTermUploadBtn.addEventListener("click", async () => {
         submittedAt: serverTimestamp(),
         reviewedAt: new Date()
       });
-      statusEl.textContent = "✅ Published";
-      statusEl.style.color = "var(--leaf-500)";
+
+      setStatus("✅ Published", "var(--leaf-500)");
       successCount++;
     } catch (err) {
       console.error("[AgriAdmin] bulk term upload failed:", err);
-      statusEl.textContent = "❌ Failed";
-      statusEl.style.color = "var(--terracotta-500)";
+      setStatus("❌ Failed", "var(--terracotta-500)");
       failCount++;
-      nameInput.disabled = false;
-      descInput.disabled = false;
+      rowEl?.querySelectorAll("input, textarea").forEach(el => { el.disabled = false; });
     }
   }
 
-  bulkTermStatus.textContent = `Done — ${successCount} published, ${failCount} failed.`;
+  const parts = [`${successCount} published`];
+  if (failCount) parts.push(`${failCount} failed`);
+  if (skipped) parts.push(`${skipped} skipped`);
+  bulkTermStatus.textContent = `Done — ${parts.join(", ")}.`;
   bulkTermStatus.style.color = failCount ? "var(--terracotta-500)" : "var(--leaf-500)";
+
   bulkTermUploadBtn.disabled = false;
+  bulkTermClearBtn.disabled = false;
   bulkTermUploadBtn.textContent = "⬆️ Upload All";
 
   if (successCount > 0) loadTerms();

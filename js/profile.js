@@ -4,9 +4,10 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { normalizeEmail } from "./identity.js";
 import { getSession, saveSession, clearSession } from "./session.js";
-import { initEmailNotifications, sendCredentialsEmail } from "./email-config.js";
+import { initEmailNotifications } from "./email-config.js";
 import { hashPassword, isPasswordValid } from "./password.js";
 import { computeResourceAccessStatus, maybeSendAccessReminder, renderAccessBadge, renderAccessScale, formatDate, formatRemaining } from "./access.js";
+import { fetchMessagesForUser, markMessageRead, formatMessageDateTime } from "./inbox.js";
 
 initEmailNotifications();
 
@@ -178,6 +179,12 @@ async function init() {
     } catch (err) {
       console.error("[Profile] failed to load blog posts:", err);
     }
+
+    try {
+      await renderInbox(session.regId);
+    } catch (err) {
+      console.error("[Profile] failed to load inbox:", err);
+    }
   } catch (err) {
     console.error("[Profile] failed to load:", err);
     loadingEl.innerHTML = `
@@ -268,8 +275,6 @@ function renderPasswordSection(regId, reg) {
       const passwordHash = await hashPassword(password, reg.email);
       await updateDoc(doc(db, "registrations", regId), { passwordHash });
       reg.passwordHash = passwordHash;
-
-      sendCredentialsEmail({ toEmail: reg.email, toName: reg.fullName, studentId: reg.studentIdNumber, password });
 
       newPasswordInput.value = "";
       confirmInput.value = "";
@@ -517,6 +522,92 @@ async function renderMyBlogPosts(email) {
         console.error("[Profile] failed to delete post:", err);
         alert("Failed to delete post. Please try again.");
         btn.disabled = false;
+      }
+    });
+  });
+}
+
+// ============================================
+// INBOX — messages sent by an admin (js/admin.js "Notify User").
+// Opening a message marks it read; the admin panel then shows exactly
+// when it was seen. See js/inbox.js for the shared read/write helpers.
+// ============================================
+let inboxCache = [];
+
+function inboxUnreadCount() {
+  return inboxCache.filter(m => !m.read).length;
+}
+
+function renderInboxBadge() {
+  const badge = document.getElementById("inbox-unread-badge");
+  if (!badge) return;
+  const count = inboxUnreadCount();
+  if (count > 0) {
+    badge.textContent = count;
+    badge.classList.remove("hidden");
+  } else {
+    badge.classList.add("hidden");
+  }
+}
+
+async function renderInbox(regId) {
+  const listEl = document.getElementById("inbox-list");
+  const emptyEl = document.getElementById("inbox-empty");
+  if (!listEl) return;
+
+  inboxCache = await fetchMessagesForUser(regId);
+
+  if (inboxCache.length === 0) {
+    listEl.innerHTML = "";
+    emptyEl?.classList.remove("hidden");
+    renderInboxBadge();
+    return;
+  }
+  emptyEl?.classList.add("hidden");
+
+  listEl.innerHTML = inboxCache.map(item => {
+    const isUnread = !item.read;
+    return `
+      <div class="inbox-row ${isUnread ? "is-unread" : ""}" data-id="${esc(item.id)}">
+        <div class="inbox-row-head">
+          <span class="inbox-row-dot" aria-hidden="true"></span>
+          <div class="inbox-row-headline">
+            <span class="inbox-row-subject">${esc(item.subject)}</span>
+            <span class="inbox-row-date">${esc(formatMessageDateTime(item.sentAt))}</span>
+          </div>
+          <span class="inbox-row-chevron">▾</span>
+        </div>
+        <div class="inbox-row-body hidden">
+          <p>${esc(item.body)}</p>
+          <div class="inbox-row-footer">— Agri Core Admin${item.readAt ? ` · seen ${esc(formatMessageDateTime(item.readAt))}` : ""}</div>
+        </div>
+      </div>`;
+  }).join("");
+
+  renderInboxBadge();
+
+  listEl.querySelectorAll(".inbox-row").forEach(row => {
+    row.querySelector(".inbox-row-head").addEventListener("click", async () => {
+      const bodyEl = row.querySelector(".inbox-row-body");
+      const wasHidden = bodyEl.classList.contains("hidden");
+      // Close any other open message first — one message open at a time.
+      listEl.querySelectorAll(".inbox-row-body").forEach(b => b.classList.add("hidden"));
+      listEl.querySelectorAll(".inbox-row").forEach(r => r.classList.remove("is-open"));
+      if (!wasHidden) return; // was open — clicking again just closes it
+      bodyEl.classList.remove("hidden");
+      row.classList.add("is-open");
+
+      const id = row.dataset.id;
+      const item = inboxCache.find(m => m.id === id);
+      if (item && !item.read) {
+        item.read = true; // optimistic — avoids a flash back to "unread" on re-render
+        row.classList.remove("is-unread");
+        try {
+          await markMessageRead(id);
+        } catch (err) {
+          console.error("[Profile] failed to mark message read:", err);
+        }
+        renderInboxBadge();
       }
     });
   });

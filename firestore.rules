@@ -232,6 +232,45 @@ service cloud.firestore {
     }
 
     // ============================================
+    // ADMIN MESSAGES: Admin → Student inbox (js/admin.js "Notify User",
+    // js/inbox.js, js/profile.js Inbox section)
+    // ============================================
+    // Only the admin panel (a real Firebase Auth session) may compose and
+    // send a message to a student. Students never hold a Firebase Auth
+    // session (same trust model as the rest of this file), so reading
+    // "messages sent to me" and marking one "read" have to stay public
+    // and be locked down with field validation instead of an auth check
+    // — js/profile.js filters its own query to the signed-in student's
+    // own regId, and the update rule below can ONLY ever flip
+    // read:false -> true (plus its timestamp), never touch the sender,
+    // recipient, subject or body.
+    match /adminMessages/{id} {
+      allow create: if request.auth != null &&
+        request.resource.data.keys().hasAll(['toRegId', 'toEmail', 'subject', 'body', 'sentAt', 'read']) &&
+        request.resource.data.toRegId is string && request.resource.data.toRegId.size() > 0 &&
+        request.resource.data.toEmail is string && request.resource.data.toEmail.size() > 0 &&
+        request.resource.data.subject is string &&
+        request.resource.data.subject.size() > 0 && request.resource.data.subject.size() <= 200 &&
+        request.resource.data.body is string &&
+        request.resource.data.body.size() > 0 && request.resource.data.body.size() <= 5000 &&
+        request.resource.data.read == false;
+
+      // Public list/get so the recipient (no auth session) can query their
+      // own inbox by regId — same pattern as classroomCodes/adUnlocks above.
+      allow list, get: if true;
+
+      // A student may only ever mark their own received message as read
+      // (read:false -> true, plus readAt) — every other field is frozen.
+      // The admin panel can do anything (delete, edit) via its own auth.
+      allow update: if request.auth != null || (
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'readAt']) &&
+        request.resource.data.read == true
+      );
+
+      allow delete: if request.auth != null;
+    }
+
+    // ============================================
     // BLOG POSTS: Facebook-style student timeline (js/blog.js)
     // ============================================
     // Same trust model as /resources and /terms above: students never
