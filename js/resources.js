@@ -113,12 +113,12 @@ async function autoRenameIfDuplicate(fileName, courseCode, facultyName) {
 // NOTE TYPE (Hand Notes / Class Slide / Others)
 // A student-chosen category, separate from the file format (fileType:
 // pdf/image/ppt). Shown with low visual prominence next to the course
-// code/name in the PDFs & Presentations lists. Defaults to "hand_notes"
-// for any older docs that predate this field.
+// code/name in the document lists. Defaults to "class_slide" for any
+// older docs that predate this field.
 // ============================================
 const NOTE_TYPE_LABELS = { hand_notes: "Hand Notes", class_slide: "Class Slide", others: "Others" };
 function noteTypeLabel(item) {
-  return NOTE_TYPE_LABELS[item.noteType] || NOTE_TYPE_LABELS.hand_notes;
+  return NOTE_TYPE_LABELS[item.noteType] || NOTE_TYPE_LABELS.class_slide;
 }
 function wireNoteTypeVisual(radioName) {
   document.querySelectorAll(`input[name="${radioName}"]`).forEach(r => {
@@ -1447,14 +1447,22 @@ if (handNotesGate && handNotesContent) {
 
 // ============================================
 // THREE-CARD PREMIUM LAYOUT (slides-notes.html)
+// Cards: 📝 Hand Notes | 🖥️ Class Lecture Slides | 🖼️ Images
+// The two document cards share one folder browser and one "View All"
+// modal; they differ only in which slice of the resources they show:
+//   noteType === "hand_notes"  → Hand Notes
+//   anything else (incl. old files with no noteType) → Class Lecture Slides
 // ============================================
-const pdfList = document.getElementById("pdf-list");
-const pdfSearch = document.getElementById("pdf-search");
+const handnotesList = document.getElementById("handnotes-list");
+const handnotesSearch = document.getElementById("handnotes-search");
+const slidesList = document.getElementById("slides-list");
+const slidesSearch = document.getElementById("slides-search");
 const imageGrid = document.getElementById("image-grid");
 const imageSearch = document.getElementById("image-search");
 
-if (pdfList || imageGrid) {
-  let allDocs = [];   // PDFs + Presentations, merged into one card
+if (handnotesList || slidesList || imageGrid) {
+  let allHandNotes = [];  // 📝 hand notes (PDF/PPT)
+  let allSlides = [];     // 🖥️ class lecture slides (PDF/PPT)
   let allImages = [];
 
   async function loadThreeCardLayout() {
@@ -1467,11 +1475,16 @@ if (pdfList || imageGrid) {
       const snap = await getDocs(q);
       const resources = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-      // PDFs and Presentations share one card now; images stay separate.
-      allDocs = resources.filter(r => r.fileType === "pdf" || r.fileType === "ppt" || !r.fileType); // no fileType defaults to PDF for backward compatibility
+      // Documents (PDF + presentations) split into the two folder cards;
+      // images stay in their own card. No fileType at all still means PDF,
+      // for backward compatibility with files uploaded before that field.
+      const docs = resources.filter(r => r.fileType === "pdf" || r.fileType === "ppt" || !r.fileType);
+      allHandNotes = docs.filter(r => r.noteType === "hand_notes");
+      allSlides = docs.filter(r => r.noteType !== "hand_notes");
       allImages = resources.filter(r => r.fileType === "image");
 
-      renderPdfCard();
+      handNotesCard.render();
+      slidesCard.render();
       renderImageCard();
     } catch (err) {
       console.error("[Three Card Layout] load failed:", err);
@@ -1503,7 +1516,7 @@ if (pdfList || imageGrid) {
   }
 
   // ============================================
-  // PDF/PRESENTATIONS FOLDER BROWSER
+  // DOCUMENT FOLDER BROWSER
   // Renders a drill-down folder view into `container`, backed by `items`
   // (an array of submissions) and `state` (mutable {courseCode, faculty}).
   //   Level 1 — one folder per course code (e.g. "AGR 101: Agronomy")
@@ -1517,6 +1530,7 @@ if (pdfList || imageGrid) {
   // "View All" link.
   // ============================================
   function renderPdfFolder(container, items, state, opts = {}) {
+    if (!container) return;
     if (items.length === 0) {
       container.innerHTML = `<p style="color:var(--moss-600);font-size:.9rem;text-align:center;padding:1rem;">No matching files found.</p>`;
       if (opts.onTopLevelCount) opts.onTopLevelCount(0, 0);
@@ -1647,88 +1661,103 @@ if (pdfList || imageGrid) {
     });
   }
 
-  let pdfSearchWired = false;
-  let pdfLoadedOnce = false;
-  const pdfCardState = { courseCode: null, faculty: null };
+  // ============================================
+  // DOCUMENT CARD (used twice: Hand Notes + Class Lecture Slides)
+  // Each card keeps its OWN drill-down state, its own search box and its
+  // own "View All" link, but they share renderPdfFolder above.
+  // ============================================
+  function createDocCard({ listEl, searchEl, countId, viewAllId, getItems }) {
+    const state = { courseCode: null, faculty: null };
+    let searchWired = false;
+    let loadedOnce = false;
 
-  function renderPdfCard() {
-    const docCount = allDocs.length;
-    document.getElementById("pdf-count").textContent = `(${docCount})`;
-
-    if (docCount === 0) {
-      pdfList.innerHTML = `<p style="color:var(--moss-600);font-size:.9rem;text-align:center;padding:1rem;">No files yet.</p>`;
-      if (pdfSearch) pdfSearch.style.display = "none";
-      document.getElementById("pdf-view-all").style.display = "none";
-      return;
+    function filtered() {
+      const items = getItems();
+      const term = (searchEl?.value || "").trim().toLowerCase();
+      if (!term) return items;
+      return items.filter(i =>
+        (i.courseCode || "").toLowerCase().includes(term) ||
+        (i.courseName || "").toLowerCase().includes(term)
+      );
     }
 
-    // BUG FIX: loadThreeCardLayout() reruns in the background (the 15s
-    // access poll, or right after an access-state change) purely to
-    // refresh lock badges/counts — it isn't a fresh page visit. Only
-    // reset the folder drill-down (and re-apply the search box's current
-    // term) on the very FIRST render; later automatic reruns now keep the
-    // student exactly where they were browsing instead of bouncing them
-    // back to the top-level course list mid-navigation.
-    const resetNav = !pdfLoadedOnce;
-    pdfLoadedOnce = true;
+    function renderList(items, resetNav) {
+      if (resetNav) { state.courseCode = null; state.faculty = null; }
+      renderPdfFolder(listEl, items, state, {
+        limitTopLevel: 6,
+        onTopLevelCount: (total, shown) => {
+          const link = document.getElementById(viewAllId);
+          if (link) link.style.display = total > shown ? "block" : "none";
+        }
+      });
+    }
 
-    if (pdfSearch) {
-      pdfSearch.style.display = "block";
-      const term = pdfSearch.value.trim().toLowerCase();
-      const filtered = term
-        ? allDocs.filter(item =>
-            (item.courseCode || "").toLowerCase().includes(term) ||
-            (item.courseName || "").toLowerCase().includes(term)
-          )
-        : allDocs;
-      renderPdfList(filtered, resetNav);
+    function render() {
+      const items = getItems();
+      const countEl = document.getElementById(countId);
+      if (countEl) countEl.textContent = `(${items.length})`;
+      if (!listEl) return;
 
-      if (!pdfSearchWired) {
-        pdfSearchWired = true;
-        pdfSearch.addEventListener("input", (e) => {
-          const term = e.target.value.trim().toLowerCase();
-          const filtered = term
-            ? allDocs.filter(item =>
-                (item.courseCode || "").toLowerCase().includes(term) ||
-                (item.courseName || "").toLowerCase().includes(term)
-              )
-            : allDocs;
+      const viewAllLink = document.getElementById(viewAllId);
+      if (items.length === 0) {
+        listEl.innerHTML = `<p style="color:var(--moss-600);font-size:.9rem;text-align:center;padding:1rem;">No files yet.</p>`;
+        if (searchEl) searchEl.style.display = "none";
+        if (viewAllLink) viewAllLink.style.display = "none";
+        return;
+      }
+
+      // loadThreeCardLayout() reruns in the background (the 15s access
+      // poll, or right after an access-state change) purely to refresh
+      // lock badges/counts — it isn't a fresh page visit. Only reset the
+      // folder drill-down on the very FIRST render, so later automatic
+      // reruns keep the student exactly where they were browsing.
+      const resetNav = !loadedOnce;
+      loadedOnce = true;
+
+      if (searchEl) {
+        searchEl.style.display = "block";
+        if (!searchWired) {
+          searchWired = true;
           // A new search term always starts back at the top level.
-          renderPdfList(filtered, true);
-        });
+          searchEl.addEventListener("input", () => renderList(filtered(), true));
+        }
       }
-    } else {
-      renderPdfList(allDocs, resetNav);
+      renderList(filtered(), resetNav);
     }
+
+    return { render };
   }
 
-  function renderPdfList(items, resetNav = true) {
-    if (resetNav) {
-      pdfCardState.courseCode = null;
-      pdfCardState.faculty = null;
-    }
-    renderPdfFolder(pdfList, items, pdfCardState, {
-      limitTopLevel: 6,
-      onTopLevelCount: (total, shown) => {
-        document.getElementById("pdf-view-all").style.display = total > shown ? "block" : "none";
-      }
-    });
-  }
+  const handNotesCard = createDocCard({
+    listEl: handnotesList, searchEl: handnotesSearch,
+    countId: "handnotes-count", viewAllId: "handnotes-view-all",
+    getItems: () => allHandNotes
+  });
+
+  const slidesCard = createDocCard({
+    listEl: slidesList, searchEl: slidesSearch,
+    countId: "slides-count", viewAllId: "slides-view-all",
+    getItems: () => allSlides
+  });
 
   let imageSearchWired = false;
 
   function renderImageCard() {
     const imageCount = allImages.length;
-    document.getElementById("image-count").textContent = `(${imageCount})`;
+    const countEl = document.getElementById("image-count");
+    if (countEl) countEl.textContent = `(${imageCount})`;
+    if (!imageGrid) return;
+
+    const viewAllLink = document.getElementById("image-view-all");
 
     if (imageCount === 0) {
       imageGrid.innerHTML = `<p style="color:var(--moss-600);font-size:.9rem;text-align:center;padding:1rem;grid-column:1/-1;">No images yet.</p>`;
-      imageSearch.style.display = "none";
-      document.getElementById("image-view-all").style.display = "none";
+      if (imageSearch) imageSearch.style.display = "none";
+      if (viewAllLink) viewAllLink.style.display = "none";
       return;
     }
 
-    imageSearch.style.display = "block";
+    if (imageSearch) imageSearch.style.display = "block";
     const displayCount = Math.min(6, imageCount);
 
     // BUG FIX #1: this used to re-attach a brand-new "input" listener on
@@ -1742,7 +1771,7 @@ if (pdfList || imageGrid) {
     // by re-applying whatever's currently in the search box on every
     // call, and wiring the listener exactly once.
     const applyFilter = () => {
-      const term = imageSearch.value.trim().toLowerCase();
+      const term = (imageSearch?.value || "").trim().toLowerCase();
       const filtered = term
         ? allImages.filter(img =>
             (img.courseName || "").toLowerCase().includes(term) ||
@@ -1753,9 +1782,9 @@ if (pdfList || imageGrid) {
     };
 
     applyFilter();
-    document.getElementById("image-view-all").style.display = imageCount > displayCount ? "block" : "none";
+    if (viewAllLink) viewAllLink.style.display = imageCount > displayCount ? "block" : "none";
 
-    if (!imageSearchWired) {
+    if (imageSearch && !imageSearchWired) {
       imageSearchWired = true;
       imageSearch.addEventListener("input", applyFilter);
     }
@@ -1807,9 +1836,7 @@ if (pdfList || imageGrid) {
   // ============================================
   // VIEW ALL MODALS
   // The small cards only ever preview up to 5/6 items. "View All" opens a
-  // modal with the complete list — with a course-code search box, and (for
-  // PDFs) a faculty filter that's populated from whatever the code search
-  // currently matches.
+  // modal with the complete list — with a course-code search box.
   // ============================================
   function wireViewAllModal({ openBtnId, modalId, closeBtnId, searchId, facultyId, getItems, renderList, matchFn }) {
     const openBtn = document.getElementById(openBtnId);
@@ -1849,41 +1876,53 @@ if (pdfList || imageGrid) {
     if (facultySelect) facultySelect.addEventListener("change", apply);
   }
 
-  // VIEW ALL — PDFs & Presentations: same folder browser as the compact
-  // card, just unlimited and backed by the full allDocs list. Search
-  // filters by course code/name and resets navigation back to the top.
-  // The old standalone faculty-filter dropdown is superseded by the
+  // VIEW ALL — documents: one shared modal serving BOTH folder cards. The
+  // card that opened it decides the heading and which list is shown; the
+  // same folder browser as the compact card, just unlimited. Search filters
+  // by course code/name and resets navigation back to the top. The old
+  // standalone faculty-filter dropdown is superseded by the
   // course → faculty drill-down, so it's hidden rather than wired up.
-  (function wirePdfViewAllModal() {
-    const openBtn = document.getElementById("pdf-view-all");
+  (function wireDocViewAllModal() {
     const modal = document.getElementById("pdf-viewall-modal");
-    if (!openBtn || !modal) return;
+    if (!modal) return;
     const closeBtn = document.getElementById("pdf-viewall-close");
     const searchInput = document.getElementById("pdf-viewall-search");
     const facultySelect = document.getElementById("pdf-viewall-faculty");
     if (facultySelect) facultySelect.closest(".form-field")?.classList.add("hidden");
     const listEl = document.getElementById("pdf-viewall-list");
+    const titleEl = document.getElementById("pdf-viewall-title");
     const modalState = { courseCode: null, faculty: null };
+    let source = () => [];
 
     function apply() {
       const term = (searchInput?.value || "").trim().toLowerCase();
       const items = term
-        ? allDocs.filter(i =>
+        ? source().filter(i =>
             (i.courseCode || "").toLowerCase().includes(term) ||
             (i.courseName || "").toLowerCase().includes(term)
           )
-        : allDocs;
+        : source();
       renderPdfFolder(listEl, items, modalState);
     }
 
-    openBtn.addEventListener("click", (e) => {
-      e.preventDefault();
-      if (searchInput) searchInput.value = "";
-      modalState.courseCode = null;
-      modalState.faculty = null;
-      modal.classList.remove("hidden");
-      apply();
+    [
+      { btnId: "handnotes-view-all", heading: "📝 All Hand Notes", getItems: () => allHandNotes },
+      { btnId: "slides-view-all", heading: "🖥️ All Class Lecture Slides", getItems: () => allSlides }
+    ].forEach(({ btnId, heading, getItems }) => {
+      const btn = document.getElementById(btnId);
+      if (!btn) return;
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        source = getItems;
+        if (titleEl) titleEl.textContent = heading;
+        if (searchInput) searchInput.value = "";
+        modalState.courseCode = null;
+        modalState.faculty = null;
+        modal.classList.remove("hidden");
+        apply();
+      });
     });
+
     if (closeBtn) closeBtn.addEventListener("click", () => modal.classList.add("hidden"));
     modal.addEventListener("click", (e) => { if (e.target === modal) modal.classList.add("hidden"); });
     if (searchInput) searchInput.addEventListener("input", () => {
