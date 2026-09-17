@@ -378,7 +378,7 @@ function renderPasswordSection(regId, reg) {
   }
 }
 
-async function renderCredits(email, fullName, reg = {}) {
+async function renderCredits(email, fullName, reg) {
   const [resourcesSnap, termsSnap, classroomSnap, manualSnap, fileUnlockSnap, folderUnlockSnap] = await Promise.all([
     getDocs(query(collection(db, "resources"), where("uploaderEmail", "==", email))),
     getDocs(query(collection(db, "terms"), where("uploaderEmail", "==", email))),
@@ -405,7 +405,6 @@ async function renderCredits(email, fullName, reg = {}) {
   const rejected = items.filter(i => i.status === "rejected").length;
 
   document.getElementById("stat-total").textContent = items.length;
-  document.getElementById("stat-total-card")?.replaceChildren(document.createTextNode(String(items.length)));
   document.getElementById("stat-approved").textContent = approved;
   document.getElementById("stat-pending").textContent = pending;
   document.getElementById("stat-rejected").textContent = rejected;
@@ -514,8 +513,8 @@ async function renderCredits(email, fullName, reg = {}) {
     return `
       <div class="upload-row">
         <div>
-          <div class="upload-title">${title}</div>
-          <div class="upload-date">${date}</div>
+          <div style="font-weight:600;font-size:.92rem;">${title}</div>
+          <div style="font-size:.75rem;color:var(--moss-600);">${date}</div>
         </div>
         <span class="status-tag ${esc(status)}">${status === "approved" ? "✅ Approved" : status === "rejected" ? "❌ Rejected" : "⏳ Pending"}</span>
       </div>`;
