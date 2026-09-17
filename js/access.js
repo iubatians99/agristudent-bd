@@ -349,7 +349,7 @@ export function renderAccessBadge({ badgeEl, detailEl }, access) {
 
   badgeEl.textContent = "🔒 No Active Access";
   badgeEl.className = "access-badge locked";
-  detailEl.textContent = "Upload a relevant PDF, image, or presentation — access starts the moment you upload it (24 hours per file).";
+  detailEl.textContent = "Use your available credits or an approved folder unlock to access resources.";
 }
 
 // Backward-compatible export used by any older page code.

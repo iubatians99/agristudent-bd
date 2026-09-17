@@ -6,7 +6,7 @@ import { normalizeEmail } from "./identity.js";
 import { getSession, saveSession, clearSession } from "./session.js";
 import { initEmailNotifications } from "./email-config.js";
 import { hashPassword, isPasswordValid } from "./password.js";
-import { computeResourceAccessStatus, maybeSendAccessReminder, renderAccessBadge, renderAccessScale, formatDate, formatRemaining } from "./access.js";
+import { computeResourceAccessStatus, maybeSendAccessReminder, renderAccessBadge, renderAccessScale, formatDate, formatRemaining, DAY_MS } from "./access.js";
 import { fetchMessagesForUser, markMessageRead, formatMessageDateTime } from "./inbox.js";
 
 initEmailNotifications();
@@ -236,59 +236,146 @@ function renderPasswordSection(regId, reg) {
   const noPasswordBlock = document.getElementById("password-section-no-password");
   const hasPasswordBlock = document.getElementById("password-section-has-password");
   const hasPassword = !!reg.passwordHash;
-  noPasswordBlock.classList.toggle("hidden", hasPassword);
-  hasPasswordBlock.classList.toggle("hidden", !hasPassword);
+  const cardCopy = document.getElementById("password-card-copy");
+  const openBtn = document.getElementById("profile-password-open-btn");
+  const modal = document.getElementById("profile-password-modal");
 
-  const submitBtn = document.getElementById("profile-password-submit-btn");
-  const statusEl = document.getElementById("profile-password-status");
-  const newPasswordInput = document.getElementById("profile-new-password");
-  const confirmInput = document.getElementById("profile-new-password-confirm");
+  noPasswordBlock?.classList.toggle("hidden", hasPassword);
+  hasPasswordBlock?.classList.toggle("hidden", !hasPassword);
 
-  function showPwStatus(msg, isError = false) {
-    statusEl.textContent = msg;
-    statusEl.style.color = isError ? "var(--terracotta-500)" : "var(--moss-600)";
+  if (cardCopy) cardCopy.textContent = hasPassword
+    ? "Update the password you use to log in."
+    : "Set a password for secure login.";
+
+  // Existing-password users update directly from the profile card.
+  // The popup is reserved exclusively for first-time password setup.
+  if (openBtn) {
+    openBtn.classList.toggle("hidden", hasPassword);
+    openBtn.textContent = "Set Password";
   }
 
-  // Cloned to strip any listener left over from a previous init() call
-  // (e.g. the retry button re-running init()) so clicks never double-fire.
-  const freshBtn = submitBtn.cloneNode(true);
-  submitBtn.replaceWith(freshBtn);
+  const closeModal = () => {
+    modal?.classList.add("hidden");
+    modal?.setAttribute("aria-hidden", "true");
+  };
 
-  freshBtn.addEventListener("click", async () => {
-    const password = newPasswordInput.value;
-    const confirm = confirmInput.value;
+  if (openBtn && !openBtn.dataset.wired) {
+    openBtn.dataset.wired = "1";
+    openBtn.addEventListener("click", () => {
+      modal?.classList.remove("hidden");
+      modal?.setAttribute("aria-hidden", "false");
+      document.getElementById("profile-new-password")?.focus();
+    });
+  }
+  const modalClose = document.getElementById("profile-password-modal-close");
+  if (modalClose && !modalClose.dataset.wired) {
+    modalClose.dataset.wired = "1";
+    modalClose.addEventListener("click", closeModal);
+  }
+  if (modal && !modal.dataset.wired) {
+    modal.dataset.wired = "1";
+    modal.addEventListener("click", e => { if (e.target === modal) closeModal(); });
+  }
 
+  const setupSubmitBtn = document.getElementById("profile-password-submit-btn");
+  const setupStatusEl = document.getElementById("profile-password-status");
+  const setupNewInput = document.getElementById("profile-new-password");
+  const setupConfirmInput = document.getElementById("profile-new-password-confirm");
+
+  async function savePassword(password, statusEl, button, successText, onSuccess) {
     if (!isPasswordValid(password)) {
-      showPwStatus("Password must be at least 6 characters.", true);
-      return;
+      statusEl.textContent = "Password must be at least 6 characters.";
+      statusEl.style.color = "var(--terracotta-500)";
+      return false;
     }
-    if (password !== confirm) {
-      showPwStatus("Passwords don't match.", true);
-      return;
-    }
-
-    freshBtn.disabled = true;
-    freshBtn.textContent = "Saving…";
-    showPwStatus("Saving your password…");
-
+    button.disabled = true;
+    const oldText = button.textContent;
+    button.textContent = "Saving…";
+    statusEl.textContent = "Saving your password…";
+    statusEl.style.color = "var(--moss-600)";
     try {
       const passwordHash = await hashPassword(password, reg.email);
       await updateDoc(doc(db, "registrations", regId), { passwordHash });
       reg.passwordHash = passwordHash;
-
-      newPasswordInput.value = "";
-      confirmInput.value = "";
-      showPwStatus("✅ Password saved. From now on, log in with your Student ID + this password (your email will no longer work for login).");
-      noPasswordBlock.classList.add("hidden");
-      hasPasswordBlock.classList.remove("hidden");
+      statusEl.textContent = successText;
+      statusEl.style.color = "var(--moss-600)";
+      onSuccess?.();
+      return true;
     } catch (err) {
       console.error("[Profile] failed to save password:", err);
-      showPwStatus("Something went wrong saving your password. (" + err.message + ")", true);
+      statusEl.textContent = "Something went wrong saving your password. (" + err.message + ")";
+      statusEl.style.color = "var(--terracotta-500)";
+      return false;
     } finally {
-      freshBtn.disabled = false;
-      freshBtn.textContent = "Save Password";
+      button.disabled = false;
+      button.textContent = oldText;
     }
-  });
+  }
+
+  // First-time setup: popup only, and it opens automatically for legacy accounts.
+  if (setupSubmitBtn && !setupSubmitBtn.dataset.wired) {
+    setupSubmitBtn.dataset.wired = "1";
+    setupSubmitBtn.addEventListener("click", async () => {
+      const password = setupNewInput?.value || "";
+      const confirm = setupConfirmInput?.value || "";
+      if (password !== confirm) {
+        setupStatusEl.textContent = "Passwords don't match.";
+        setupStatusEl.style.color = "var(--terracotta-500)";
+        return;
+      }
+      const saved = await savePassword(
+        password,
+        setupStatusEl,
+        setupSubmitBtn,
+        "✅ Password set successfully. You can now use it to log in.",
+        () => {
+          if (setupNewInput) setupNewInput.value = "";
+          if (setupConfirmInput) setupConfirmInput.value = "";
+          closeModal();
+          renderPasswordSection(regId, reg);
+        }
+      );
+      if (!saved) return;
+    });
+  }
+
+  // Existing password: update inline on the profile page — no popup.
+  const inlineBtn = document.getElementById("profile-inline-password-submit-btn");
+  const inlineStatus = document.getElementById("profile-inline-password-status");
+  const inlineNew = document.getElementById("profile-inline-new-password");
+  const inlineConfirm = document.getElementById("profile-inline-new-password-confirm");
+  if (inlineBtn && !inlineBtn.dataset.wired) {
+    inlineBtn.dataset.wired = "1";
+    inlineBtn.addEventListener("click", async () => {
+      const password = inlineNew?.value || "";
+      const confirm = inlineConfirm?.value || "";
+      if (password !== confirm) {
+        inlineStatus.textContent = "Passwords don't match.";
+        inlineStatus.style.color = "var(--terracotta-500)";
+        return;
+      }
+      await savePassword(
+        password,
+        inlineStatus,
+        inlineBtn,
+        "✅ Password updated successfully.",
+        () => {
+          if (inlineNew) inlineNew.value = "";
+          if (inlineConfirm) inlineConfirm.value = "";
+        }
+      );
+    });
+  }
+
+  if (!hasPassword) {
+    setTimeout(() => {
+      modal?.classList.remove("hidden");
+      modal?.setAttribute("aria-hidden", "false");
+      setupNewInput?.focus();
+    }, 250);
+  } else {
+    closeModal();
+  }
 }
 
 async function renderCredits(email, fullName) {
@@ -326,10 +413,21 @@ async function renderCredits(email, fullName) {
   // Hand Note uploads create one 36h unlock credit per uploaded file, while Class Slides and Images create lifetime folder access, whether or
   // not it's been reviewed yet — see js/access.js for the stacking rules.
   const resourceItems = items.filter(i => i.kind === "resource" && i.resourceType === "slides_notes");
-  const handNoteCreditSources = resourceItems.filter(i => i.noteType === "hand_notes" && i.unlockMode === "file_credit");
-  const creditsEarned = handNoteCreditSources.reduce((n, i) => n + Math.max(1, Array.isArray(i.fileUrls) ? i.fileUrls.length : 1), 0);
+  // Every uploaded resource file earns one credit, regardless of folder type.
+  const uploadCredits = resourceItems.reduce((n, i) => n + (Array.isArray(i.fileUrls) ? i.fileUrls.length : 1), 0);
+  // Every approved Classroom unlock earns 10 credits. Locked/rejected codes do not.
+  const classroomCredits = classroomItems.reduce((n, i) => n + (i.status === "approved" ? 10 : 0), 0);
+  // Coffee approvals/manual credit grants can award a custom number of credits.
+  const coffeeCredits = manualItems.reduce((n, i) => n + (i.source === "coffee" ? Number(i.creditsGranted || 0) : 0), 0);
+  // Every registered user receives 5 free registration credits.
+  // The fallback keeps existing users eligible even if their older registration
+  // document does not yet contain the new field.
+  const registrationCredits = Math.max(5, Number(reg?.registrationCredits || 0));
+  const creditsEarned = registrationCredits + uploadCredits + classroomCredits + coffeeCredits;
   const creditsUsed = fileUnlockItems.filter(i => !i.revoked).length;
   const creditsRemaining = Math.max(0, creditsEarned - creditsUsed);
+  document.getElementById("handnote-credit-earned-top")?.replaceChildren(document.createTextNode(String(creditsEarned)));
+  document.getElementById("handnote-credit-remaining-top")?.replaceChildren(document.createTextNode(String(creditsRemaining)));
   const creditPanel = document.getElementById("handnote-credit-panel");
   if (creditPanel) {
     creditPanel.classList.toggle("hidden", creditsEarned === 0 && creditsUsed === 0);
@@ -349,6 +447,16 @@ async function renderCredits(email, fullName) {
     detailEl: document.getElementById("access-detail")
   }, access);
   maybeSendAccessReminder(access, { email, name: fullName });
+  const circle = document.getElementById("profile-access-circle");
+  const daysEl = document.getElementById("profile-access-days");
+  const daysLabel = document.getElementById("profile-access-days-label");
+  if (circle && daysEl) {
+    const days = access.lifetimeActive ? 100 : Math.max(0, Math.ceil((access.accessUntil - Date.now()) / DAY_MS));
+    daysEl.textContent = access.lifetimeActive ? "∞" : String(days);
+    if (daysLabel) daysLabel.textContent = access.lifetimeActive ? "lifetime" : "days left";
+    const pct = access.lifetimeActive ? 100 : Math.max(0, Math.min(100, (access.msRemaining / (36*60*60*1000))*100));
+    circle.style.background = `conic-gradient(var(--leaf-500) ${pct*3.6}deg,#e5ece5 ${pct*3.6}deg)`;
+  }
 
   // The scale bar shows how much of the MOST RECENTLY granted top-up is
   // left (36h Hand Note credit / lifetime folder) — access.lastGrantMs already

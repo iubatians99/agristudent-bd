@@ -252,6 +252,7 @@ otpVerifyBtn.addEventListener("click", async () => {
       studentIdNumber,
       status: "verified", // OTP verification is the only registration approval step now
       emailVerified: true,
+      registrationCredits: 5,
       submittedAt: serverTimestamp()
     };
     if (studentIdUrl) docData.studentIdUrl = studentIdUrl;

@@ -686,26 +686,61 @@ if (handNotesGate && handNotesContent) {
     });
   }
 
-  window.__tryUseHandNoteCredit = async function(fileId) {
+  window.__tryUseResourceCredit = async function(fileId, category = "hand_notes") {
     const session = getSession();
     if (!session || !fileId) return false;
     const email = normalizeEmail(session.email);
     try {
       const items = window.__hnAccessItems || [];
-      const creditSources = items.filter(i => i.kind === "resource" && i.resourceType === "slides_notes" && i.noteType === "hand_notes" && i.unlockMode === "file_credit" && normalizeEmail(i.uploaderEmail) === email);
-      const totalCredits = creditSources.reduce((n, i) => n + fileCount(i), 0);
+      const creditSources = items.filter(i => i.kind === "resource" && i.resourceType === "slides_notes" && normalizeEmail(i.uploaderEmail) === email);
+      // Every registered user receives 5 free credits. Keep the fallback at 5
+      // so users registered before this field was introduced also receive them.
+      let registrationCredits = 5;
+      try {
+        const regSnap = await getDocs(query(collection(db, "registrations"), where("emailNormalized", "==", email)));
+        if (!regSnap.empty) registrationCredits = Math.max(5, Number(regSnap.docs[0].data().registrationCredits || 0));
+        else {
+          const legacyRegSnap = await getDocs(query(collection(db, "registrations"), where("email", "==", email)));
+          if (!legacyRegSnap.empty) registrationCredits = Math.max(5, Number(legacyRegSnap.docs[0].data().registrationCredits || 0));
+        }
+      } catch (regErr) {
+        console.warn("[Resource Credit] registration credit lookup failed; keeping 5-credit entitlement:", regErr);
+      }
+      const totalCredits = registrationCredits
+        + creditSources.reduce((n, i) => n + fileCount(i), 0)
+        + items.filter(i => i.kind === "classroom" && i.status === "approved").reduce((n) => n + 10, 0)
+        + items.filter(i => i.kind === "manual" && i.source === "coffee").reduce((n, i) => n + Number(i.creditsGranted || 0), 0);
       const usedSnap = await getDocs(query(collection(db, "fileUnlocks"), where("fromEmail", "==", email)));
       const used = usedSnap.docs.map(d => ({id:d.id, ...d.data()})).filter(x => !x.revoked);
       if (used.some(x => x.targetFileId === fileId)) return true;
       if (used.length >= totalCredits) return false;
-      await createFileCreditUnlock({ email, name:session.fullName, targetFileId:fileId, sourceResourceId:creditSources[0]?.id || "", category:"hand_notes" });
+
+      // One credit -> one target file. Do not continue to another unlock gate
+      // after we have confirmed that a credit is available; a write failure is
+      // reported instead of silently changing the user's unlock path.
+      const created = await createFileCreditUnlock({
+        email,
+        name: session.fullName,
+        targetFileId: fileId,
+        sourceResourceId: creditSources[0]?.id || "",
+        category
+      });
+      if (!created?.id) return false;
+
+      // Re-read Firestore and make the new grant the source of truth before
+      // declaring the file unlocked. This keeps the UI and the actual viewer
+      // access in sync, including after a page reload.
       await hnRefreshAccess(email);
-      return true;
+      const unlocked = computeFileAccessStatus(window.__hnAccessItems || [], fileId, Date.now(), category).active;
+      return !!unlocked;
     } catch (err) {
-      console.error("[Hand Notes] automatic credit unlock failed:", err);
+      console.error("[Resource Credit] automatic credit unlock failed:", err);
+      window.__resourceCreditUnlockError = err;
       return false;
     }
   };
+
+  window.__tryUseHandNoteCredit = window.__tryUseResourceCredit;
 
   // These were being called (submit handler, classroom-unlock handler)
   // but never defined — the missing functions threw a silent
@@ -952,6 +987,7 @@ if (handNotesGate && handNotesContent) {
           courseCode: String(window.__hnGateFolderKey || "").replace(/^course::/, ""),
           facultyName: window.__hnGateFolderKey && window.__hnGateFolderKey.startsWith("hand_notes::") ? String(window.__hnGateFolderKey).split("::")[2] || "" : "",
           status: "new",
+          creditsGranted: 0,
           submittedAt: serverTimestamp()
         });
 
@@ -1168,8 +1204,7 @@ if (handNotesGate && handNotesContent) {
   // that whole window every file rendered with a 🔒 lock badge even when
   // the student's access was genuinely active — it just hadn't been
   // *checked* yet. window.__hnAccessKnown tracks whether a real check has
-  // completed at least once, so the file lists can show a neutral
-  // "checking access…" state instead of a false 🔒 until we actually know.
+  // completed at least once, so the file lists can keep the file state silent until the access check completes.
   // ------------------------------------------------------------------
   window.__hnAccessKnown = true;
 
@@ -1720,18 +1755,45 @@ if (handnotesList || slidesList || imageGrid) {
 
     container.querySelectorAll("[data-locked-file]").forEach(el => {
       el.addEventListener("click", async () => {
+        if (el.dataset.unlockBusy === "1") return;
         const category = el.dataset.category || "hand_notes";
-        if (category === "hand_notes" && window.__tryUseHandNoteCredit) {
+        const fileId = el.dataset.fileId;
+        el.dataset.unlockBusy = "1";
+
+        if (window.__tryUseResourceCredit) {
           el.classList.add("unlocking-now");
-          const used = await window.__tryUseHandNoteCredit(el.dataset.fileId);
+          const used = await window.__tryUseResourceCredit(fileId, category);
           if (used) {
-            el.innerHTML = `<span class="file-status">✨</span><span class="file-name">Unlocked successfully</span><span class="file-action file-lock-badge unlock-success-badge">✓ Unlocked</span>`;
-            setTimeout(() => hnRefreshAccess(normalizeEmail(getSession()?.email || "")), 500);
+            // Keep the successful state visible long enough for the animation
+            // to be seen, then re-render the real file row so the normal View
+            // action becomes available and remains unlocked for its grant time.
+            el.classList.remove("unlocking-now");
+            el.classList.add("unlock-complete");
+            el.innerHTML = `<span class="file-status unlock-checkmark">✓</span><span class="file-name">Unlocked successfully</span><span class="file-action file-lock-badge unlock-success-badge">✓ Unlocked</span>`;
+            setTimeout(() => {
+              el.classList.remove("unlock-complete");
+              hnRefreshAccess(normalizeEmail(getSession()?.email || ""));
+            }, 850);
             return;
           }
           el.classList.remove("unlocking-now");
+          el.dataset.unlockBusy = "0";
+
+          // If a credit was available but the Firestore write failed, do not
+          // send the user into a different unlock flow. Give the real error
+          // path a chance to recover instead.
+          if (window.__resourceCreditUnlockError) {
+            const err = window.__resourceCreditUnlockError;
+            window.__resourceCreditUnlockError = null;
+            el.classList.add("unlock-failed");
+            const old = el.innerHTML;
+            el.innerHTML = `<span class="file-status">⚠️</span><span class="file-name">Unlock could not be completed. Please try again.</span><span class="file-action file-lock-badge">Retry</span>`;
+            setTimeout(() => { if (el.isConnected) { el.classList.remove("unlock-failed"); el.innerHTML = old; } }, 1800);
+            console.error("[Resource Credit] unlock write failed:", err);
+            return;
+          }
         }
-        window.hnOpenGate && window.hnOpenGate(el.dataset.fileId, el.dataset.folderKey, category);
+        window.hnOpenGate && window.hnOpenGate(fileId, el.dataset.folderKey, category);
       });
     });
   }

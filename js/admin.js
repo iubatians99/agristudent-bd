@@ -353,7 +353,6 @@ const tabs = {
   messages: { btn: document.getElementById("tab-messages"), panel: document.getElementById("messages-panel"), load: loadMessages },
   notifyUser: { btn: document.getElementById("tab-notify-user"), panel: document.getElementById("notify-user-panel"), load: loadNotifyUser },
   classroomCodes: { btn: document.getElementById("tab-classroom-codes"), panel: document.getElementById("classroom-codes-panel"), load: loadClassroomCodes },
-  adUnlocks: { btn: document.getElementById("tab-ad-unlocks"), panel: document.getElementById("ad-unlocks-panel"), load: loadAdUnlocks },
   coffeeRequests: { btn: document.getElementById("tab-coffee-requests"), panel: document.getElementById("coffee-requests-panel"), load: loadCoffeeRequests },
   folderAccess: { btn: document.getElementById("tab-folder-access"), panel: document.getElementById("folder-access-panel"), load: loadFolderAccess },
   danger: { btn: document.getElementById("tab-danger"), panel: document.getElementById("danger-panel"), load: () => {} }
@@ -406,6 +405,29 @@ async function initManualUnlock() {
     });
   });
 
+  // Registered-student search: name, Student ID, or email. Selecting a result fills the hidden email field used by the grant logic.
+  const searchInput = document.getElementById("mu-user-search");
+  const results = document.getElementById("mu-user-results");
+  let registeredCache = [];
+  async function loadStudentSearch() {
+    if (registeredCache.length) return registeredCache;
+    const snap = await getDocs(query(collection(db, "registrations"), limit(300)));
+    registeredCache = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+    return registeredCache;
+  }
+  searchInput?.addEventListener("input", async () => {
+    const term = searchInput.value.trim().toLowerCase();
+    if (!term) { results?.classList.add("hidden"); return; }
+    try {
+      const users = await loadStudentSearch();
+      const matches = users.filter(u => [u.fullName,u.email,u.studentIdNumber,u.studentId].some(v => String(v||"").toLowerCase().includes(term))).slice(0,20);
+      if (!results) return;
+      results.innerHTML = matches.length ? matches.map(u => `<button type="button" class="mu-result" data-email="${esc(u.email||"")}" style="display:block;width:100%;text-align:left;padding:.65rem .75rem;border:0;border-bottom:1px solid var(--line);background:#fff;cursor:pointer"><strong>${esc(u.fullName||"Student")}</strong><br><small>${esc(u.studentIdNumber||u.studentId||"")} · ${esc(u.email||"")}</small></button>`).join("") : `<div style="padding:.7rem;color:var(--moss-600);font-size:.82rem">No registered student found.</div>`;
+      results.classList.remove("hidden");
+      results.querySelectorAll(".mu-result").forEach(btn => btn.addEventListener("click", () => { document.getElementById("mu-user-email").value = btn.dataset.email; searchInput.value = btn.textContent.split("\n")[0].trim(); results.classList.add("hidden"); }));
+    } catch (err) { console.error("[Manual Unlock] search failed",err); }
+  });
+
   // Form submit
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -438,9 +460,8 @@ async function grantManualUnlock(email, days, unlockType, reason) {
 
     // Students live in "registrations" (see js/login.js, js/resources.js) —
     // there is no separate "users" collection in this app.
-    const regSnap = await getDocs(
-      query(collection(db, "registrations"), where("emailNormalized", "==", normalizedEmail))
-    );
+    let regSnap = await getDocs(query(collection(db, "registrations"), where("emailNormalized", "==", normalizedEmail)));
+    if (regSnap.empty) regSnap = await getDocs(query(collection(db, "registrations"), where("email", "==", normalizedEmail)));
 
     if (regSnap.empty) {
       alert("❌ User not found. Make sure email is registered.");
@@ -563,6 +584,7 @@ async function loadCoffeeRequests() {
     coffeeRequestsList.querySelectorAll(".coffee-approve-btn").forEach(btn => btn.addEventListener("click", async () => {
       const days = prompt("How many days of access should be granted?", "7"); if (days === null) return;
       const n = Number(days); if (!Number.isFinite(n) || n < 1 || n > 3650) { alert("Enter a valid duration between 1 and 3650 days."); return; }
+      const creditInput = prompt("How many unlock credits should this coffee support grant?", "10"); if (creditInput === null) return; const creditsGranted = Math.max(0, Math.floor(Number(creditInput))); if (!Number.isFinite(creditsGranted) || creditsGranted > 10000) { alert("Enter credits between 0 and 10000."); return; }
       const message = prompt("Message to the student (shown in Profile → Inbox):", "Thank you for buying the admin a coffee! Your access has been granted."); if (message === null) return;
       btn.disabled=true;
       try {
@@ -570,10 +592,10 @@ async function loadCoffeeRequests() {
         if (snap.empty) throw new Error("Request not found."); const d=snap.docs[0].data();
         const regSnap = await getDocs(query(collection(db,"registrations"), where("emailNormalized", "==", normalizeEmail(d.fromEmail || ""))));
         if (regSnap.empty) throw new Error("Registered student not found."); const regId=regSnap.docs[0].id;
-        await addDoc(collection(db,"manualUnlocks"), { kind:"manual", source:"coffee", fromEmail:normalizeEmail(d.fromEmail), userEmail:normalizeEmail(d.fromEmail), studentName:d.fromName||"", unlockType:"all_resources", category:null, days:n, durationMs:n*24*60*60*1000, reason:"Buy Me a Coffee", grantedAt:serverTimestamp(), grantedBy:getCurrentUserEmail() });
+        await addDoc(collection(db,"manualUnlocks"), { kind:"manual", source:"coffee", fromEmail:normalizeEmail(d.fromEmail), userEmail:normalizeEmail(d.fromEmail), studentName:d.fromName||"", unlockType:"all_resources", category:null, days:n, durationMs:n*24*60*60*1000, reason:"Buy Me a Coffee", creditsGranted, grantedAt:serverTimestamp(), grantedBy:getCurrentUserEmail() });
         await syncStudentAccessStatus(db, normalizeEmail(d.fromEmail));
         await sendMessageToUser({ toRegId:regId, toEmail:d.fromEmail, toName:d.fromName, subject:"☕ Coffee support access approved", body:message, sentBy:getCurrentUserEmail() });
-        await updateDoc(ref, { status:"approved", approvedAt:serverTimestamp(), approvedDays:n, adminMessage:message, approvedBy:getCurrentUserEmail() });
+        await updateDoc(ref, { status:"approved", approvedAt:serverTimestamp(), approvedDays:n, creditsGranted, adminMessage:message, approvedBy:getCurrentUserEmail() });
         loadCoffeeRequests();
       } catch(err) { alert("Could not approve request: " + err.message); btn.disabled=false; }
     }));
@@ -1796,7 +1818,7 @@ async function loadClassroomCodes() {
       btn.addEventListener("click", async () => {
         btn.disabled = true;
         try {
-          await updateDoc(doc(db, "classroomCodes", btn.dataset.id), { status: "approved", approvedAt: serverTimestamp(), approvedBy:getCurrentUserEmail() });
+          await updateDoc(doc(db, "classroomCodes", btn.dataset.id), { status: "approved", approvedAt: serverTimestamp(), approvedBy:getCurrentUserEmail(), ...(isMaterialsRequest ? {} : { creditsGranted: 10 }) });
           loadClassroomCodes();
         } catch (err) {
           console.error("[AgriAdmin] Failed to confirm classroom code:", err);
@@ -1814,7 +1836,7 @@ async function loadClassroomCodes() {
     classroomCodesList.querySelectorAll(".unlock-classroom-code-btn").forEach(btn => {
       btn.addEventListener("click", async () => {
         btn.disabled = true;
-        try { await updateDoc(doc(db,"classroomCodes",btn.dataset.id),{status:"approved",approvedAt:serverTimestamp(),approvedBy:getCurrentUserEmail()}); loadClassroomCodes(); } catch(err){ console.error(err); btn.disabled=false; }
+        try { await updateDoc(doc(db,"classroomCodes",btn.dataset.id),{status:"approved",approvedAt:serverTimestamp(),approvedBy:getCurrentUserEmail(),creditsGranted:10}); loadClassroomCodes(); } catch(err){ console.error(err); btn.disabled=false; }
       });
     });
     classroomCodesList.querySelectorAll(".mark-contacted-btn").forEach(btn => {

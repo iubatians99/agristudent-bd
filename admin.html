@@ -83,7 +83,6 @@
       <button id="tab-messages" class="admin-nav-item" data-label="Messages"><span class="admin-nav-icon">💬</span><span>Messages</span></button>
       <button id="tab-notify-user" class="admin-nav-item" data-label="Notify User"><span class="admin-nav-icon">🔔</span><span>Notify User</span></button>
       <button id="tab-classroom-codes" class="admin-nav-item" data-label="Classroom Codes"><span class="admin-nav-icon">🔑</span><span>Classroom Codes</span></button>
-      <button id="tab-ad-unlocks" class="admin-nav-item" data-label="Ad Unlocks"><span class="admin-nav-icon">🎬</span><span>Ad Unlocks</span></button>
       <button id="tab-coffee-requests" class="admin-nav-item" data-label="Coffee Support"><span class="admin-nav-icon">☕</span><span>Coffee Support</span></button>
       <button id="tab-folder-access" class="admin-nav-item" data-label="Folder Access"><span class="admin-nav-icon">♾️</span><span>Folder Access</span></button>
       <button id="tab-danger" class="admin-nav-item admin-nav-item--danger" data-label="Danger Zone"><span class="admin-nav-icon">⚠️</span><span>Danger Zone</span></button>
@@ -111,7 +110,10 @@
 
         <form id="manual-unlock-form" style="max-width:560px;">
           <div class="form-field">
-            <label for="mu-user-email">Student Email *</label>
+            <label for="mu-user-search">Search student *</label>
+            <input type="search" id="mu-user-search" placeholder="Search by name, Student ID or email" autocomplete="off" style="padding:.6rem .8rem;border:1px solid var(--line);border-radius:6px;width:100%;">
+            <div id="mu-user-results" class="hidden" style="border:1px solid var(--line);border-radius:8px;margin-top:.4rem;max-height:220px;overflow:auto;background:#fff;"></div>
+            <label for="mu-user-email" style="display:none">Student Email *</label>
             <input type="email" id="mu-user-email" placeholder="Enter registered student email" required style="padding:.6rem .8rem;border:1px solid var(--line);border-radius:6px;width:100%;">
             <small style="display:block;margin-top:.3rem;color:var(--moss-600);font-size:.85rem;">Must be a registered user</small>
           </div>
@@ -374,12 +376,6 @@
       <div id="classroom-codes-panel" class="admin-panel-card hidden">
         <h2 class="admin-panel-heading">Classroom Codes — Submitted by Students</h2>
         <div id="admin-classroom-codes-list"></div>
-      </div>
-
-      <div id="ad-unlocks-panel" class="admin-panel-card hidden">
-        <h2 class="admin-panel-heading">Ad Unlocks — Watch-an-Ad unlock log</h2>
-        <p style="color:var(--moss-600);font-size:.85rem;margin-top:-.5rem;margin-bottom:1rem;">Read-only log for abuse monitoring — these already granted 6h access instantly, so nothing here needs approval. Delete an entry to revoke that file's access early.</p>
-        <div id="admin-ad-unlocks-list"></div>
       </div>
 
       <div id="coffee-requests-panel" class="admin-panel-card hidden">

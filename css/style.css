@@ -3025,3 +3025,22 @@ body.viewer-layout {
 .coffee-copy-btn:active{transform:scale(.97);}
 .coffee-payment-note{font-size:.77rem;line-height:1.55;color:var(--moss-600);margin-top:.65rem;}
 @media(max-width:620px){.coffee-hero{grid-template-columns:1fr;}.coffee-art-wrap{min-height:175px;max-height:205px;}.coffee-art{min-height:175px;}.coffee-hero-copy{padding:1.15rem 1.05rem 1rem;}.coffee-hero h2{font-size:1.35rem}.coffee-number-row{align-items:center}.coffee-number{font-size:clamp(1.05rem,7.2vw,1.45rem);letter-spacing:.035em}.coffee-copy-btn{padding:.5rem .65rem;font-size:.75rem}.coffee-payment-card{padding:.95rem}.coffee-number span+span::before{content:"";}.coffee-number{word-spacing:.12em}}
+
+/* Inline password update for existing-password accounts */
+.profile-password-inline-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.8rem;margin-top:1rem;padding-top:1rem;border-top:1px solid var(--line);align-items:end;}
+.profile-password-field label{display:block;font-size:.78rem;font-weight:700;color:var(--moss-800);margin-bottom:.35rem;}
+.profile-password-field input{width:100%;box-sizing:border-box;padding:.72rem .8rem;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--moss-900);outline:none;}
+.profile-password-field input:focus{border-color:var(--leaf-500);box-shadow:0 0 0 3px rgba(107,155,94,.12);}
+.profile-password-inline-form > button{min-height:42px;}
+.profile-password-status{grid-column:1/-1;min-height:1.2rem;font-size:.8rem;}
+@media (max-width:640px){.profile-password-inline-form{grid-template-columns:1fr;}.profile-password-status{grid-column:auto;}.profile-password-inline-form > button{width:100%;}}
+
+/* Per-file credit unlock success animation */
+.file-item.unlock-complete{animation:agriUnlockSuccess .8s ease both;position:relative;overflow:hidden;}
+.file-item.unlock-complete::after{content:"";position:absolute;inset:0;border:2px solid var(--leaf-500);border-radius:inherit;opacity:0;animation:agriUnlockRing .8s ease-out both;pointer-events:none;}
+.unlock-checkmark{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--leaf-500);color:#fff;font-weight:900;animation:agriUnlockCheck .55s cubic-bezier(.2,.9,.25,1.4) both;}
+.file-item.unlock-failed{animation:agriUnlockFail .35s ease-in-out 2;}
+@keyframes agriUnlockSuccess{0%{transform:scale(.98);opacity:.65}45%{transform:scale(1.015);opacity:1}100%{transform:scale(1);opacity:1}}
+@keyframes agriUnlockRing{0%{transform:scale(.88);opacity:.65}100%{transform:scale(1.04);opacity:0}}
+@keyframes agriUnlockCheck{0%{transform:scale(0);opacity:0}70%{transform:scale(1.15);opacity:1}100%{transform:scale(1);opacity:1}}
+@keyframes agriUnlockFail{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}

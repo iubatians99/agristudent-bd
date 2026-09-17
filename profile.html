@@ -29,184 +29,10 @@
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Work+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 <style>
-  .profile-card{
-    display:flex; gap:1.2rem; align-items:center; padding:1.6rem;
-    border:1px solid var(--line); border-radius:20px; margin-bottom:1.6rem;
-    background:
-      radial-gradient(circle at 100% 0%, rgba(214,171,74,.12), transparent 55%),
-      radial-gradient(circle at 0% 100%, rgba(107,155,94,.14), transparent 55%),
-      #fff;
-    box-shadow:0 10px 30px rgba(31,46,34,.07);
-    position:relative; overflow:hidden;
-  }
-  .profile-avatar-wrap{ position:relative; flex-shrink:0; width:80px; height:80px; }
-  .profile-avatar{
-    width:80px; height:80px; border-radius:50%; object-fit:cover; flex-shrink:0; display:block;
-    border:3px solid #fff; box-shadow:0 4px 16px rgba(31,46,34,.18);
-  }
-  .profile-avatar-wrap.is-id-verified .profile-avatar{
-    border-color:var(--leaf-500);
-    box-shadow:0 0 0 3px rgba(107,155,94,.25), 0 4px 16px rgba(31,46,34,.18);
-  }
-  .profile-avatar-edit-btn{
-    position:absolute; bottom:-2px; right:-2px;
-    width:28px; height:28px; border-radius:50%;
-    background:var(--leaf-500); color:#fff; border:2px solid #fff;
-    display:flex; align-items:center; justify-content:center;
-    font-size:.8rem; cursor:pointer;
-    box-shadow:0 2px 6px rgba(31,46,34,.25);
-    transition:background .16s ease, transform .16s ease;
-  }
-  .profile-avatar-edit-btn:hover{ background:var(--moss-700); transform:scale(1.06); }
-  .profile-avatar-edit-btn:disabled{ opacity:.6; cursor:wait; transform:none; }
-  .profile-avatar-wrap.is-uploading .profile-avatar{ opacity:.5; }
-  .profile-avatar-status{ font-size:.72rem; color:var(--moss-600); margin-top:.3rem; min-height:1em; }
-  .profile-avatar-status.is-error{ color:var(--terracotta-500); }
-  .profile-name-row{ display:flex; align-items:center; gap:.4rem; flex-wrap:wrap; }
-  .profile-id-verified-badge{
-    display:inline-flex; align-items:center; gap:.3rem;
-    font-size:.72rem; font-weight:700;
-    padding:.2rem .55rem; border-radius:999px;
-    background:linear-gradient(135deg, rgba(107,155,94,.22), rgba(63,91,61,.16));
-    color:var(--leaf-500);
-    box-shadow:0 1px 3px rgba(107,155,94,.25) inset;
-  }
-  .profile-status-pill{
-    display:inline-block; font-size:.75rem; font-weight:700; padding:.25rem .6rem;
-    border-radius:999px; margin-top:.35rem;
-  }
-  .profile-status-pill.verified{ background:rgba(107,155,94,.15); color:var(--leaf-500); }
-  .profile-status-pill.unverified{ background:rgba(214,171,74,.18); color:var(--wheat-400); }
-  .profile-status-pill.rejected{ background:rgba(196,90,63,.15); color:var(--terracotta-500); }
-  .credit-stats{
-    display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:.8rem; margin-bottom:1.8rem;
-  }
-  .credit-stat{
-    text-align:center; padding:1.1rem .6rem; border:1px solid var(--line); border-radius:14px;
-    background:#fff; box-shadow:0 3px 10px rgba(31,46,34,.05);
-  }
-  .credit-stat .num{ font-family:var(--font-mono); font-size:1.6rem; font-weight:700; color:var(--moss-700); }
-  .credit-stat .label{ font-size:.78rem; color:var(--moss-600); margin-top:.2rem; }
-  .upload-row{
-    display:flex; justify-content:space-between; align-items:center; gap:.8rem;
-    padding:.8rem 1rem; border:1px solid var(--line); border-radius:12px; margin-bottom:.6rem; background:#fff;
-  }
-  .upload-row .status-tag{ font-size:.72rem; font-weight:700; padding:.2rem .55rem; border-radius:999px; white-space:nowrap; }
-  .status-tag.approved{ background:rgba(107,155,94,.15); color:var(--leaf-500); }
-  .status-tag.pending{ background:rgba(214,171,74,.18); color:var(--wheat-400); }
-  .status-tag.rejected{ background:rgba(196,90,63,.15); color:var(--terracotta-500); }
-
-  /* ============================================
-     LAYOUT REFRESH — page header band, clearer section
-     rhythm, and a responsive profile card that stacks on
-     narrow screens instead of cramping avatar + text.
-     ============================================ */
-  .profile-page-head{
-    padding:1.6rem 1.6rem 1.8rem;
-    margin-bottom:1.4rem;
-    border-radius:20px;
-    position:relative; overflow:hidden; isolation:isolate;
-    background:
-      radial-gradient(circle at 12% 15%, rgba(214,171,74,.30), transparent 55%),
-      radial-gradient(circle at 88% 85%, rgba(107,155,94,.38), transparent 55%),
-      linear-gradient(135deg, var(--moss-900), var(--moss-700));
-  }
-  .profile-page-head .crumb{ color:rgba(255,255,255,.7); margin-bottom:.5rem; }
-  .profile-page-head .crumb a{ color:rgba(255,255,255,.85); }
-  .profile-page-head h1{ color:#fff; margin:0; }
-
-  .profile-card{ margin-bottom:1.8rem; }
-
-  .profile-section{ margin-top:2.2rem; }
-  .profile-section-head{
-    display:flex; align-items:baseline; justify-content:space-between; gap:.6rem;
-    margin-bottom:.9rem; padding-bottom:.5rem; border-bottom:1px solid var(--line);
-  }
-  .profile-section-head h2{ font-size:1.05rem; margin:0; }
-
-  .credit-stat{ transition:transform .16s ease, box-shadow .16s ease; }
-  .credit-stat:hover{ transform:translateY(-2px); box-shadow:0 8px 18px rgba(31,46,34,.09); }
-  .upload-row{ transition:box-shadow .16s ease; }
-  .upload-row:hover{ box-shadow:0 4px 14px rgba(31,46,34,.08); }
-
-  @media (max-width:560px){
-    .profile-card{ flex-direction:column; text-align:center; padding:1.3rem 1.1rem; }
-    .profile-name-row{ justify-content:center; }
-    .profile-page-head{ padding:1.3rem 1.1rem 1.5rem; border-radius:16px; }
-  }
-
-  /* ============================================
-     PREMIUM POLISH — richer card surfaces, a
-     section-icon chip so each block of the page
-     reads at a glance, and a subtle hover lift
-     that makes the whole profile feel considered
-     rather than a plain stacked form.
-     ============================================ */
-  .profile-page-head::after{
-    content:"";
-    position:absolute; inset:0;
-    background-image:radial-gradient(rgba(255,255,255,.14) 1px, transparent 1px);
-    background-size:14px 14px;
-    opacity:.5; pointer-events:none;
-  }
-  .profile-card{
-    box-shadow:0 14px 34px rgba(31,46,34,.09), inset 0 1px 0 rgba(255,255,255,.6);
-    border-color:rgba(107,155,94,.18);
-  }
-  .uc-panel{ transition:box-shadow .18s ease, transform .18s ease; }
-  .profile-section-head{
-    display:flex; align-items:center; gap:.6rem; justify-content:flex-start;
-  }
-  .profile-section-icon{
-    display:inline-flex; align-items:center; justify-content:center;
-    width:30px; height:30px; border-radius:9px; flex-shrink:0;
-    background:linear-gradient(150deg, rgba(107,155,94,.20), rgba(214,171,74,.16));
-    font-size:.95rem;
-  }
-  .profile-section-head h2{ display:flex; align-items:center; gap:.55rem; }
-  .profile-section-badge-count{
-    display:inline-flex; align-items:center; justify-content:center;
-    min-width:20px; height:20px; padding:0 .35rem;
-    border-radius:999px; background:var(--terracotta-500); color:#fff;
-    font-size:.7rem; font-weight:800; font-family:var(--font-mono);
-  }
-
-  /* --- Inbox --- */
-  .inbox-panel{ padding:0; overflow:hidden; }
-  .inbox-row{
-    border-bottom:1px solid var(--line);
-    background:#fff;
-    transition:background .15s ease;
-  }
-  .inbox-row:last-child{ border-bottom:none; }
-  .inbox-row.is-unread{ background:rgba(107,155,94,.05); }
-  .inbox-row-head{
-    display:flex; align-items:center; gap:.7rem;
-    padding:.95rem 1.1rem; cursor:pointer;
-  }
-  .inbox-row-head:hover{ background:rgba(63,91,61,.04); }
-  .inbox-row-dot{
-    width:8px; height:8px; border-radius:50%; flex-shrink:0;
-    background:transparent;
-  }
-  .inbox-row.is-unread .inbox-row-dot{ background:var(--leaf-500); box-shadow:0 0 0 3px rgba(107,155,94,.18); }
-  .inbox-row-headline{ flex:1; min-width:0; display:flex; flex-direction:column; gap:.15rem; }
-  .inbox-row-subject{ font-weight:600; font-size:.92rem; color:var(--moss-900); }
-  .inbox-row.is-unread .inbox-row-subject{ font-weight:800; }
-  .inbox-row-date{ font-size:.74rem; color:var(--moss-600); }
-  .inbox-row-chevron{ color:var(--moss-500); transition:transform .18s ease; flex-shrink:0; }
-  .inbox-row.is-open .inbox-row-chevron{ transform:rotate(180deg); }
-  .inbox-row-body{
-    padding:0 1.1rem 1.1rem 2.4rem;
-    font-size:.9rem; color:var(--moss-700); line-height:1.6;
-    white-space:pre-wrap;
-  }
-  .inbox-row-footer{
-    margin-top:.6rem; font-size:.75rem; color:var(--moss-500); font-style:italic;
-  }
-  #inbox-unread-badge{
-    margin-left:.15rem;
-  }
+.profile-page-head{padding:1.8rem 1.6rem;margin-bottom:1.4rem;border-radius:24px;background:linear-gradient(135deg,var(--moss-900),var(--moss-700));color:#fff;position:relative;overflow:hidden}.profile-page-head:after{content:"";position:absolute;inset:0;background-image:radial-gradient(rgba(255,255,255,.14) 1px,transparent 1px);background-size:16px 16px;opacity:.45;pointer-events:none}.profile-page-head .crumb,.profile-page-head .crumb a{color:rgba(255,255,255,.78)}.profile-page-head h1{color:#fff;margin:0;position:relative;z-index:1}
+.profile-dashboard{display:grid;gap:1rem}.profile-identity-card{display:grid;grid-template-columns:auto 1fr;gap:1.1rem;align-items:center;padding:1.35rem;border:1px solid rgba(107,155,94,.2);border-radius:22px;background:linear-gradient(145deg,#fff,rgba(241,247,240,.82));box-shadow:0 14px 36px rgba(31,46,34,.09)}.profile-avatar-wrap{position:relative;width:88px;height:88px}.profile-avatar{width:88px;height:88px;border-radius:50%;object-fit:cover;border:3px solid #fff;box-shadow:0 8px 24px rgba(31,46,34,.18);display:block}.profile-avatar-edit-btn{position:absolute;right:-2px;bottom:-2px;width:30px;height:30px;border:2px solid #fff;border-radius:50%;background:var(--leaf-500);color:#fff;cursor:pointer;box-shadow:0 4px 10px rgba(31,46,34,.22)}.profile-name-row{display:flex;align-items:center;gap:.45rem;flex-wrap:wrap}.profile-id-verified-badge{font-size:.7rem;font-weight:800;padding:.2rem .55rem;border-radius:999px;background:rgba(107,155,94,.14);color:var(--leaf-500)}.profile-meta{display:grid;gap:.22rem;margin-top:.35rem;color:var(--moss-600);font-size:.86rem}.profile-status-pill{display:inline-flex;width:max-content;font-size:.7rem;font-weight:800;padding:.22rem .6rem;border-radius:999px;margin-top:.45rem}.profile-status-pill.verified{background:rgba(107,155,94,.15);color:var(--leaf-500)}.profile-status-pill.unverified{background:rgba(214,171,74,.18);color:var(--wheat-400)}.profile-status-pill.rejected{background:rgba(196,90,63,.15);color:var(--terracotta-500)}.profile-avatar-status{font-size:.72rem;color:var(--moss-600);min-height:1em;margin-top:.2rem}
+.profile-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:.8rem}.profile-metric{padding:1rem;border:1px solid var(--line);border-radius:18px;background:#fff;box-shadow:0 7px 20px rgba(31,46,34,.055);text-align:center}.profile-metric strong{display:block;font-family:var(--font-mono);font-size:1.55rem;color:var(--moss-900)}.profile-metric span{display:block;font-size:.75rem;color:var(--moss-600);margin-top:.2rem}.profile-access-card{display:grid;grid-template-columns:150px 1fr;gap:1.1rem;align-items:center;padding:1.2rem;border:1px solid rgba(107,155,94,.22);border-radius:22px;background:#fff;box-shadow:0 10px 28px rgba(31,46,34,.07)}.access-day-circle{width:132px;height:132px;border-radius:50%;display:grid;place-items:center;margin:auto;background:conic-gradient(var(--leaf-500) 0deg,#e5ece5 0deg);position:relative}.access-day-circle:after{content:"";position:absolute;inset:9px;border-radius:50%;background:#fff}.access-day-circle-inner{position:relative;z-index:1;text-align:center}.access-day-circle-inner strong{display:block;font-family:var(--font-mono);font-size:1.65rem;color:var(--moss-900)}.access-day-circle-inner span{font-size:.68rem;color:var(--moss-600)}.access-copy h2{margin:0 0 .35rem;font-size:1.08rem}.access-copy p{margin:0;color:var(--moss-600);font-size:.83rem;line-height:1.55}.profile-section{margin-top:1rem}.profile-section-head{display:flex;align-items:center;gap:.55rem;margin-bottom:.65rem}.profile-section-head h2{margin:0;font-size:1rem}.profile-section-icon{display:grid;place-items:center;width:30px;height:30px;border-radius:9px;background:rgba(107,155,94,.12)}.profile-section-badge-count{min-width:20px;text-align:center;border-radius:999px;background:var(--terracotta-500);color:#fff;font:700 .68rem var(--font-mono);padding:.2rem .35rem}.profile-card-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.8rem}.profile-content-card{border:1px solid var(--line);border-radius:18px;background:#fff;overflow:hidden;box-shadow:0 8px 22px rgba(31,46,34,.055)}.profile-content-card .card-head{padding:.9rem 1rem;border-bottom:1px solid var(--line);font-weight:800}.profile-content-card .card-body{padding:.9rem}.credit-balance-card{padding:1.1rem;border:1px solid rgba(107,155,94,.2);border-radius:20px;background:linear-gradient(145deg,#fff,#f4f8f3);display:flex;justify-content:space-between;align-items:center;gap:1rem}.credit-balance-ring{width:94px;height:94px;border-radius:50%;display:grid;place-items:center;position:relative;background:conic-gradient(var(--leaf-500) 0deg,#dfe9df 0deg);flex-shrink:0}.credit-balance-ring:after{content:"";position:absolute;inset:7px;background:#fff;border-radius:50%}.credit-balance-ring>*{position:relative;z-index:1}.credit-balance-ring span{font:800 1.5rem var(--font-mono);color:var(--moss-900)}.credit-balance-ring small{font-size:.62rem;color:var(--moss-600);display:block}.credit-panel-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:.55rem;margin-top:.8rem}.credit-panel-stats>div{text-align:center;padding:.65rem;border:1px solid var(--line);border-radius:12px;background:#fff}.credit-panel-stats strong{display:block;font:800 1.1rem var(--font-mono)}.credit-panel-stats span{font-size:.68rem;color:var(--moss-600)}.credit-panel-eyebrow{font-size:.67rem;font-weight:800;letter-spacing:.12em;color:var(--leaf-500)}.credit-panel-head{display:flex;justify-content:space-between;align-items:center;gap:1rem}.credit-panel-head h2{margin:.25rem 0;font-size:1rem}.credit-panel-head p{margin:0;color:var(--moss-600);font-size:.8rem}.inbox-panel{overflow:hidden;padding:0}.inbox-row{border-bottom:1px solid var(--line);background:#fff}.inbox-row:last-child{border-bottom:0}.inbox-row.is-unread{background:rgba(107,155,94,.055)}.inbox-row-head{display:flex;align-items:center;gap:.7rem;padding:.9rem 1rem;cursor:pointer}.inbox-row-dot{width:8px;height:8px;border-radius:50%;background:transparent;flex-shrink:0}.inbox-row.is-unread .inbox-row-dot{background:var(--leaf-500);box-shadow:0 0 0 3px rgba(107,155,94,.16)}.inbox-row-headline{flex:1;min-width:0;display:flex;flex-direction:column;gap:.15rem}.inbox-row-subject{font-size:.86rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.inbox-row-date{font-size:.7rem;color:var(--moss-600)}.inbox-row-chevron{color:var(--moss-500)}.inbox-row-body{padding:0 1rem 1rem 2.25rem;color:var(--moss-700);font-size:.84rem;line-height:1.6;white-space:pre-wrap}.inbox-row-footer{margin-top:.5rem;font-size:.7rem;color:var(--moss-500);font-style:italic}.upload-row{display:flex;justify-content:space-between;gap:.7rem;align-items:center;padding:.75rem;border:1px solid var(--line);border-radius:12px;margin-bottom:.55rem;background:#fff}.status-tag{font-size:.68rem;font-weight:800;padding:.2rem .5rem;border-radius:999px;white-space:nowrap}.status-tag.approved{background:rgba(107,155,94,.15);color:var(--leaf-500)}.status-tag.pending{background:rgba(214,171,74,.18);color:var(--wheat-400)}.status-tag.rejected{background:rgba(196,90,63,.15);color:var(--terracotta-500)}.password-card{padding:1rem;border:1px solid var(--line);border-radius:18px;background:#fff}.password-card p{color:var(--moss-600);font-size:.82rem;line-height:1.55}.password-modal{position:fixed;inset:0;z-index:9999;background:rgba(17,25,19,.62);display:grid;place-items:center;padding:1rem}.password-modal.hidden{display:none}.password-modal-box{width:min(460px,100%);background:#fff;border-radius:24px;padding:1.25rem;box-shadow:0 30px 80px rgba(0,0,0,.3)}
+.hidden{display:none!important}@media(max-width:680px){.profile-metrics{grid-template-columns:1fr}.profile-card-grid{grid-template-columns:1fr}.profile-access-card{grid-template-columns:1fr;text-align:center}.access-copy{text-align:center}.credit-balance-card{align-items:center}.profile-identity-card{grid-template-columns:1fr;text-align:center}.profile-avatar-wrap{margin:auto}.profile-name-row{justify-content:center}.profile-status-pill{margin-left:auto;margin-right:auto}.profile-meta{justify-items:center}.profile-page-head{padding:1.35rem 1rem}.profile-dashboard{gap:.8rem}}
 </style>
 </head>
 <body>
@@ -224,122 +50,75 @@
     <div id="profile-loading" style="color:var(--moss-600);padding:2rem 0;">Loading your profile…</div>
 
     <div id="profile-content" class="hidden">
-      <div class="profile-card">
-        <div class="profile-avatar-wrap" id="profile-avatar-wrap">
-          <img id="profile-avatar" class="profile-avatar" src="" alt="">
-          <button type="button" class="profile-avatar-edit-btn" id="profile-avatar-edit-btn" title="Change profile photo" aria-label="Change profile photo">📷</button>
-          <input type="file" id="profile-avatar-input" accept="image/*" style="display:none;">
-        </div>
-        <div>
-          <div class="profile-name-row">
-            <span style="font-weight:700;font-size:1.25rem;" id="profile-name"></span>
-            <span id="profile-id-verified-badge" class="profile-id-verified-badge hidden">🟢 ID Verified</span>
+      <div class="profile-dashboard">
+        <div class="profile-identity-card">
+          <div class="profile-avatar-wrap" id="profile-avatar-wrap">
+            <img id="profile-avatar" class="profile-avatar" src="" alt="Profile photo">
+            <button type="button" class="profile-avatar-edit-btn" id="profile-avatar-edit-btn" title="Change profile photo" aria-label="Change profile photo">📷</button>
+            <input type="file" id="profile-avatar-input" accept="image/*" style="display:none;">
           </div>
-          <div style="font-size:.85rem;color:var(--moss-600);" id="profile-email"></div>
-          <div style="font-size:.85rem;color:var(--moss-600);">Student ID: <strong id="profile-studentid"></strong></div>
-          <span id="profile-status-pill" class="profile-status-pill"></span>
-          <div id="profile-avatar-status" class="profile-avatar-status"></div>
-        </div>
-      </div>
-
-      <div id="profile-status-note" class="uc-panel hidden" style="margin-bottom:1.8rem;"></div>
-      <div id="resource-access-alert" class="uc-panel hidden" style="margin-bottom:1.8rem;border-color:var(--terracotta-500);background:rgba(196,90,63,.07);color:var(--terracotta-500);font-weight:600;"></div>
-
-      <div class="uc-panel" style="margin-bottom:1.8rem;">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
           <div>
-            <span id="access-badge" class="access-badge"></span>
-            <div id="access-detail" style="font-size:.82rem;color:var(--moss-600);margin-top:.3rem;"></div>
+            <div class="profile-name-row"><span style="font-weight:800;font-size:1.35rem;" id="profile-name"></span><span id="profile-id-verified-badge" class="profile-id-verified-badge hidden">✓ ID Verified</span></div>
+            <div class="profile-meta"><span>🪪 Student ID: <strong id="profile-studentid"></strong></span><span>✉️ <span id="profile-email"></span></span></div>
+            <span id="profile-status-pill" class="profile-status-pill"></span><div id="profile-avatar-status" class="profile-avatar-status"></div>
           </div>
         </div>
-        <div id="access-scale-wrap" class="access-scale-wrap hidden">
-          <div class="access-premium-circle"><div class="access-scale-track"><div id="access-scale-fill" class="access-scale-fill"></div></div><div id="access-circle-center" class="access-circle-center">⏱</div></div>
-          <div class="access-scale-labels">
-            <span id="access-scale-remaining"></span>
-            <span id="access-scale-until"></span>
+
+        <div id="profile-status-note" class="uc-panel hidden"></div>
+        <div id="resource-access-alert" class="uc-panel hidden" style="border-color:var(--terracotta-500);background:rgba(196,90,63,.07);color:var(--terracotta-500);font-weight:600;"></div>
+
+        <div class="profile-metrics">
+          <div class="profile-metric"><strong id="stat-total">0</strong><span>Total Contributions</span></div>
+          <div class="profile-metric"><strong id="handnote-credit-earned-top">0</strong><span>Total Credit Earned</span></div>
+          <div class="profile-metric"><strong id="handnote-credit-remaining-top">0</strong><span>Remaining Credits</span></div>
+        </div>
+
+        <div class="profile-access-card">
+          <div class="access-day-circle" id="profile-access-circle"><div class="access-day-circle-inner"><strong id="profile-access-days">0</strong><span id="profile-access-days-label">days left</span></div></div>
+          <div class="access-copy"><h2 id="access-badge">🔒 No Active Access</h2><p id="access-detail">Your resource access status will appear here.</p><div id="access-scale-wrap" class="hidden"><div id="access-scale-fill"></div><span id="access-scale-remaining"></span><span id="access-scale-until"></span></div></div>
+        </div>
+
+        <div id="handnote-credit-panel" class="credit-balance-card">
+          <div class="credit-panel-head"><div><span class="credit-panel-eyebrow">UNLOCK WALLET</span><h2>📚 Your Credits</h2><p>Use 1 credit to unlock one resource file.</p></div><div class="credit-balance-ring"><span id="handnote-credit-remaining">0</span><small>available</small></div></div>
+          <div class="credit-panel-stats"><div><strong id="handnote-credit-earned">0</strong><span>Earned</span></div><div><strong id="handnote-credit-used">0</strong><span>Used</span></div><div><strong id="handnote-credit-remaining-mini">0</strong><span>Available</span></div></div>
+        </div>
+
+        <div class="profile-section" id="inbox"><div class="profile-section-head"><span class="profile-section-icon">📥</span><h2>Inbox</h2><span id="inbox-unread-badge" class="profile-section-badge-count hidden">0</span></div><div class="profile-content-card inbox-panel"><div id="inbox-list"></div><div id="inbox-empty" class="hidden" style="padding:1.5rem;text-align:center;color:var(--moss-600);">No messages yet.</div></div></div>
+
+        <div class="profile-card-grid">
+          <div class="profile-content-card"><div class="card-head">📊 My Contributions</div><div class="card-body"><div class="credit-panel-stats" style="margin:0"><div><strong id="stat-approved">0</strong><span>Approved</span></div><div><strong id="stat-pending">0</strong><span>Pending</span></div><div><strong id="stat-rejected">0</strong><span>Rejected</span></div></div></div></div>
+          <div class="profile-content-card"><div class="card-head">📁 My Uploads</div><div class="card-body"><div id="uploads-list"></div><div id="uploads-empty" class="hidden" style="color:var(--moss-600);font-size:.82rem;">No uploads yet.</div></div></div>
+          <div class="profile-content-card"><div class="card-head">📰 My Blog Posts</div><div class="card-body"><div id="my-posts-list"></div><div id="my-posts-empty" class="hidden" style="color:var(--moss-600);font-size:.82rem;">No blog posts yet.</div></div></div>
+        </div>
+
+        <div class="password-card">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap">
+            <div><h2 style="margin:0;font-size:1rem">🔐 Password</h2><p id="password-card-copy" style="margin:.3rem 0 0">Manage your Agri Core login password.</p></div>
+            <button type="button" id="profile-password-open-btn" class="btn-primary">Set Password</button>
+          </div>
+          <div id="password-section-no-password" class="hidden"></div>
+          <div id="password-section-has-password" class="hidden">
+            <div class="profile-password-inline-form">
+              <div class="profile-password-field"><label for="profile-inline-new-password">New password</label><input type="password" id="profile-inline-new-password" autocomplete="new-password" minlength="6" placeholder="Enter new password"></div>
+              <div class="profile-password-field"><label for="profile-inline-new-password-confirm">Confirm new password</label><input type="password" id="profile-inline-new-password-confirm" autocomplete="new-password" minlength="6" placeholder="Confirm new password"></div>
+              <button type="button" id="profile-inline-password-submit-btn" class="btn-primary">Update Password</button>
+              <div id="profile-inline-password-status" class="profile-password-status" aria-live="polite"></div>
+            </div>
           </div>
         </div>
+        <div id="access-timeline-wrap" class="hidden"><div id="access-timeline-total"></div><div id="access-timeline-list"></div></div>
+        <button type="button" id="profile-logout-btn" style="margin-top:.5rem;background:none;border:1px solid var(--line);color:var(--terracotta-500);padding:.7rem 1.4rem;border-radius:10px;font-weight:700;cursor:pointer;justify-self:start">Log Out</button>
       </div>
+    </div>
 
-      <div id="handnote-credit-panel" class="uc-panel hidden" style="margin-bottom:1.8rem;">
-        <div class="credit-panel-head">
-          <div>
-            <span class="credit-panel-eyebrow">HAND NOTE UNLOCK CREDITS</span>
-            <h2>📚 Your unlock balance</h2>
-            <p>Each uploaded Hand Note file gives you 1 credit. Unlocking a file uses 1 credit.</p>
-          </div>
-          <div class="credit-balance-ring" aria-label="Remaining Hand Note unlock credits"><span id="handnote-credit-remaining">0</span><small>credits</small></div>
-        </div>
-        <div class="credit-panel-stats">
-          <div><strong id="handnote-credit-earned">0</strong><span>Earned</span></div>
-          <div><strong id="handnote-credit-used">0</strong><span>Used</span></div>
-          <div><strong id="handnote-credit-remaining-mini">0</strong><span>Available</span></div>
-        </div>
+    <div id="profile-password-modal" class="password-modal hidden" aria-hidden="true">
+      <div class="password-modal-box">
+        <button type="button" id="profile-password-modal-close" aria-label="Close" style="float:right;border:0;background:none;font-size:1.2rem;cursor:pointer">✕</button>
+        <h2 style="margin:.2rem 0 .4rem">🔐 Set your password</h2><p style="color:var(--moss-600);font-size:.82rem;line-height:1.5">Create a secure password for your Agri Core account.</p>
+        <label for="profile-new-password" style="display:block;font-weight:700;margin:.9rem 0 .3rem;font-size:.85rem">New password</label><input type="password" id="profile-new-password" autocomplete="new-password" minlength="6" style="width:100%;padding:.75rem;border:1px solid var(--line);border-radius:10px">
+        <label for="profile-new-password-confirm" style="display:block;font-weight:700;margin:.8rem 0 .3rem;font-size:.85rem">Confirm password</label><input type="password" id="profile-new-password-confirm" autocomplete="new-password" minlength="6" style="width:100%;padding:.75rem;border:1px solid var(--line);border-radius:10px">
+        <button type="button" id="profile-password-submit-btn" class="btn-primary" style="width:100%;margin-top:1rem">Save Password</button><div id="profile-password-status" style="margin-top:.7rem;font-size:.8rem;min-height:1.2em"></div>
       </div>
-
-      <div id="access-timeline-wrap" class="uc-panel hidden" style="margin-bottom:1.8rem;">
-        <h2 style="font-size:1rem;margin-bottom:.7rem;">⏱ Access Breakdown — where your time comes from</h2>
-        <div id="access-timeline-total" class="access-timeline-total"></div>
-        <div id="access-timeline-list"></div>
-      </div>
-
-      <div class="profile-section" id="inbox" style="margin-top:0;">
-        <div class="profile-section-head"><h2><span class="profile-section-icon">📥</span>Inbox</h2><span id="inbox-unread-badge" class="profile-section-badge-count hidden">0</span></div>
-        <div class="uc-panel inbox-panel">
-          <div id="inbox-list"></div>
-          <div id="inbox-empty" class="hidden" style="padding:1.6rem 1.1rem;text-align:center;">
-            <p style="color:var(--moss-600);">No messages yet. Anything the admin sends you will show up here.</p>
-          </div>
-        </div>
-      </div>
-
-      <div class="profile-section">
-        <div class="profile-section-head"><h2><span class="profile-section-icon">📊</span>My Contributions</h2></div>
-        <div class="credit-stats">
-          <div class="credit-stat"><div class="num" id="stat-total">0</div><div class="label">Total Submitted</div></div>
-          <div class="credit-stat"><div class="num" id="stat-approved">0</div><div class="label">✅ Approved (Credits)</div></div>
-          <div class="credit-stat"><div class="num" id="stat-pending">0</div><div class="label">⏳ Pending Review</div></div>
-          <div class="credit-stat"><div class="num" id="stat-rejected">0</div><div class="label">❌ Rejected</div></div>
-        </div>
-      </div>
-
-      <div class="profile-section">
-        <div class="profile-section-head"><h2><span class="profile-section-icon">📁</span>My Uploads</h2></div>
-        <div id="uploads-list"></div>
-        <div id="uploads-empty" class="uc-panel hidden">
-          <p>You haven't uploaded anything yet. Contributions to Resources or the Knowledge Hub will show up here.</p>
-        </div>
-      </div>
-
-      <div class="profile-section">
-        <div class="profile-section-head"><h2><span class="profile-section-icon">📰</span>My Blog Posts</h2></div>
-        <div id="my-posts-list"></div>
-        <div id="my-posts-empty" class="uc-panel hidden">
-          <p>You haven't published any blog posts yet. Head to the <a href="blog.html" style="color:var(--leaf-500);font-weight:600;">Blog</a> to share something.</p>
-        </div>
-      </div>
-
-      <div class="profile-section">
-        <div class="profile-section-head"><h2><span class="profile-section-icon">🔑</span>Login Password</h2></div>
-        <div id="password-section-no-password" class="hidden">
-          <p style="color:var(--moss-600);font-size:.9rem;margin-bottom:1rem;">You currently log in with your Student ID and email. Set a password below for faster login — <strong>once you set one, you'll need your Student ID and password to log in</strong> (your email will no longer work for login).</p>
-        </div>
-        <div id="password-section-has-password" class="hidden">
-          <p style="color:var(--moss-600);font-size:.9rem;margin-bottom:1rem;">Change the password you use to log in.</p>
-        </div>
-        <div style="max-width:360px;">
-          <label for="profile-new-password" style="display:block;font-weight:600;margin-bottom:.3rem;font-size:.9rem;">New password (min. 6 characters)</label>
-          <input type="password" id="profile-new-password" autocomplete="new-password" minlength="6"
-            style="width:100%;padding:.7rem .9rem;border:1px solid var(--line);border-radius:8px;font-family:var(--font-body);font-size:.95rem;margin-bottom:.9rem;">
-          <label for="profile-new-password-confirm" style="display:block;font-weight:600;margin-bottom:.3rem;font-size:.9rem;">Confirm new password</label>
-          <input type="password" id="profile-new-password-confirm" autocomplete="new-password" minlength="6"
-            style="width:100%;padding:.7rem .9rem;border:1px solid var(--line);border-radius:8px;font-family:var(--font-body);font-size:.95rem;margin-bottom:1rem;">
-          <button type="button" id="profile-password-submit-btn" style="background:var(--moss-700);color:#fff;border:none;padding:.7rem 1.4rem;border-radius:8px;font-weight:600;font-size:.95rem;cursor:pointer;">Save Password</button>
-          <div id="profile-password-status" style="margin-top:.8rem;font-size:.9rem;min-height:1.2em;"></div>
-        </div>
-      </div>
-
-      <button type="button" id="profile-logout-btn" style="margin-top:2rem;background:none;border:1px solid var(--line);color:var(--terracotta-500);padding:.7rem 1.4rem;border-radius:8px;font-weight:600;cursor:pointer;">Log Out</button>
     </div>
 
     <div id="profile-logged-out" class="uc-panel hidden">
