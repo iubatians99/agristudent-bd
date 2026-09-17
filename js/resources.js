@@ -722,10 +722,11 @@ if (handNotesGate && handNotesContent) {
         email,
         name: session.fullName,
         targetFileId: fileId,
-        sourceResourceId: creditSources[0]?.id || "",
+        sourceResourceId: creditSources[0]?.id || "registration-free",
         category
       });
       if (!created?.id) return false;
+      window.__resourceCreditRemaining = Math.max(0, totalCredits - (used.length + 1));
 
       // Re-read Firestore and make the new grant the source of truth before
       // declaring the file unlocked. This keeps the UI and the actual viewer
@@ -836,6 +837,53 @@ if (handNotesGate && handNotesContent) {
   // submission toward the file id it was stamped with.
   let hnGateTargetId = null;
 
+  // Calculate the live credit balance used by the per-file unlock chooser.
+  // Registration credits are an entitlement, so older registration documents
+  // without registrationCredits still receive the original 5 free credits.
+  async function hnGetRemainingCredits() {
+    const session = getSession();
+    if (!session) return 0;
+    const email = normalizeEmail(session.email);
+    try {
+      const items = window.__hnAccessItems || [];
+      let registrationCredits = 5;
+      try {
+        const regSnap = await getDocs(query(collection(db, "registrations"), where("emailNormalized", "==", email)));
+        if (!regSnap.empty) registrationCredits = Math.max(5, Number(regSnap.docs[0].data().registrationCredits || 0));
+        else {
+          const legacy = await getDocs(query(collection(db, "registrations"), where("email", "==", email)));
+          if (!legacy.empty) registrationCredits = Math.max(5, Number(legacy.docs[0].data().registrationCredits || 0));
+        }
+      } catch (_) { /* retain the guaranteed 5-credit entitlement */ }
+      const uploadCredits = items.filter(i => i.kind === "resource" && i.resourceType === "slides_notes" && normalizeEmail(i.uploaderEmail) === email).reduce((n, i) => n + fileCount(i), 0);
+      const classroomCredits = items.filter(i => i.kind === "classroom" && i.status === "approved").reduce(n => n + 10, 0);
+      const coffeeCredits = items.filter(i => i.kind === "manual" && i.source === "coffee").reduce((n, i) => n + Number(i.creditsGranted || 0), 0);
+      const used = items.filter(i => i.kind === "file_unlock" && !i.revoked).length;
+      return Math.max(0, registrationCredits + uploadCredits + classroomCredits + coffeeCredits - used);
+    } catch (err) {
+      console.warn("[Resource Credit] balance check failed:", err);
+      return 0;
+    }
+  }
+
+  async function hnRefreshCreditChoice() {
+    const countEl = document.getElementById("hn-choice-credit-count");
+    const btn = document.getElementById("hn-use-credit-btn");
+    const copy = document.getElementById("hn-choice-credit-copy");
+    const earnTitle = document.getElementById("hn-earn-credit-title");
+    if (!countEl || !btn) return 0;
+    countEl.textContent = "…";
+    btn.disabled = true;
+    const remaining = await hnGetRemainingCredits();
+    window.__resourceCreditRemaining = remaining;
+    countEl.textContent = String(remaining);
+    btn.disabled = remaining < 1 || !hnGateTargetId;
+    copy && (copy.textContent = remaining > 0 ? "1 credit unlocks this file instantly. Your balance will decrease by 1." : "You have no credits available right now. Earn a new credit below to unlock this file.");
+    btn.textContent = remaining > 0 ? `⚡ Unlock with remaining credit · ${remaining} available` : "⚡ No credits available";
+    if (earnTitle) earnTitle.textContent = remaining > 0 ? "Earn more credit to unlock" : "Earn new credit to unlock";
+    return remaining;
+  }
+
   // BUG FIX — "unlocking one file unlocked ALL files": when a logged-out
   // student clicked "Unlock" on a specific file, hnGateTargetId was set
   // correctly in memory, but the login/register step then sent them to a
@@ -861,6 +909,7 @@ if (handNotesGate && handNotesContent) {
     handNotesGate.classList.remove("hidden");
     hnEnterFormOnly(true);
     hnShowStep(getSession() ? hnStepChoice : hnStepLogin);
+    if (getSession()) hnRefreshCreditChoice();
     handNotesGate.scrollIntoView({ behavior: "smooth" });
   };
 
@@ -875,6 +924,32 @@ if (handNotesGate && handNotesContent) {
   }
 
   hnGateBackBtn?.addEventListener("click", hnExitFormOnly);
+  document.getElementById("hn-use-credit-btn")?.addEventListener("click", async () => {
+    const btn = document.getElementById("hn-use-credit-btn");
+    const countEl = document.getElementById("hn-choice-credit-count");
+    if (!hnGateTargetId || btn?.disabled) return;
+    btn.disabled = true;
+    btn.textContent = "Unlocking…";
+    try {
+      const used = await window.__tryUseResourceCredit?.(hnGateTargetId, window.__hnGateCategory || "hand_notes");
+      if (used) {
+        const remaining = Number(window.__resourceCreditRemaining ?? 0);
+        if (countEl) countEl.textContent = String(remaining);
+        btn.textContent = `✓ Unlocked · ${remaining} credit${remaining === 1 ? "" : "s"} left`;
+        btn.classList.add("credit-unlock-success");
+        setTimeout(() => {
+          btn.classList.remove("credit-unlock-success");
+          hnExitFormOnly();
+          hnRefreshAccess(normalizeEmail(getSession()?.email || ""));
+        }, 700);
+        return;
+      }
+      await hnRefreshCreditChoice();
+    } catch (err) {
+      console.error("[Resource Credit] chooser unlock failed:", err);
+      await hnRefreshCreditChoice();
+    }
+  });
   document.getElementById("hn-choose-notes")?.addEventListener("click", () => hnShowStep(hnStepNotes));
   document.getElementById("hn-choose-classroom")?.addEventListener("click", () => hnShowStep(hnStepClassroom));
   document.getElementById("hn-choose-coffee")?.addEventListener("click", () => {
@@ -1769,7 +1844,8 @@ if (handnotesList || slidesList || imageGrid) {
             // action becomes available and remains unlocked for its grant time.
             el.classList.remove("unlocking-now");
             el.classList.add("unlock-complete");
-            el.innerHTML = `<span class="file-status unlock-checkmark">✓</span><span class="file-name">Unlocked successfully</span><span class="file-action file-lock-badge unlock-success-badge">✓ Unlocked</span>`;
+            const remaining = Number(window.__resourceCreditRemaining ?? 0);
+            el.innerHTML = `<span class="file-status unlock-checkmark">✓</span><span class="file-name">Unlocked successfully <small style="display:block;font-size:.68rem;opacity:.78;">${remaining} credit${remaining === 1 ? "" : "s"} remaining</small></span><span class="file-action file-lock-badge unlock-success-badge">✓ Unlocked</span>`;
             setTimeout(() => {
               el.classList.remove("unlock-complete");
               hnRefreshAccess(normalizeEmail(getSession()?.email || ""));

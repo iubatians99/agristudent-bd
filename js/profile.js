@@ -166,12 +166,12 @@ async function init() {
     contentEl.classList.remove("hidden");
 
     try {
-      await renderCredits(normalizeEmail(reg.email), reg.fullName);
+      await renderCredits(normalizeEmail(reg.email), reg.fullName, reg);
     } catch (err) {
       console.error("[Profile] failed to load resource credits:", err);
       const listEl = document.getElementById("uploads-list");
       if (listEl) listEl.innerHTML = `<p style="color:var(--terracotta-500);font-size:.85rem;">Couldn't load your uploads right now. <button type="button" id="retry-credits" style="background:none;border:none;color:var(--leaf-500);font-weight:600;cursor:pointer;text-decoration:underline;">Retry</button></p>`;
-      document.getElementById("retry-credits")?.addEventListener("click", () => renderCredits(normalizeEmail(reg.email), reg.fullName).catch(e => console.error(e)));
+      document.getElementById("retry-credits")?.addEventListener("click", () => renderCredits(normalizeEmail(reg.email), reg.fullName, reg).catch(e => console.error(e)));
     }
 
     try {
@@ -378,7 +378,7 @@ function renderPasswordSection(regId, reg) {
   }
 }
 
-async function renderCredits(email, fullName) {
+async function renderCredits(email, fullName, reg = {}) {
   const [resourcesSnap, termsSnap, classroomSnap, manualSnap, fileUnlockSnap, folderUnlockSnap] = await Promise.all([
     getDocs(query(collection(db, "resources"), where("uploaderEmail", "==", email))),
     getDocs(query(collection(db, "terms"), where("uploaderEmail", "==", email))),
@@ -405,6 +405,7 @@ async function renderCredits(email, fullName) {
   const rejected = items.filter(i => i.status === "rejected").length;
 
   document.getElementById("stat-total").textContent = items.length;
+  document.getElementById("stat-total-card")?.replaceChildren(document.createTextNode(String(items.length)));
   document.getElementById("stat-approved").textContent = approved;
   document.getElementById("stat-pending").textContent = pending;
   document.getElementById("stat-rejected").textContent = rejected;
@@ -513,8 +514,8 @@ async function renderCredits(email, fullName) {
     return `
       <div class="upload-row">
         <div>
-          <div style="font-weight:600;font-size:.92rem;">${title}</div>
-          <div style="font-size:.75rem;color:var(--moss-600);">${date}</div>
+          <div class="upload-title">${title}</div>
+          <div class="upload-date">${date}</div>
         </div>
         <span class="status-tag ${esc(status)}">${status === "approved" ? "✅ Approved" : status === "rejected" ? "❌ Rejected" : "⏳ Pending"}</span>
       </div>`;
