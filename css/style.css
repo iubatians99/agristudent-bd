@@ -878,6 +878,11 @@ img{ max-width:100%; display:block; }
 .nav-link-icon{ display:none; }
 .nav-links a:hover{ background:var(--paper-100); color:var(--moss-900); }
 .nav-links a.active{ background:var(--moss-900); color:#fff; }
+/* "My Profile" — injected into the side/mobile drawer only (see
+   js/session.js renderAuthSlot); the desktop nav already has the
+   avatar+name profile link in .navbar-auth-slot, so this stays hidden
+   there to avoid showing the same destination twice. */
+.nav-profile-mobile-item{ display:none; }
 .nav-actions{ display:flex; align-items:center; gap:.5rem; flex-shrink:0; }
 .icon-btn{
   background:none; border:none; cursor:pointer;
@@ -1002,6 +1007,7 @@ img{ max-width:100%; display:block; }
   }
   .nav-links a.active{ background:var(--leaf-500); color:#fff; }
   .nav-link-icon{ display:inline-flex; font-size:1.15rem; width:1.5rem; }
+  .nav-profile-mobile-item{ display:block; }
   .nav-toggle{ display:flex; }
 }
 
@@ -2136,11 +2142,12 @@ body.viewer-layout {
 }
 .navbar-auth-logout:hover{ background:rgba(196,90,63,.08); }
 @media (max-width:700px){
-  .navbar-auth-slot{gap:.35rem;max-width:145px;}
-  .navbar-auth-profile{gap:.35rem;min-width:0;max-width:92px;}
-  .navbar-auth-profile > span:last-child{display:block;max-width:54px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.72rem;}
-  .navbar-auth-avatar{width:30px;height:30px;}
-  .navbar-auth-logout{padding:.32rem .48rem;font-size:.68rem;}
+  .navbar-auth-slot span{ max-width:74px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:inline-block; }
+  .navbar-auth-logout{ padding:.35rem .5rem; font-size:0; width:30px; height:30px; display:inline-flex; align-items:center; justify-content:center; }
+  .navbar-auth-logout:after{ content:"⎋"; font-size:1rem; }
+}
+@media (max-width:420px){
+  .navbar-auth-slot span{ max-width:52px; }
 }
 @media (max-width:700px){
   .viewer-bar .title{ display:none; }

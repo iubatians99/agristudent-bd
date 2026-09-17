@@ -606,6 +606,43 @@ async function loadCoffeeRequests() {
 }
 
 // ============================================
+// LOCK ALL UNLOCKED FILES — one-click bulk lock. Revokes every active
+// fileUnlocks (per-file Hand Note credit spends) and folderUnlocks
+// (lifetime Class Slides/Images grants) document, mirroring what the
+// individual "🔒 Lock Again" button does per-row (js/access.js only
+// counts a grant while revoked !== true). Manual admin grants
+// (manualUnlocks) are left untouched here — those are separate,
+// account-wide grants the admin controls individually from the Manual
+// Unlock tab, not a per-file "unlocked file".
+// ============================================
+document.getElementById("admin-lock-all-files-btn")?.addEventListener("click", async () => {
+  if (!confirm("Lock every currently unlocked file for every student? This revokes all active Hand Note credit unlocks and all lifetime Class Slides/Images folder grants. This cannot be undone (students can always re-unlock with a fresh credit).")) return;
+  const btn = document.getElementById("admin-lock-all-files-btn");
+  btn.disabled = true;
+  btn.textContent = "Locking…";
+  try {
+    const [fileSnap, folderSnap] = await Promise.all([
+      getDocs(query(collection(db, "fileUnlocks"))),
+      getDocs(query(collection(db, "folderUnlocks")))
+    ]);
+    const revokedBy = getCurrentUserEmail();
+    const targets = [
+      ...fileSnap.docs.filter(d => !d.data().revoked).map(d => doc(db, "fileUnlocks", d.id)),
+      ...folderSnap.docs.filter(d => !d.data().revoked).map(d => doc(db, "folderUnlocks", d.id))
+    ];
+    await Promise.all(targets.map(ref => updateDoc(ref, { revoked: true, revokedAt: serverTimestamp(), revokedBy })));
+    alert(`✅ Locked ${targets.length} file/folder unlock${targets.length === 1 ? "" : "s"}.`);
+    loadFolderAccess();
+  } catch (err) {
+    console.error("[Lock All Files] failed:", err);
+    alert("❌ Could not lock all files: " + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "🔒 Lock All Unlocked Files";
+  }
+});
+
+// ============================================
 // LIFETIME FOLDER ACCESS CONTROL
 // ============================================
 async function loadFolderAccess() {
@@ -1817,13 +1854,7 @@ async function loadClassroomCodes() {
       btn.addEventListener("click", async () => {
         btn.disabled = true;
         try {
-          const codeDoc = await getDoc(doc(db, "classroomCodes", btn.dataset.id));
-          const codeData = codeDoc.exists() ? codeDoc.data() : {};
-          if (codeData.purpose === "materials_request") {
-            await updateDoc(doc(db, "classroomCodes", btn.dataset.id), { status: "approved", approvedAt: serverTimestamp(), approvedBy:getCurrentUserEmail() });
-          } else {
-            await updateDoc(doc(db, "classroomCodes", btn.dataset.id), { status: "approved", approvedAt: serverTimestamp(), approvedBy:getCurrentUserEmail(), creditsGranted: 10 });
-          }
+          await updateDoc(doc(db, "classroomCodes", btn.dataset.id), { status: "approved", approvedAt: serverTimestamp(), approvedBy:getCurrentUserEmail(), ...(isMaterialsRequest ? {} : { creditsGranted: 10 }) });
           loadClassroomCodes();
         } catch (err) {
           console.error("[AgriAdmin] Failed to confirm classroom code:", err);

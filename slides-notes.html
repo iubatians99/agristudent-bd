@@ -32,16 +32,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Work+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
-
-<style>
-@media(max-width:640px){
-  #handnotes-gate .modal-box{width:calc(100vw - 20px)!important;max-height:92vh;overflow-y:auto;border-radius:20px;padding:.75rem!important}
-  #handnotes-gate .modal-body{padding:.75rem!important}
-  #hn-gate-step-unlock h2,#hn-gate-step-choice h2,#hn-gate-step-notes h2,#hn-gate-step-classroom h2{font-size:1.15rem!important}
-  #hn-gate-step-choice .btn-primary{font-size:.82rem;line-height:1.35}
-  .unlock-credit-card{align-items:flex-start!important;padding:.85rem!important}
-}
-</style>
 </head>
 <body>
 
@@ -77,13 +67,13 @@
           <div id="hn-gate-step-unlock" class="hidden" style="text-align:center;">
             <div style="font-size:1.7rem;width:3.4rem;height:3.4rem;line-height:3.4rem;margin:0 auto .9rem;border-radius:50%;background:linear-gradient(135deg, var(--moss-900), var(--moss-700));box-shadow:0 10px 22px rgba(31,46,34,.28);">🔓</div>
             <h2 style="font-size:1.35rem;margin-bottom:.3rem;">Unlock This File</h2>
-            <p style="color:var(--moss-600);font-size:.9rem;margin-bottom:1rem;line-height:1.6;">Use 1 credit to unlock this file for 6 hours, or earn more credits.</p>
+            <p style="color:var(--moss-600);font-size:.9rem;margin-bottom:1rem;line-height:1.6;">Use a credit from your wallet to unlock it instantly, or earn a new one.</p>
 
             <div id="hn-unlock-loading" style="color:var(--moss-600);font-size:.85rem;padding:.4rem 0 1rem;">Checking your credit balance…</div>
 
             <div id="hn-unlock-remaining-wrap" class="hidden unlock-credit-card">
               <div class="unlock-credit-ring" id="hn-unlock-remaining-ring"><span id="hn-unlock-remaining-count">0</span><small>credits left</small></div>
-              <div class="unlock-credit-copy"><strong>Unlock Wallet</strong><span>Spend 1 credit to unlock this file for 6 hours.</span></div>
+              <div class="unlock-credit-copy"><strong>Unlock Wallet</strong><span>Spend 1 credit to unlock this file right now.</span></div>
             </div>
 
             <button type="button" id="hn-unlock-use-credit-btn" class="btn-primary hidden" style="display:block;width:100%;padding:.85rem;margin-bottom:.7rem;">🔓 Unlock with Remaining Credit</button>
@@ -94,7 +84,7 @@
 
             <div class="unlock-divider"><span>or</span></div>
 
-            <button type="button" id="hn-unlock-earn-btn" class="btn-primary" style="display:block;width:100%;padding:.85rem;margin-top:.9rem;background:var(--moss-600);">💡 Earn Credit / Access Options</button>
+            <button type="button" id="hn-unlock-earn-btn" class="btn-primary" style="display:block;width:100%;padding:.85rem;margin-top:.9rem;background:var(--moss-600);">⚡ Earn New Credit to Unlock</button>
           </div>
 
           <!-- STEP: CHOICE (shown once logged in, reached via "Earn New Credit to Unlock") -->
@@ -102,10 +92,10 @@
             <button type="button" id="hn-choice-back" class="step-back-link">← Back</button>
             <div style="font-size:1.7rem;width:3.4rem;height:3.4rem;line-height:3.4rem;margin:0 auto .9rem;border-radius:50%;background:linear-gradient(135deg, var(--moss-900), var(--moss-700));box-shadow:0 10px 22px rgba(31,46,34,.28);">🔓</div>
             <h2 style="font-size:1.35rem;margin-bottom:.3rem;">Unlock Resources</h2>
-            <p style="color:var(--moss-600);font-size:.9rem;margin-bottom:1.4rem;line-height:1.6;">Choose how you'd like to earn access to this file.</p>
-            <button type="button" id="hn-choose-notes" class="btn-primary" style="display:block;width:100%;padding:.8rem;margin-bottom:.7rem;">📤 Unlock with Notes <span style="font-weight:400;opacity:.85;">— upload a file; earn 1 credit and keep your uploaded file forever</span></button>
-            <button type="button" id="hn-choose-classroom" class="btn-primary" style="display:block;width:100%;padding:.8rem;background:var(--moss-600);margin-bottom:.7rem;">🏫 Unlock with Google Classroom <span style="font-weight:400;opacity:.85;">— approved code: 48h access + 10 credits</span></button>
-            <button type="button" id="hn-choose-coffee" class="btn-primary" style="display:block;width:100%;padding:.8rem;background:#7a4a24;margin-bottom:.7rem;">☕ Buy Me a Coffee <span style="font-weight:400;opacity:.85;">— admin-approved custom access / credits</span></button>
+            <p style="color:var(--moss-600);font-size:.9rem;margin-bottom:1.4rem;line-height:1.6;">Choose how you'd like to unlock access — this opens Hand Notes, Class Slides, and Images together.</p>
+            <button type="button" id="hn-choose-notes" class="btn-primary" style="display:block;width:100%;padding:.8rem;margin-bottom:.7rem;">📤 Unlock with Notes <span style="font-weight:400;opacity:.85;">— 6h access per file (or lifetime folder for Slides & Images)</span></button>
+            <button type="button" id="hn-choose-classroom" class="btn-primary" style="display:block;width:100%;padding:.8rem;background:var(--moss-600);margin-bottom:.7rem;">🏫 Unlock with Google Classroom <span style="font-weight:400;opacity:.85;">— +10 credits &amp; 48h access once approved</span></button>
+            <button type="button" id="hn-choose-coffee" class="btn-primary" style="display:block;width:100%;padding:.8rem;background:#7a4a24;margin-bottom:.7rem;">☕ Buy Me a Coffee <span style="font-weight:400;opacity:.85;">— admin-approved custom access</span></button>
           </div>
 
           <!-- STEP: UNLOCK WITH NOTES (existing upload form) -->
@@ -114,7 +104,7 @@
             <div style="text-align:center;">
               <div style="font-size:1.7rem;width:3.4rem;height:3.4rem;line-height:3.4rem;margin:0 auto .9rem;border-radius:50%;background:linear-gradient(135deg, var(--moss-900), var(--moss-700));box-shadow:0 10px 22px rgba(31,46,34,.28);">📤</div>
               <h2 style="font-size:1.35rem;margin-bottom:.3rem;">Unlock with Notes</h2>
-              <p style="color:var(--moss-600);font-size:.9rem;margin-bottom:1rem;line-height:1.6;">Upload a genuine academic file to earn 1 credit. The file you upload remains unlocked for you permanently.</p>
+              <p style="color:var(--moss-600);font-size:.9rem;margin-bottom:1rem;line-height:1.6;">Contribute lecture notes to unlock access. Upload PDF, images, or presentations below — you'll get immediate access to view notes while your upload is under review.</p>
               <p style="background:rgba(214,171,74,.15);color:var(--wheat-400,#a3791f);border-radius:8px;padding:.6rem .8rem;font-size:.82rem;margin-bottom:1.2rem;text-align:left;">⚠️ Please upload only genuine academic/educational content relevant to the course. Irrelevant or false uploads may result in your profile being restricted by an admin.</p>
             </div>
           <form id="handnotes-unlock-form">
@@ -193,7 +183,7 @@
           <div id="hn-notes-success" class="uc-panel hidden" style="border-color:var(--leaf-500);background:rgba(107,155,94,.06);margin-top:1rem;">
             <span class="badge" style="background:var(--leaf-500);">🎉 Congratulations!</span>
             <h3 id="hn-notes-success-title">You've got temporary access</h3>
-            <p id="hn-notes-success-detail">Your upload is pending review. Each uploaded file adds 1 credit. Your own uploaded file stays unlocked forever; 1 credit unlocks another file for 6 hours.</p>
+            <p id="hn-notes-success-detail">Your upload is pending review. Hand Notes use one 36-hour unlock credit per uploaded file; Class Slides and Images unlock the full folder for lifetime access.</p>
             <button type="button" id="hn-notes-success-close" class="btn-primary" style="margin-top:.8rem;">See the Notes</button>
           </div>
           </div>
@@ -204,7 +194,7 @@
             <div style="text-align:center;">
               <div style="font-size:1.7rem;width:3.4rem;height:3.4rem;line-height:3.4rem;margin:0 auto .9rem;border-radius:50%;background:linear-gradient(135deg, var(--moss-900), var(--moss-700));box-shadow:0 10px 22px rgba(31,46,34,.28);">🏫</div>
               <h2 style="font-size:1.35rem;margin-bottom:.3rem;">Unlock with Google Classroom</h2>
-              <p style="color:var(--moss-600);font-size:.9rem;margin-bottom:1rem;line-height:1.6;">Submit a genuine Google Classroom code. After admin approval, this file is accessible for 48 hours and 10 credits are added to your wallet.</p>
+              <p style="color:var(--moss-600);font-size:.9rem;margin-bottom:1rem;line-height:1.6;">Share your Google Classroom code — after admin confirmation, Hand Notes unlock the selected folder for 36 hours; Class Slides and Images unlock the selected course folder for lifetime access.</p>
               <p style="background:rgba(214,171,74,.15);color:var(--wheat-400,#a3791f);border-radius:8px;padding:.6rem .8rem;font-size:.82rem;margin-bottom:1.2rem;text-align:left;">⚠️ Please share only a genuine classroom code for real academic/educational content. A false or misused code may result in your profile being restricted by an admin.</p>
             </div>
             <form id="hn-classroom-form">
@@ -219,7 +209,7 @@
             <div id="hn-classroom-success" class="uc-panel hidden" style="border-color:var(--leaf-500);background:rgba(107,155,94,.06);margin-top:1rem;">
               <span class="badge" style="background:var(--leaf-500);">✅ Sent for review</span>
               <h3>Your code is with an admin now</h3>
-              <p>After admin confirmation, this file is accessible for 48 hours and 10 credits are added to your wallet.</p>
+              <p>After admin confirmation, the selected Hand Notes folder is unlocked for 36 hours, while Class Slides and Images receive lifetime folder access.</p>
               <button type="button" id="hn-classroom-success-close" class="btn-primary" style="margin-top:.8rem;">Back to Notes</button>
             </div>
           </div>
