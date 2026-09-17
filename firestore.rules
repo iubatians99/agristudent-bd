@@ -104,11 +104,16 @@ service cloud.firestore {
     // Same story as resources: js/knowledge-hub.js submits terms with
     // no auth session, so create stays public + validated.
     match /terms/{id} {
+      // Students create pending terms. Authenticated admins may also create
+      // already-approved terms (used by the Admin → Bulk Upload Terms tool).
       allow create: if
         request.resource.data.keys().hasAll(['status', 'name']) &&
-        request.resource.data.status == "pending" &&
         request.resource.data.name is string &&
-        request.resource.data.name.size() > 0;
+        request.resource.data.name.size() > 0 &&
+        (
+          (request.resource.data.status == "pending" && request.auth == null) ||
+          (request.resource.data.status == "approved" && request.auth != null)
+        );
 
       allow get: if
         resource.data.status == "approved" ||
@@ -220,6 +225,25 @@ service cloud.firestore {
       allow list, get: if true;
 
       // Admin panel only — reviewing/deleting for abuse monitoring.
+      allow update, delete: if request.auth != null;
+    }
+
+    // ============================================
+    // ADMIN MANUAL UNLOCKS — grants custom access directly from Admin.
+    // Students can read their own unlock records through the existing public
+    // access-query model, but only an authenticated admin can create/change
+    // these grants.
+    match /manualUnlocks/{id} {
+      allow create: if
+        request.auth != null &&
+        request.resource.data.keys().hasAll(['kind','fromEmail','userEmail','unlockType','days','durationMs']) &&
+        request.resource.data.kind == "manual" &&
+        request.resource.data.fromEmail is string && request.resource.data.fromEmail.size() > 0 &&
+        request.resource.data.userEmail is string && request.resource.data.userEmail.size() > 0 &&
+        request.resource.data.unlockType in ["all_resources","hand_notes","class_slides","images"] &&
+        request.resource.data.days is number && request.resource.data.days >= 1 &&
+        request.resource.data.durationMs is number && request.resource.data.durationMs >= 86400000;
+      allow list, get: if true;
       allow update, delete: if request.auth != null;
     }
 

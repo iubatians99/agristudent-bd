@@ -609,31 +609,6 @@ img{ max-width:100%; display:block; }
   text-align: center; padding: .5rem;
 }
 
-/* "Checking access…" — the neutral in-between state shown for the brief
-   moment before the real access check has come back. Deliberately NOT
-   styled like .file-locked/.image-locked (no lock icon, no dimming to
-   near-disabled, not clickable) so it never reads as "you're locked out"
-   when the truth simply isn't known yet. */
-.file-item.file-checking { cursor: default; }
-.file-lock-badge.is-checking{
-  opacity: .8;
-  color: var(--moss-600);
-  animation: checkingPulse 1.4s ease-in-out infinite;
-}
-.image-item.image-checking .image-item-thumb::after{
-  content: "⏳ Checking access…";
-  position: absolute; inset: 0;
-  display: flex; align-items: center; justify-content: center;
-  background: rgba(31,46,34,.35);
-  color: #fff; font-size: .8rem; font-weight: 600;
-  text-align: center; padding: .5rem;
-  animation: checkingPulse 1.4s ease-in-out infinite;
-}
-@keyframes checkingPulse {
-  0%, 100% { opacity: .55; }
-  50% { opacity: 1; }
-}
-
 /* soft ambient color blobs drifting behind the glass card */
 .resource-lock-overlay::before,
 .resource-lock-overlay::after {
@@ -3016,3 +2991,37 @@ body.viewer-layout {
 .file-item.unlocking-now{animation:agriUnlockPulse .55s ease-in-out infinite alternate;transform-origin:center;}
 .unlock-success-badge{background:var(--leaf-500);color:#fff!important;border-radius:999px;padding:.25rem .55rem;}
 @keyframes agriUnlockPulse{from{transform:scale(1)}to{transform:scale(1.015);box-shadow:0 0 0 5px rgba(107,155,94,.12)}}
+
+
+/* Premium Hand Note credit balance */
+.credit-panel-head{display:flex;align-items:center;justify-content:space-between;gap:1rem;}
+.credit-panel-eyebrow{display:inline-block;font-family:var(--font-mono);font-size:.68rem;letter-spacing:.12em;font-weight:700;color:var(--leaf-500);margin-bottom:.25rem;}
+.credit-panel-head h2{font-size:1.05rem;margin:0;}
+.credit-panel-head p{font-size:.78rem;color:var(--moss-600);margin:.35rem 0 0;line-height:1.5;}
+.credit-balance-ring{width:82px;height:82px;min-width:82px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(circle,#fff 55%,transparent 56%),conic-gradient(var(--leaf-500) 0deg,#dfe9df 0deg);border:1px solid rgba(107,155,94,.25);box-shadow:0 8px 24px rgba(31,46,34,.10);font-family:var(--font-mono);font-weight:800;color:var(--moss-900);}
+.credit-balance-ring span{font-size:1.35rem;line-height:1;}
+.credit-balance-ring small{font-family:var(--font-sans,var(--font-body));font-size:.62rem;color:var(--moss-600);margin-top:.2rem;}
+.credit-panel-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:.6rem;margin-top:1rem;}
+.credit-panel-stats div{padding:.65rem .5rem;border:1px solid var(--line);border-radius:11px;background:rgba(107,155,94,.035);text-align:center;}
+.credit-panel-stats strong{display:block;font-family:var(--font-mono);font-size:1.1rem;color:var(--moss-900);}
+.credit-panel-stats span{display:block;margin-top:.15rem;font-size:.68rem;color:var(--moss-600);}
+@media(max-width:520px){.credit-panel-head{align-items:flex-start}.credit-balance-ring{width:72px;height:72px;min-width:72px}.credit-balance-ring span{font-size:1.15rem}.credit-panel-head p{max-width:230px}.credit-panel-stats{gap:.45rem}.credit-panel-stats div{padding:.6rem .25rem}}
+
+/* Premium Buy Me a Coffee card */
+.coffee-hero{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(260px,.95fr);gap:1rem;align-items:stretch;margin:1rem 0;border:1px solid rgba(31,46,34,.10);border-radius:22px;overflow:hidden;background:linear-gradient(135deg,#fbfaf5,#f1eadf);box-shadow:0 16px 38px rgba(31,46,34,.10);}
+.coffee-hero-copy{padding:1.35rem 1.35rem 1.15rem;display:flex;flex-direction:column;justify-content:center;}
+.coffee-kicker{font-family:var(--font-mono);font-size:.65rem;letter-spacing:.15em;color:var(--leaf-500);font-weight:800;margin-bottom:.45rem;}
+.coffee-hero h2{font-size:1.55rem;line-height:1.15;margin:0 0 .55rem;color:var(--moss-900);}
+.coffee-hero h2 span{font-size:1.2em;}
+.coffee-hero p{font-size:.86rem;line-height:1.65;color:var(--moss-600);margin:0;}
+.coffee-art-wrap{min-height:240px;background:#d8b991;position:relative;}
+.coffee-art{width:100%;height:100%;min-height:240px;display:block;object-fit:cover;}
+.coffee-payment-card{margin:1rem 0 1.1rem;padding:1.1rem 1.2rem;border:1px solid rgba(107,155,94,.22);border-radius:18px;background:linear-gradient(180deg,#ffffff,#f7fbf5);box-shadow:0 10px 25px rgba(31,46,34,.07);}
+.coffee-payment-label{font-family:var(--font-mono);font-size:.66rem;letter-spacing:.11em;color:var(--moss-600);font-weight:800;margin-bottom:.55rem;}
+.coffee-number-row{display:flex;align-items:center;gap:.7rem;min-width:0;}
+.coffee-number{font-family:var(--font-mono);font-size:clamp(1.25rem,5vw,2rem);font-weight:800;letter-spacing:.06em;color:var(--moss-900);white-space:nowrap;line-height:1.15;flex:1;}
+.coffee-number span+span::before{content:" ";}
+.coffee-copy-btn{flex:0 0 auto;border:1px solid rgba(31,46,34,.15);background:#fff;color:var(--moss-700);border-radius:10px;padding:.55rem .75rem;font-weight:700;cursor:pointer;}
+.coffee-copy-btn:active{transform:scale(.97);}
+.coffee-payment-note{font-size:.77rem;line-height:1.55;color:var(--moss-600);margin-top:.65rem;}
+@media(max-width:620px){.coffee-hero{grid-template-columns:1fr;}.coffee-art-wrap{min-height:175px;max-height:205px;}.coffee-art{min-height:175px;}.coffee-hero-copy{padding:1.15rem 1.05rem 1rem;}.coffee-hero h2{font-size:1.35rem}.coffee-number-row{align-items:center}.coffee-number{font-size:clamp(1.05rem,7.2vw,1.45rem);letter-spacing:.035em}.coffee-copy-btn{padding:.5rem .65rem;font-size:.75rem}.coffee-payment-card{padding:.95rem}.coffee-number span+span::before{content:"";}.coffee-number{word-spacing:.12em}}

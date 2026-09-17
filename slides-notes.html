@@ -115,24 +115,7 @@
               </div>
             </div>
             <div class="form-field">
-              <label>File Type *</label>
-              <div class="filetype-grid">
-                <label class="filetype-option">
-                  <input type="radio" name="fileType" value="pdf" checked>
-                  <span>📄 PDF</span>
-                </label>
-                <label class="filetype-option">
-                  <input type="radio" name="fileType" value="image">
-                  <span>🖼️ Image</span>
-                </label>
-                <label class="filetype-option">
-                  <input type="radio" name="fileType" value="ppt">
-                  <span>📊 PPT</span>
-                </label>
-              </div>
-            </div>
-            <div class="form-field">
-              <label id="hn-files-label">PDF File(s) *</label>
+              <label id="hn-files-label">PDF, Image or Presentation File(s) *</label>
               <div class="file-drop">
                 <div class="file-drop-icon">📎</div>
                 <div class="file-drop-text">Tap to choose files, or drag them here</div>
@@ -209,14 +192,21 @@
           <!-- STEP: UNLOCK BY WATCHING AN AD (new) -->
           <div id="hn-gate-step-coffee" class="hidden">
             <button type="button" id="hn-coffee-back" class="modal-close" title="Back" style="position:static;float:right;">✕</button>
-            <div style="text-align:center;">
-              <div style="font-size:2rem;width:4rem;height:4rem;line-height:4rem;margin:0 auto .8rem;border-radius:50%;background:rgba(214,171,74,.16);">☕</div>
-              <h2 style="font-size:1.35rem;margin-bottom:.3rem;">Buy the Admin a Coffee</h2>
-              <p style="color:var(--moss-600);font-size:.9rem;line-height:1.6;">A small coffee helps keep Agri Core running. Send your coffee support via bKash, then submit the transaction details below. After checking, the admin can grant custom access.</p>
+            <div class="coffee-hero">
+              <div class="coffee-hero-copy">
+                <span class="coffee-kicker">SUPPORT AGRI CORE</span>
+                <h2>Buy the Admin a Coffee <span>☕</span></h2>
+                <p>A small coffee helps keep Agri Core running. Send your support through bKash and submit the payment details below. After verification, the admin can grant custom access.</p>
+              </div>
+              <div class="coffee-art-wrap"><img class="coffee-art" src="assets/coffee-premium.svg" alt="A warm cup of coffee on a table"></div>
             </div>
-            <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:1rem;align-items:stretch;margin:1rem 0;">
-              <div style="border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#fff;box-shadow:0 8px 24px rgba(31,46,34,.08);"><img src="https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=900&q=85" alt="A cup of coffee" style="width:100%;height:190px;object-fit:cover;display:block;"><div style="padding:.9rem;text-align:center;"><strong>Buy the admin a coffee ☕</strong><div style="font-size:.82rem;color:var(--moss-600);margin-top:.3rem;">Thank you for supporting Agri Core.</div></div></div>
-              <div style="border:1px solid var(--line);border-radius:14px;padding:1rem;background:linear-gradient(180deg,#fff,#f8fbf7);display:flex;flex-direction:column;justify-content:center;"><div style="font-size:.78rem;color:var(--moss-600);">bKash Number</div><div style="font-size:1.35rem;font-weight:800;letter-spacing:.04em;margin:.25rem 0 1rem;">01753486065</div><div style="font-size:.8rem;color:var(--moss-600);line-height:1.5;">Send the coffee amount, then enter the same sender number and transaction ID below.</div></div>
+            <div class="coffee-payment-card">
+              <div class="coffee-payment-label">SEND COFFEE SUPPORT VIA bKASH</div>
+              <div class="coffee-number-row">
+                <div class="coffee-number" aria-label="bKash number 01753486065"><span>01753</span><span>486</span><span>065</span></div>
+                <button type="button" class="coffee-copy-btn" id="hn-coffee-copy" title="Copy bKash number">Copy</button>
+              </div>
+              <div class="coffee-payment-note">Send your chosen amount to this number, then enter the <strong>sender number</strong> and <strong>transaction ID</strong> exactly as shown in bKash.</div>
             </div>
             <form id="hn-coffee-form">
               <div class="form-field"><label for="hn-coffee-sender">Your bKash Number *</label><input id="hn-coffee-sender" type="tel" inputmode="numeric" maxlength="20" required placeholder="01XXXXXXXXX"></div>
@@ -427,24 +417,7 @@
               </div>
             </div>
             <div class="form-field">
-              <label>File Type *</label>
-              <div class="filetype-grid">
-                <label class="filetype-option">
-                  <input type="radio" name="au-fileType" value="pdf" checked>
-                  <span>📄 PDF</span>
-                </label>
-                <label class="filetype-option">
-                  <input type="radio" name="au-fileType" value="image">
-                  <span>🖼️ Image</span>
-                </label>
-                <label class="filetype-option">
-                  <input type="radio" name="au-fileType" value="ppt">
-                  <span>📊 PPT</span>
-                </label>
-              </div>
-            </div>
-            <div class="form-field">
-              <label id="au-files-label">PDF File(s) *</label>
+              <label id="au-files-label">PDF, Image or Presentation File(s) *</label>
               <div class="file-drop">
                 <div class="file-drop-icon">📎</div>
                 <div class="file-drop-text">Tap to choose files, or drag them here</div>

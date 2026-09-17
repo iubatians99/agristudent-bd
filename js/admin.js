@@ -38,18 +38,25 @@ async function syncStudentAccessStatus(db, uploaderEmail) {
     );
     
     const classroomSnap = await getDocs(
-      query(collection(db, "terms"), where("uploaderEmail", "==", normalizedEmail), where("kind", "==", "classroom"))
+      query(collection(db, "classroomCodes"), where("fromEmail", "==", normalizedEmail))
+    );
+    const manualSnap = await getDocs(
+      query(collection(db, "manualUnlocks"), where("fromEmail", "==", normalizedEmail))
+    );
+    const fileUnlockSnap = await getDocs(
+      query(collection(db, "fileUnlocks"), where("fromEmail", "==", normalizedEmail))
+    );
+    const folderUnlockSnap = await getDocs(
+      query(collection(db, "folderUnlocks"), where("fromEmail", "==", normalizedEmail))
     );
 
     const resourceDocs = resourcesSnap.docs.map(d => ({ id: d.id, kind: "resource", ...d.data() }));
-    const classroomDocs = classroomSnap.docs.map(d => ({ 
-      id: d.id, 
-      kind: "classroom", 
-      status: "approved",
-      ...d.data() 
-    }));
+    const classroomDocs = classroomSnap.docs.map(d => ({ id: d.id, kind: "classroom", ...d.data() }));
+    const manualDocs = manualSnap.docs.map(d => ({ id: d.id, kind: "manual", ...d.data() }));
+    const fileUnlockDocs = fileUnlockSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const folderUnlockDocs = folderUnlockSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-    const access = computeResourceAccessStatus([...resourceDocs, ...classroomDocs]);
+    const access = computeResourceAccessStatus([...resourceDocs, ...classroomDocs, ...manualDocs, ...fileUnlockDocs, ...folderUnlockDocs]);
 
     await updateDoc(doc(db, "registrations", regId), {
       accessUntil: access.accessUntil ? Timestamp.fromDate(new Date(access.accessUntil)) : null,
@@ -432,7 +439,7 @@ async function grantManualUnlock(email, days, unlockType, reason) {
     // Students live in "registrations" (see js/login.js, js/resources.js) —
     // there is no separate "users" collection in this app.
     const regSnap = await getDocs(
-      query(collection(db, "registrations"), where("email", "==", normalizedEmail))
+      query(collection(db, "registrations"), where("emailNormalized", "==", normalizedEmail))
     );
 
     if (regSnap.empty) {
@@ -463,6 +470,11 @@ async function grantManualUnlock(email, days, unlockType, reason) {
       grantedAt: serverTimestamp(),
       grantedBy: getCurrentUserEmail()
     });
+
+    // Immediately mirror the grant into the registration access fields used
+    // by storage.rules, so the manual unlock works without waiting for the
+    // student to open Profile first.
+    await syncStudentAccessStatus(db, normalizedEmail);
 
     alert(`✅ Access granted to ${userData.fullName || normalizedEmail} for ${days} days!`);
 
@@ -559,6 +571,7 @@ async function loadCoffeeRequests() {
         const regSnap = await getDocs(query(collection(db,"registrations"), where("emailNormalized", "==", normalizeEmail(d.fromEmail || ""))));
         if (regSnap.empty) throw new Error("Registered student not found."); const regId=regSnap.docs[0].id;
         await addDoc(collection(db,"manualUnlocks"), { kind:"manual", source:"coffee", fromEmail:normalizeEmail(d.fromEmail), userEmail:normalizeEmail(d.fromEmail), studentName:d.fromName||"", unlockType:"all_resources", category:null, days:n, durationMs:n*24*60*60*1000, reason:"Buy Me a Coffee", grantedAt:serverTimestamp(), grantedBy:getCurrentUserEmail() });
+        await syncStudentAccessStatus(db, normalizeEmail(d.fromEmail));
         await sendMessageToUser({ toRegId:regId, toEmail:d.fromEmail, toName:d.fromName, subject:"☕ Coffee support access approved", body:message, sentBy:getCurrentUserEmail() });
         await updateDoc(ref, { status:"approved", approvedAt:serverTimestamp(), approvedDays:n, adminMessage:message, approvedBy:getCurrentUserEmail() });
         loadCoffeeRequests();
@@ -2179,8 +2192,9 @@ function uploadFileToCloudinary(file, onProgress) {
 // other site and CORS never comes into it. If their fetch fails (dead link,
 // hotlink protection), we fall back to saving the original URL as-is.
 async function uploadRemoteUrlToCloudinary(url) {
+  const sourceUrl = normalizeImageUrl(url);
   const data = new FormData();
-  data.append("file", url);
+  data.append("file", sourceUrl);
   data.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
   const res = await fetch(CLOUDINARY_UPLOAD_URL, { method: "POST", body: data });
   if (!res.ok) throw new Error(`Couldn't fetch that image link (${res.status})`);
@@ -2270,6 +2284,41 @@ function isHttpUrl(val) {
   return /^https?:\/\//i.test(String(val || "").trim());
 }
 
+// Google Drive sharing links are HTML viewer pages, not image files. Convert
+// the common Drive URL forms to Google's image thumbnail endpoint so previews
+// and the final Knowledge Hub image both receive actual image bytes.
+function googleDriveFileId(url) {
+  const raw = String(url || "").trim();
+  if (!raw) return "";
+  try {
+    const u = new URL(raw);
+    const host = u.hostname.toLowerCase();
+    const isDriveHost = /(^|\.)drive\.google\.com$/.test(host) || /(^|\.)docs\.google\.com$/.test(host) || /(^|\.)driveusercontent\.google\.com$/.test(host);
+    if (!isDriveHost) return "";
+    const byQuery = u.searchParams.get("id");
+    if (byQuery) return byQuery.trim();
+    const m = u.pathname.match(/\/(?:file\/d|uc|thumbnail)\/([^/]+)/i);
+    if (m) return m[1].trim();
+    const m2 = u.pathname.match(/\/d\/([^/]+)/i);
+    if (m2) return m2[1].trim();
+  } catch (_) {}
+  return "";
+}
+
+function normalizeImageUrl(url) {
+  const raw = String(url || "").trim();
+  const id = googleDriveFileId(raw);
+  // `uc?export=view` is the most broadly compatible public Drive image URL;
+  // the thumbnail endpoint remains the preview fallback when Drive returns a
+  // thumbnail instead of the original image bytes.
+  return id ? `https://drive.google.com/uc?export=view&id=${encodeURIComponent(id)}` : raw;
+}
+
+function googleDriveThumbnailUrl(url) {
+  const id = googleDriveFileId(url);
+  return id ? `https://drive.google.com/thumbnail?id=${encodeURIComponent(id)}&sz=w1600` : String(url || "").trim();
+}
+
 // Local images are looked up by full filename and by filename-without-
 // extension, so a sheet saying "rhizobium" still matches "rhizobium.jpg".
 function buildLocalImageIndex(files) {
@@ -2338,8 +2387,8 @@ async function handleSheetSelected() {
         entry.error = "No image given";
         missingImages++;
       } else if (isHttpUrl(imageRef)) {
-        entry.imageUrl = imageRef;
-        entry.thumb = imageRef;
+        entry.imageUrl = normalizeImageUrl(imageRef);
+        entry.thumb = googleDriveThumbnailUrl(imageRef);
         linkedRemote++;
       } else {
         const match = localIndex.get(imageRef.toLowerCase())

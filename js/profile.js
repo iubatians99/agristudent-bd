@@ -292,10 +292,11 @@ function renderPasswordSection(regId, reg) {
 }
 
 async function renderCredits(email, fullName) {
-  const [resourcesSnap, termsSnap, classroomSnap, fileUnlockSnap, folderUnlockSnap] = await Promise.all([
+  const [resourcesSnap, termsSnap, classroomSnap, manualSnap, fileUnlockSnap, folderUnlockSnap] = await Promise.all([
     getDocs(query(collection(db, "resources"), where("uploaderEmail", "==", email))),
     getDocs(query(collection(db, "terms"), where("uploaderEmail", "==", email))),
     getDocs(query(collection(db, "classroomCodes"), where("fromEmail", "==", email))).catch(() => ({ docs: [] })),
+    getDocs(query(collection(db, "manualUnlocks"), where("fromEmail", "==", email))).catch(() => ({ docs: [] })),
     getDocs(query(collection(db, "fileUnlocks"), where("fromEmail", "==", email))).catch(() => ({ docs: [] })),
     getDocs(query(collection(db, "folderUnlocks"), where("fromEmail", "==", email))).catch(() => ({ docs: [] }))
   ]);
@@ -308,6 +309,7 @@ async function renderCredits(email, fullName) {
   // Classroom-code unlocks aren't shown in "My Contributions" (they aren't
   // reviewed uploads) but they DO count toward resource access time.
   const classroomItems = classroomSnap.docs.map(d => ({ id: d.id, kind: "classroom", ...d.data() }));
+  const manualItems = manualSnap.docs.map(d => ({ id: d.id, kind: "manual", ...d.data() }));
   const fileUnlockItems = fileUnlockSnap.docs.map(d => ({ id:d.id, ...d.data() }));
   const folderUnlockItems = folderUnlockSnap.docs.map(d => ({ id:d.id, ...d.data() }));
 
@@ -324,7 +326,24 @@ async function renderCredits(email, fullName) {
   // Hand Note uploads create one 36h unlock credit per uploaded file, while Class Slides and Images create lifetime folder access, whether or
   // not it's been reviewed yet — see js/access.js for the stacking rules.
   const resourceItems = items.filter(i => i.kind === "resource" && i.resourceType === "slides_notes");
-  const access = computeResourceAccessStatus([...resourceItems, ...classroomItems, ...fileUnlockItems, ...folderUnlockItems]);
+  const handNoteCreditSources = resourceItems.filter(i => i.noteType === "hand_notes" && i.unlockMode === "file_credit");
+  const creditsEarned = handNoteCreditSources.reduce((n, i) => n + Math.max(1, Array.isArray(i.fileUrls) ? i.fileUrls.length : 1), 0);
+  const creditsUsed = fileUnlockItems.filter(i => !i.revoked).length;
+  const creditsRemaining = Math.max(0, creditsEarned - creditsUsed);
+  const creditPanel = document.getElementById("handnote-credit-panel");
+  if (creditPanel) {
+    creditPanel.classList.toggle("hidden", creditsEarned === 0 && creditsUsed === 0);
+    document.getElementById("handnote-credit-earned")?.replaceChildren(document.createTextNode(String(creditsEarned)));
+    document.getElementById("handnote-credit-used")?.replaceChildren(document.createTextNode(String(creditsUsed)));
+    document.getElementById("handnote-credit-remaining")?.replaceChildren(document.createTextNode(String(creditsRemaining)));
+    document.getElementById("handnote-credit-remaining-mini")?.replaceChildren(document.createTextNode(String(creditsRemaining)));
+    const ring = document.querySelector(".credit-balance-ring");
+    if (ring) {
+      const pct = creditsEarned ? Math.max(0, Math.min(100, (creditsRemaining / creditsEarned) * 100)) : 0;
+      ring.style.background = `radial-gradient(circle,#fff 55%,transparent 56%), conic-gradient(var(--leaf-500) ${pct * 3.6}deg,#dfe9df ${pct * 3.6}deg)`;
+    }
+  }
+  const access = computeResourceAccessStatus([...resourceItems, ...classroomItems, ...manualItems, ...fileUnlockItems, ...folderUnlockItems]);
   renderAccessBadge({
     badgeEl: document.getElementById("access-badge"),
     detailEl: document.getElementById("access-detail")
@@ -431,10 +450,13 @@ function renderAccessTimeline(access) {
 
   listEl.innerHTML = breakdown.slice().reverse().map(entry => {
     const isClassroom = entry.kind === "classroom";
+    const isManual = entry.kind === "manual";
     const item = entry.item || {};
     const title = isClassroom
       ? `🏫 Classroom Code — ${esc(item.classroomCode || "Unlock")}`
-      : `📄 ${esc(item.courseCode || "Unknown course")} — Slides/Notes`;
+      : isManual
+        ? `🔓 Admin Manual Unlock — ${esc(item.unlockType || "Access")}`
+        : `📄 ${esc(item.courseCode || "Unknown course")} — Slides/Notes`;
     const hours = Math.round(entry.durationMs / (60 * 60 * 1000));
     const startStr = formatDateTime(entry.startsAt);
     const endStr = formatDateTime(entry.endsAt);

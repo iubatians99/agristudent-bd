@@ -42,6 +42,15 @@ window.__checkResourceRestriction = async function(userEmail) {
 };
 
 
+function detectFileType(file) {
+  const name = String(file?.name || "").toLowerCase();
+  const mime = String(file?.type || "").toLowerCase();
+  if (mime === "application/pdf" || name.endsWith(".pdf")) return "pdf";
+  if (mime.startsWith("image/") || /\.(jpe?g|png|gif|webp|bmp|svg)$/i.test(name)) return "image";
+  if (mime === "application/vnd.ms-powerpoint" || mime === "application/vnd.openxmlformats-officedocument.presentationml.presentation" || /\.(ppt|pptx)$/i.test(name)) return "ppt";
+  return "unknown";
+}
+
 function uploadFileToCloudinary(file, onProgress) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -368,12 +377,7 @@ if (uploadForm) {
   const progressText = document.getElementById("progress-ring-text");
   const CIRCUMFERENCE = 226.19;
 
-  const fileTypeAccepts = {
-    pdf: ".pdf,application/pdf",
-    image: "image/*,.jpg,.jpeg,.png,.gif,.webp",
-    ppt: ".ppt,.pptx,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
-  };
-  let currentFileType = "pdf";
+  let currentFileType = "auto";
   let currentNoteType = "hand_notes";
   let matchedCourse = null;
 
@@ -389,7 +393,7 @@ if (uploadForm) {
   }
   function renderImageTitleInputs() {
     if (!imageTitlesWrap || !imageTitlesListEl) return;
-    if (currentFileType !== "image" || !fileInput.files || fileInput.files.length === 0) {
+    if (!fileInput.files || fileInput.files.length === 0 || !Array.from(fileInput.files).some(f => detectFileType(f) === "image")) {
       imageTitlesWrap.classList.add("hidden");
       imageTitlesListEl.innerHTML = "";
       return;
@@ -404,23 +408,7 @@ if (uploadForm) {
   fileInput.addEventListener("change", renderImageTitleInputs);
   wireSelectedFilesPreview(fileInput, document.getElementById("files-selected-preview"));
 
-  document.querySelectorAll('input[name="fileType"]').forEach(radio => {
-    radio.addEventListener("change", () => {
-      currentFileType = radio.value;
-      fileInput.accept = fileTypeAccepts[currentFileType];
-      const labels = {
-        pdf: "PDF File(s) *",
-        image: "Image File(s) * (JPG, PNG, GIF, WebP)",
-        ppt: "Presentation File(s) * (PPT/PPTX)"
-      };
-      if (filesLabel) filesLabel.textContent = labels[currentFileType];
-      document.querySelectorAll('input[name="fileType"]').forEach(r => {
-        r.closest("label").style.borderColor = r.checked ? "var(--leaf-500)" : "var(--line)";
-        r.closest("label").style.background = r.checked ? "rgba(107, 155, 94, 0.05)" : "transparent";
-      });
-      renderImageTitleInputs();
-    });
-  });
+  fileInput.accept = ".pdf,.ppt,.pptx,image/*";
 
   courseCodeInput.addEventListener("blur", async () => {
     const code = courseCodeInput.value.trim().toUpperCase();
@@ -476,18 +464,11 @@ if (uploadForm) {
     const uploaderEmail = normalizeEmail(document.getElementById("uploaderEmail").value);
     const files = Array.from(fileInput.files);
 
-    if (files.length === 0) { showError(`Please choose at least one ${currentFileType.toUpperCase()} file.`); return; }
+    if (files.length === 0) { showError("Please choose at least one PDF, image, or presentation file."); return; }
     if (files.length > MAX_FILES) { showError(`Maximum ${MAX_FILES} files allowed.`); return; }
-
-    let validationError = false;
-    if (currentFileType === "pdf") {
-      validationError = files.some(f => !f.name.toLowerCase().endsWith(".pdf"));
-    } else if (currentFileType === "image") {
-      validationError = files.some(f => !["jpg","jpeg","png","gif","webp"].includes(f.name.toLowerCase().split(".").pop()));
-    } else if (currentFileType === "ppt") {
-      validationError = files.some(f => !["ppt","pptx"].includes(f.name.toLowerCase().split(".").pop()));
-    }
-    if (validationError) { showError(`Some files are not valid ${currentFileType.toUpperCase()} files.`); return; }
+    const detectedTypes = files.map(detectFileType);
+    if (detectedTypes.some(t => t === "unknown")) { showError("One or more files have an unsupported type. Please use PDF, PPT/PPTX, JPG, PNG, GIF, WebP, or another standard image file."); return; }
+    currentFileType = [...new Set(detectedTypes)].length === 1 ? detectedTypes[0] : "mixed";
 
     const oversized = files.find(f => f.size > MAX_SIZE);
     if (oversized) { showError(`"${oversized.name}" is over 50MB.`); return; }
@@ -510,6 +491,9 @@ if (uploadForm) {
       const fileUrls = await Promise.all(
         files.map((file, i) => uploadFileToCloudinary(file, (pct) => { progressByFile[i] = pct; updateOverall(); }))
       );
+      fileUrls.forEach((f, i) => { f.fileType = detectedTypes[i]; });
+        fileUrls.forEach((f, i) => { f.fileType = detectedTypes[i]; });
+      fileUrls.forEach((f, i) => { f.fileType = detectedTypes[i]; });
 
       // Auto-rename duplicates
       for (let i = 0; i < fileUrls.length; i++) {
@@ -517,7 +501,7 @@ if (uploadForm) {
         fileUrls[i].name = renamedName;
       }
 
-      if (currentFileType === "image" && imageTitlesListEl) {
+      if (detectedTypes.some(t => t === "image") && imageTitlesListEl) {
         const titleInputs = imageTitlesListEl.querySelectorAll(".upload-image-title-input");
         fileUrls.forEach((f, i) => {
           const t = titleInputs[i] ? titleInputs[i].value.trim() : "";
@@ -739,13 +723,7 @@ if (handNotesGate && handNotesContent) {
   }
 
   // File type acceptances
-  const fileTypeAccepts = {
-    pdf: ".pdf,application/pdf",
-    image: "image/*,.jpg,.jpeg,.png,.gif,.webp",
-    ppt: ".ppt,.pptx,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
-  };
-
-  let currentFileType = "pdf";
+  let currentFileType = "auto";
   let hnNoteType = "hand_notes";
 
   document.querySelectorAll('input[name="hn-noteType"]').forEach(radio => {
@@ -885,6 +863,18 @@ if (handNotesGate && handNotesContent) {
   // ============================================
   // BUY ME A COFFEE — payment proof request
   // ============================================
+  document.getElementById("hn-coffee-copy")?.addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    try {
+      await navigator.clipboard.writeText("01753486065");
+      const old = btn.textContent;
+      btn.textContent = "Copied ✓";
+      setTimeout(() => { btn.textContent = old; }, 1600);
+    } catch (_) {
+      alert("bKash number: 01753486065");
+    }
+  });
+
   const hnCoffeeForm = document.getElementById("hn-coffee-form");
   hnCoffeeForm?.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -1181,7 +1171,7 @@ if (handNotesGate && handNotesContent) {
   // completed at least once, so the file lists can show a neutral
   // "checking access…" state instead of a false 🔒 until we actually know.
   // ------------------------------------------------------------------
-  window.__hnAccessKnown = !cachedEmail; // nothing to check for a guest — treat as "known" (locked)
+  window.__hnAccessKnown = true;
 
   function renderAccessState(state, userEmail) {
     window.__hnAccessKnown = true;
@@ -1312,28 +1302,9 @@ if (handNotesGate && handNotesContent) {
       return state;
     } catch (err) {
       console.error("[Access Status Check] failed:", err);
-
-      if (!hnAccessEverKnown && hnCheckRetries < HN_MAX_CHECK_RETRIES) {
-        hnCheckRetries++;
-        if (accessStatusBar) {
-          accessStatusBar.classList.remove("hidden", "approved", "rejected");
-          accessStatusBar.classList.add("pending");
-          const content = accessStatusBar.querySelector(".status-content");
-          if (content) {
-            content.innerHTML = `
-              <strong>⏳ Checking your access…</strong>
-              <div class="file-info">Having trouble reaching the server — retrying (${hnCheckRetries}/${HN_MAX_CHECK_RETRIES})…</div>
-            `;
-          }
-        }
-        setTimeout(() => hnRefreshAccess(userEmail), 2500 * hnCheckRetries);
-        return null;
-      }
-
-      // Either we've already had at least one successful check this visit
-      // (so whatever __hnAccessActive currently holds is trustworthy), or
-      // we've genuinely retried and it's still failing — in both cases the
-      // file list must not be stuck on "checking…" forever, so unblock it.
+      // Never expose an internal connectivity state in the file rows. The
+      // list simply remains in its last known state and the next refresh
+      // retries silently in the background.
       window.__hnAccessKnown = true;
       loadThreeCardLayoutIfAvailable();
       return null;
@@ -1346,7 +1317,6 @@ if (handNotesGate && handNotesContent) {
   }
 
   // File type selector
-  const fileTypeRadios = document.querySelectorAll('input[name="fileType"]');
   const imageTitlesWrap = document.getElementById("hn-image-titles-wrap");
   const imageTitlesList = document.getElementById("hn-image-titles-list");
 
@@ -1355,7 +1325,7 @@ if (handNotesGate && handNotesContent) {
   }
 
   function renderImageTitleInputs() {
-    if (currentFileType !== "image" || !hnFiles.files || hnFiles.files.length === 0) {
+    if (!hnFiles.files || hnFiles.files.length === 0 || !Array.from(hnFiles.files).some(f => detectFileType(f) === "image")) {
       imageTitlesWrap.classList.add("hidden");
       imageTitlesList.innerHTML = "";
       return;
@@ -1371,28 +1341,7 @@ if (handNotesGate && handNotesContent) {
   hnFiles.addEventListener("change", renderImageTitleInputs);
   wireSelectedFilesPreview(hnFiles, document.getElementById("hn-files-selected-preview"));
 
-  fileTypeRadios.forEach(radio => {
-    radio.addEventListener("change", () => {
-      currentFileType = radio.value;
-      hnFiles.accept = fileTypeAccepts[currentFileType];
-      
-      // Update label
-      const labels = {
-        pdf: "PDF File(s) *",
-        image: "Image File(s) * (JPG, PNG, GIF, WebP)",
-        ppt: "Presentation File(s) * (PPT/PPTX)"
-      };
-      hnFilesLabel.textContent = labels[currentFileType];
-
-      // Visual feedback
-      document.querySelectorAll('input[name="fileType"]').forEach(r => {
-        r.closest("label").style.borderColor = r.checked ? "var(--leaf-500)" : "var(--line)";
-        r.closest("label").style.background = r.checked ? "rgba(107, 155, 94, 0.05)" : "transparent";
-      });
-
-      renderImageTitleInputs();
-    });
-  });
+  hnFiles.accept = ".pdf,.ppt,.pptx,image/*";
 
   if (hnForm) {
     hnForm.addEventListener("submit", async (e) => {
@@ -1413,33 +1362,24 @@ if (handNotesGate && handNotesContent) {
       }
 
       if (files.length === 0) { 
-        hnShowStatus(`Please choose at least one ${currentFileType.toUpperCase()} file.`, true); 
+        hnShowStatus("Please choose at least one PDF, image, or presentation file.", true); 
         return; 
       }
       if (files.length > MAX_FILES) { 
         hnShowStatus(`Maximum ${MAX_FILES} files allowed.`, true); 
         return; 
       }
+      const detectedTypes = files.map(detectFileType);
+      if (detectedTypes.some(t => t === "unknown")) {
+        hnShowStatus("One or more files have an unsupported type. Please use PDF, PPT/PPTX, JPG, PNG, GIF, or WebP.", true);
+        return;
+      }
+      currentFileType = [...new Set(detectedTypes)].length === 1 ? detectedTypes[0] : "mixed";
 
       const oversized = files.find(f => f.size > MAX_SIZE);
       if (oversized) { 
         hnShowStatus(`"${oversized.name}" is over 50MB.`, true); 
         return; 
-      }
-
-      // Validate file types
-      let validationError = false;
-      if (currentFileType === "pdf") {
-        validationError = files.some(f => !f.name.toLowerCase().endsWith(".pdf"));
-      } else if (currentFileType === "image") {
-        validationError = files.some(f => !["jpg","jpeg","png","gif","webp"].includes(f.name.toLowerCase().split(".").pop()));
-      } else if (currentFileType === "ppt") {
-        validationError = files.some(f => !["ppt","pptx"].includes(f.name.toLowerCase().split(".").pop()));
-      }
-
-      if (validationError) {
-        hnShowStatus(`Some files are not valid ${currentFileType.toUpperCase()} files.`, true);
-        return;
       }
 
       hnSubmit.disabled = true;
@@ -1467,7 +1407,7 @@ if (handNotesGate && handNotesContent) {
 
         // Attach the per-image title captured at upload time (if any),
         // so the gallery and viewer can display it under the image.
-        if (currentFileType === "image") {
+        if (detectedTypes.some(t => t === "image")) {
           const titleInputs = imageTitlesList.querySelectorAll(".hn-image-title-input");
           fileUrls.forEach((f, i) => {
             const t = titleInputs[i] ? titleInputs[i].value.trim() : "";
@@ -1579,13 +1519,14 @@ if (handnotesList || slidesList || imageGrid) {
       const snap = await getDocs(q);
       const resources = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-      // Documents (PDF + presentations) split into the two folder cards;
-      // images stay in their own card. No fileType at all still means PDF,
-      // for backward compatibility with files uploaded before that field.
-      const docs = resources.filter(r => r.fileType === "pdf" || r.fileType === "ppt" || !r.fileType);
+      // Classify by each file when available. This also supports a batch
+      // containing more than one format without needing a manual file-type
+      // selector. Older records continue to use their document-level type.
+      const hasType = (r, type) => r.fileType === type || (Array.isArray(r.fileUrls) && r.fileUrls.some(f => (f.fileType || detectFileType({name:f.name || ""})) === type));
+      const docs = resources.filter(r => hasType(r, "pdf") || hasType(r, "ppt") || (!r.fileType && !hasType(r, "image")));
       allHandNotes = docs.filter(r => r.noteType === "hand_notes");
       allSlides = docs.filter(r => r.noteType !== "hand_notes");
-      allImages = resources.filter(r => r.fileType === "image");
+      allImages = resources.filter(r => hasType(r, "image"));
 
       handNotesCard.render();
       slidesCard.render();
@@ -1595,8 +1536,9 @@ if (handnotesList || slidesList || imageGrid) {
     }
   }
 
-  function docIcon(item) {
-    return item.fileType === "ppt" ? "📊" : "📄";
+  function docIcon(item, file = null) {
+    const type = file?.fileType || item.fileType || detectFileType({ name: file?.name || "" });
+    return type === "ppt" ? "📊" : type === "image" ? "🖼️" : "📄";
   }
 
   // A file's display label: its per-file title if the uploader gave one,
@@ -1733,11 +1675,14 @@ if (handnotesList || slidesList || imageGrid) {
     // Firestore — show a neutral "checking" state instead of a false 🔒,
     // so a student with genuinely active access never sees files marked
     // locked just because the check hasn't finished yet.
-    const checking = !window.__hnAccessKnown;
     const fileRows = [];
     const lockScope = opts.lockScope || "file";
     facultyItems.forEach(item => {
       (item.fileUrls || []).forEach((file, idx) => {
+        const detected = file.fileType || item.fileType || detectFileType({name:file.name || ""});
+        if (opts.category === "hand_notes" || opts.category === "class_slides") {
+          if (detected === "image") return;
+        }
         // Each file normally gets its OWN id (a submission doc can bundle
         // several files, so the doc id alone isn't unique per file) and is
         // unlocked independently of every other file — see hnOpenGate.
@@ -1745,17 +1690,15 @@ if (handnotesList || slidesList || imageGrid) {
         // under the same course code shares one key instead, so unlocking
         // any one of them unlocks the whole course folder at once.
         const fileId = lockScope === "folder" ? `course::${state.courseCode}` : `hand_notes::${state.courseCode}::${state.faculty || ""}::${item.id}::${idx}`;
-        const unlocked = checking ? false : (window.__hnIsFileUnlocked && window.__hnIsFileUnlocked(fileId, opts.category));
-        const locked = !checking && !unlocked;
+        const unlocked = !!(window.__hnIsFileUnlocked && window.__hnIsFileUnlocked(fileId, opts.category));
+        const locked = !unlocked;
         fileRows.push(`
-          <div class="file-item${locked ? " file-locked" : ""}${checking ? " file-checking" : ""}" ${locked ? `data-locked-file="1" data-file-id="${esc(fileId)}" data-folder-key="${esc(lockScope === "folder" ? `course::${state.courseCode}` : `hand_notes::${state.courseCode}::${state.faculty || ""}`)}" data-category="${esc(opts.category || "hand_notes")}"` : ""}>
-            <span class="file-status">${docIcon(item)}</span>
+          <div class="file-item${locked ? " file-locked" : ""}" ${locked ? `data-locked-file="1" data-file-id="${esc(fileId)}" data-folder-key="${esc(lockScope === "folder" ? `course::${state.courseCode}` : `hand_notes::${state.courseCode}::${state.faculty || ""}`)}" data-category="${esc(opts.category || "hand_notes")}"` : ""}>
+            <span class="file-status">${docIcon(item, file)}</span>
             <span class="file-name">${esc(fileDisplayName(file))} <span class="note-type-tag">${esc(noteTypeLabel(item))}</span></span>
-            ${checking
-              ? `<span class="file-action file-lock-badge is-checking">⏳ Checking…</span>`
-              : locked
-                ? `<span class="file-action file-lock-badge">🔒 Unlock</span>`
-                : `<a href="${buildViewHref(file, item)}" class="file-action" title="${esc(file.name)}">View</a>`}
+            ${locked
+              ? `<span class="file-action file-lock-badge">🔒 Unlock</span>`
+              : `<a href="${buildViewHref(file, item)}" class="file-action" title="${esc(file.name)}">View</a>`}
           </div>`);
       });
     });
@@ -1886,20 +1829,20 @@ if (handnotesList || slidesList || imageGrid) {
   // only the first is used as the thumbnail, same as before). Shared by
   // the compact card, its "View All" modal, and the search results in
   // both, so lock/unlock behaviour never drifts between them.
-  function imageTileHtml(img, checking) {
-    const file = img.fileUrls[0];
+  function imageTileHtml(img) {
+    const file = img.fileUrls.find(f => (f.fileType || detectFileType({name:f.name || ""})) === "image") || img.fileUrls[0];
     const viewHref = buildViewHref(file, img);
     const imageFileId = `course::${img.courseCode}`;
-    const unlocked = checking ? false : (window.__hnIsFileUnlocked && window.__hnIsFileUnlocked(imageFileId, "images"));
-    const locked = !checking && !unlocked;
+    const unlocked = !!(window.__hnIsFileUnlocked && window.__hnIsFileUnlocked(imageFileId, "images"));
+    const locked = !unlocked;
     const tag = locked ? "div" : "a";
     return `
-    <${tag} class="image-item${locked ? " image-locked" : ""}${checking ? " image-checking" : ""}"${locked ? ` data-locked-image="1" data-file-id="${esc(`course::${img.courseCode}`)}" data-folder-key="${esc(`course::${img.courseCode}`)}" data-category="images"` : ` href="${viewHref}"`} style="text-decoration:none;">
+    <${tag} class="image-item${locked ? " image-locked" : ""}"${locked ? ` data-locked-image="1" data-file-id="${esc(`course::${img.courseCode}`)}" data-folder-key="${esc(`course::${img.courseCode}`)}" data-category="images"` : ` href="${viewHref}"`} style="text-decoration:none;">
       <div class="image-item-thumb">
         <img src="${encodeURI(file.url)}" alt="${esc(file.title || img.courseName)}" loading="lazy">
         <div class="status-badge">✓</div>
         <div class="view-overlay">
-          <button type="button">${checking ? "⏳" : locked ? "🔒" : "View"}</button>
+          <button type="button">${locked ? "🔒" : "View"}</button>
         </div>
       </div>
       <div class="image-item-caption">
@@ -1964,15 +1907,14 @@ if (handnotesList || slidesList || imageGrid) {
     // LEVEL 2 — every image submitted under this course code
     const courseItems = items.filter(i => (i.courseCode || "Unknown") === state.courseCode);
     const courseName = courseItems[0]?.courseName || "";
-    const checking = !window.__hnAccessKnown;
-
+    
     container.innerHTML =
       `<div class="file-item folder-row folder-back" data-back="1" style="grid-column:1/-1;">
         <span class="file-status">←</span>
         <span class="file-name">${esc(state.courseCode)}${courseName ? `: ${esc(courseName)}` : ""}</span>
       </div>` +
       (courseItems.length
-        ? courseItems.map(img => imageTileHtml(img, checking)).join("")
+        ? courseItems.map(img => imageTileHtml(img)).join("")
         : `<p style="color:var(--moss-600);font-size:.9rem;text-align:center;padding:1rem;grid-column:1/-1;">No images here.</p>`);
 
     container.querySelector("[data-back]").addEventListener("click", () => {
@@ -2023,9 +1965,8 @@ if (handnotesList || slidesList || imageGrid) {
           (img.courseName || "").toLowerCase().includes(term) ||
           (img.courseCode || "").toLowerCase().includes(term)
         ).slice(0, 6);
-        const checking = !window.__hnAccessKnown;
-        imageGrid.innerHTML = filtered.length
-          ? filtered.map(img => imageTileHtml(img, checking)).join("")
+                imageGrid.innerHTML = filtered.length
+          ? filtered.map(img => imageTileHtml(img)).join("")
           : `<p style="color:var(--moss-600);font-size:.9rem;text-align:center;padding:1rem;grid-column:1/-1;">No matching images found.</p>`;
         wireImageLockClicks(imageGrid);
         if (viewAllLink) viewAllLink.style.display = "block";
@@ -2144,9 +2085,8 @@ if (handnotesList || slidesList || imageGrid) {
           (img.courseCode || "").toLowerCase().includes(term) ||
           (img.courseName || "").toLowerCase().includes(term)
         );
-        const checking = !window.__hnAccessKnown;
-        grid.innerHTML = filtered.length
-          ? filtered.map(img => imageTileHtml(img, checking)).join("")
+                grid.innerHTML = filtered.length
+          ? filtered.map(img => imageTileHtml(img)).join("")
           : `<p style="color:var(--moss-600);font-size:.9rem;text-align:center;padding:1rem;grid-column:1/-1;">No matching images found.</p>`;
         wireImageLockClicks(grid);
       } else {
@@ -2197,7 +2137,7 @@ if (anotherUploadBtn && anotherUploadModal) {
   const auImageTitlesList = document.getElementById("au-image-titles-list");
   const auSuccess = document.getElementById("au-success");
   const AU_CIRCUMFERENCE = 226.19;
-  let auFileType = "pdf";
+  let auFileType = "auto";
   let auNoteType = "hand_notes";
   let auMatchedCourse = null;
 
@@ -2208,11 +2148,7 @@ if (anotherUploadBtn && anotherUploadModal) {
     });
   });
 
-  const auFileTypeAccepts = {
-    pdf: ".pdf,application/pdf",
-    image: "image/*,.jpg,.jpeg,.png,.gif,.webp",
-    ppt: ".ppt,.pptx,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
-  };
+
 
   function auResetForm() {
     auForm.reset();
@@ -2225,17 +2161,11 @@ if (anotherUploadBtn && anotherUploadModal) {
     auImageTitlesWrap.classList.add("hidden");
     auImageTitlesList.innerHTML = "";
     auMatchedCourse = null;
-    auFileType = "pdf";
-    auFiles.accept = auFileTypeAccepts.pdf;
-    auFilesLabel.textContent = "PDF File(s) *";
+    auFileType = "auto";
+    auFiles.accept = ".pdf,.ppt,.pptx,image/*";
+    auFilesLabel.textContent = "PDF, Image or Presentation File(s) *";
     auFilesPreview.innerHTML = "";
     auFilesPreview.classList.add("hidden");
-    const pdfRadio = document.querySelector('input[name="au-fileType"][value="pdf"]');
-    if (pdfRadio) pdfRadio.checked = true;
-    document.querySelectorAll('input[name="au-fileType"]').forEach(r => {
-      r.closest("label").style.borderColor = r.checked ? "var(--leaf-500)" : "var(--line)";
-      r.closest("label").style.background = r.checked ? "rgba(107, 155, 94, 0.05)" : "transparent";
-    });
     auNoteType = "hand_notes";
     const handNotesRadio = document.querySelector('input[name="au-noteType"][value="hand_notes"]');
     if (handNotesRadio) handNotesRadio.checked = true;
@@ -2280,7 +2210,7 @@ if (anotherUploadBtn && anotherUploadModal) {
     return name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim();
   }
   function renderAuImageTitleInputs() {
-    if (auFileType !== "image" || !auFiles.files || auFiles.files.length === 0) {
+    if (!auFiles.files || auFiles.files.length === 0 || !Array.from(auFiles.files).some(f => detectFileType(f) === "image")) {
       auImageTitlesWrap.classList.add("hidden");
       auImageTitlesList.innerHTML = "";
       return;
@@ -2295,23 +2225,7 @@ if (anotherUploadBtn && anotherUploadModal) {
   auFiles.addEventListener("change", renderAuImageTitleInputs);
   wireSelectedFilesPreview(auFiles, auFilesPreview);
 
-  document.querySelectorAll('input[name="au-fileType"]').forEach(radio => {
-    radio.addEventListener("change", () => {
-      auFileType = radio.value;
-      auFiles.accept = auFileTypeAccepts[auFileType];
-      const labels = {
-        pdf: "PDF File(s) *",
-        image: "Image File(s) * (JPG, PNG, GIF, WebP)",
-        ppt: "Presentation File(s) * (PPT/PPTX)"
-      };
-      auFilesLabel.textContent = labels[auFileType];
-      document.querySelectorAll('input[name="au-fileType"]').forEach(r => {
-        r.closest("label").style.borderColor = r.checked ? "var(--leaf-500)" : "var(--line)";
-        r.closest("label").style.background = r.checked ? "rgba(107, 155, 94, 0.05)" : "transparent";
-      });
-      renderAuImageTitleInputs();
-    });
-  });
+  auFiles.accept = ".pdf,.ppt,.pptx,image/*";
 
   function auSetProgress(pct) {
     auProgressBar.style.strokeDashoffset = AU_CIRCUMFERENCE - (pct / 100) * AU_CIRCUMFERENCE;
@@ -2340,16 +2254,13 @@ if (anotherUploadBtn && anotherUploadModal) {
       return;
     }
 
-    if (files.length === 0) { auShowStatus(`Please choose at least one ${auFileType.toUpperCase()} file.`, true); return; }
+    if (files.length === 0) { auShowStatus("Please choose at least one PDF, image, or presentation file.", true); return; }
     if (files.length > MAX_FILES) { auShowStatus(`Maximum ${MAX_FILES} files allowed.`, true); return; }
+    const detectedTypes = files.map(detectFileType);
+    if (detectedTypes.some(t => t === "unknown")) { auShowStatus("One or more files have an unsupported type. Please use PDF, PPT/PPTX, JPG, PNG, GIF, or WebP.", true); return; }
+    auFileType = [...new Set(detectedTypes)].length === 1 ? detectedTypes[0] : "mixed";
     const oversized = files.find(f => f.size > MAX_SIZE);
     if (oversized) { auShowStatus(`"${oversized.name}" is over 50MB.`, true); return; }
-
-    let validationError = false;
-    if (auFileType === "pdf") validationError = files.some(f => !f.name.toLowerCase().endsWith(".pdf"));
-    else if (auFileType === "image") validationError = files.some(f => !["jpg","jpeg","png","gif","webp"].includes(f.name.toLowerCase().split(".").pop()));
-    else if (auFileType === "ppt") validationError = files.some(f => !["ppt","pptx"].includes(f.name.toLowerCase().split(".").pop()));
-    if (validationError) { auShowStatus(`Some files are not valid ${auFileType.toUpperCase()} files.`, true); return; }
 
     auSubmit.disabled = true;
     auSubmit.textContent = "Uploading…";
@@ -2373,7 +2284,7 @@ if (anotherUploadBtn && anotherUploadModal) {
         fileUrls[i].name = renamedName;
       }
 
-      if (auFileType === "image") {
+      if (detectedTypes.some(t => t === "image")) {
         const titleInputs = auImageTitlesList.querySelectorAll(".au-image-title-input");
         fileUrls.forEach((f, i) => {
           const t = titleInputs[i] ? titleInputs[i].value.trim() : "";

@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" role="img" aria-labelledby="title desc">
+<title id="title">Premium cup of coffee</title><desc id="desc">A warm cup of coffee on a wooden table with coffee beans and soft morning light.</desc>
+<defs>
+ <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f4eadb"/><stop offset="1" stop-color="#d7b995"/></linearGradient>
+ <radialGradient id="light"><stop stop-color="#fff7e7" stop-opacity=".9"/><stop offset="1" stop-color="#fff7e7" stop-opacity="0"/></radialGradient>
+ <linearGradient id="cup" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#fff"/><stop offset="1" stop-color="#e8dfd3"/></linearGradient>
+ <linearGradient id="coffee" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#6f4427"/><stop offset="1" stop-color="#2f1a0d"/></linearGradient>
+ <filter id="shadow"><feGaussianBlur stdDeviation="22"/></filter>
+</defs>
+<rect width="1200" height="760" fill="url(#bg)"/>
+<circle cx="910" cy="120" r="330" fill="url(#light)"/>
+<path d="M0 520 C250 460 410 560 650 505 C870 455 1030 510 1200 450 V760 H0Z" fill="#a9794d" opacity=".38"/>
+<ellipse cx="610" cy="610" rx="280" ry="70" fill="#3b2415" opacity=".25" filter="url(#shadow)"/>
+<!-- cup -->
+<path d="M360 300 C365 500 410 590 610 590 C810 590 855 500 860 300 Z" fill="url(#cup)" stroke="#cbbca9" stroke-width="6"/>
+<ellipse cx="610" cy="302" rx="250" ry="70" fill="#f9f5ee" stroke="#cbbca9" stroke-width="6"/>
+<ellipse cx="610" cy="305" rx="218" ry="48" fill="url(#coffee)"/>
+<path d="M855 355 C1010 325 1040 465 914 495 C880 503 850 488 835 465" fill="none" stroke="#eee6da" stroke-width="30"/>
+<path d="M855 355 C1005 337 1017 449 908 472" fill="none" stroke="#cbbca9" stroke-width="6"/>
+<!-- steam -->
+<path d="M500 225 C455 175 540 145 490 90" fill="none" stroke="#fff" stroke-opacity=".7" stroke-width="18" stroke-linecap="round"/>
+<path d="M610 220 C565 165 650 135 600 75" fill="none" stroke="#fff" stroke-opacity=".6" stroke-width="18" stroke-linecap="round"/>
+<path d="M720 225 C675 175 760 145 710 95" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="18" stroke-linecap="round"/>
+<!-- beans -->
+<g fill="#3a2113">
+ <ellipse cx="180" cy="620" rx="24" ry="15" transform="rotate(-25 180 620)"/><ellipse cx="230" cy="655" rx="24" ry="15" transform="rotate(18 230 655)"/><ellipse cx="285" cy="620" rx="24" ry="15" transform="rotate(-10 285 620)"/>
+ <ellipse cx="980" cy="610" rx="24" ry="15" transform="rotate(25 980 610)"/><ellipse cx="1035" cy="650" rx="24" ry="15" transform="rotate(-18 1035 650)"/><ellipse cx="1090" cy="600" rx="24" ry="15" transform="rotate(12 1090 600)"/>
+</g>
+</svg>
