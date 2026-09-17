@@ -19,7 +19,8 @@ service cloud.firestore {
         request.resource.data.studentIdNumber.size() > 0 &&
         request.resource.data.studentIdNumber.size() < 50 &&
         request.resource.data.email is string &&
-        request.resource.data.email.size() > 0;
+        request.resource.data.email.size() > 0 &&
+        request.resource.data.registrationCredits == 5;
 
       allow list: if true;
 
@@ -286,6 +287,15 @@ service cloud.firestore {
         request.resource.data.status == "pending";
       allow list, get: if true;
       allow update, delete: if request.auth != null;
+    }
+
+    // ============================================
+    // GLOBAL RESOURCE LOCK — admin-only control used to invalidate all
+    // existing non-owner file unlock grants at once.
+    match /resourceLocks/{id} {
+      allow get, list: if true;
+      allow create, update: if request.auth != null && request.auth.token.admin == true;
+      allow delete: if request.auth != null && request.auth.token.admin == true;
     }
 
     // ============================================

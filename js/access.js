@@ -33,18 +33,10 @@
 import { sendReviewEmail } from "./email-config.js";
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
-// 📤 "Unlock with Notes" earn method (and spending any generic credit,
-// however it was earned) unlocks its one target file for 6 hours — see
-// the Resources Unlock System spec: registration/upload/coffee credits
-// all draw from the same balance and each credit spent grants this
-// window on the ONE file it was spent on.
-export const ACCESS_PER_FILE_MS = 6 * 60 * 60 * 1000; // 6h per Hand Note file unlock / per spent credit
-// 🏫 An approved Google Classroom code grants 48 hours of access to the
-// one file it was submitted for (plus +10 credits — see js/admin.js's
-// approval handler and js/profile.js / getResourceCreditSummary below).
-export const ACCESS_PER_CLASSROOM_MS = 48 * 60 * 60 * 1000; // 48h per approved classroom-code unlock
+export const ACCESS_PER_FILE_MS = 36 * 60 * 60 * 1000; // 36h per credit unlock
+export const ACCESS_PER_CLASSROOM_MS = 48 * 60 * 60 * 1000; // 48h per approved Classroom code
 export const LIFETIME_ACCESS_MS = 100 * 365 * DAY_MS; // practical lifetime sentinel for folder access
-export const ACCESS_PER_AD_MS = 6 * 60 * 60 * 1000; // legacy/unused — kept only for backward-compat records
+export const ACCESS_PER_AD_MS = 6 * 60 * 60 * 1000; // 6h per watched rewarded ad
 export const RESTRICTION_MS = 30 * DAY_MS;
 const REMINDER_WINDOW_DAYS = 1;
 
@@ -127,7 +119,7 @@ export function computeResourceAccessStatus(items, now = Date.now()) {
         kind: "file_unlock",
         status: "granted",
         time: eventTime(item, "unlockedAt")?.getTime?.() || now,
-        durationMs: ACCESS_PER_FILE_MS
+        durationMs: Number(item?.durationMs) || ACCESS_PER_FILE_MS
       });
       continue;
     }
@@ -147,15 +139,15 @@ export function computeResourceAccessStatus(items, now = Date.now()) {
       if (status !== "approved") continue;
       const approvedAt = eventTime(item, "approvedAt");
       const submittedAt = eventTime(item, "submittedAt");
-      const classroomFolder = item?.unlockScope === "folder";
-      const lifetimeFolder = classroomFolder && ["class_slides", "images"].includes(item?.category);
+      // Classroom unlocks are always scoped to the exact file selected by the
+      // student. Approval grants 48 hours plus 10 credits; it never opens a folder.
+      if (!item?.targetFileId) continue;
       grants.push({
         item,
-        kind: lifetimeFolder ? "folder_lifetime" : "classroom",
+        kind: "classroom",
         status: "approved",
         time: (approvedAt || submittedAt)?.getTime?.() || now,
-        durationMs: lifetimeFolder ? LIFETIME_ACCESS_MS : ACCESS_PER_CLASSROOM_MS,
-        lifetime: lifetimeFolder
+        durationMs: ACCESS_PER_CLASSROOM_MS
       });
       continue;
     }
@@ -193,18 +185,12 @@ export function computeResourceAccessStatus(items, now = Date.now()) {
       continue;
     }
 
-    // New Hand Note uploads create explicit file credits; new Class Slides
-    // and Images create explicit lifetime-folder grants. Do not double-count
-    // those source resource documents as blanket access. Legacy documents
-    // without unlockMode retain their historical behaviour for compatibility.
-    if (item?.unlockMode === "file_credit" || item?.unlockMode === "folder_lifetime") continue;
-    grants.push({
-      item,
-      kind: "resource",
-      status,
-      time: eventTime(item, "uploadedAt")?.getTime?.() || now,
-      durationMs: fileCount(item) * ACCESS_PER_FILE_MS
-    });
+    // Resource documents are contribution records, not access grants in the
+    // new system. Ownership is handled per file by resources.js, while all
+    // temporary access is represented by explicit fileUnlocks/classroom/
+    // manual grants. This also prevents legacy blanket uploads from unlocking
+    // multiple unrelated files.
+    if (item?.kind === "resource" || item?.resourceType) continue;
   }
 
   grants.sort((a, b) => a.time - b.time);
@@ -278,17 +264,17 @@ export function computeResourceAccessStatus(items, now = Date.now()) {
  * "Unlock" on a specific file always attaches that file's id, so from
  * then on that submission only ever unlocks that one file.
  */
-export function computeFileAccessStatus(items, fileId, now = Date.now(), fileCategory = null) {
+export function computeFileAccessStatus(items, fileId, now = Date.now(), fileCategory = null, globalLockAt = 0) {
   const list = Array.isArray(items) ? items : [];
   const relevant = list.filter(i => {
-    const targetOk = !i?.targetFileId || i.targetFileId === fileId || (String(i.targetFileId).endsWith("::") ? String(fileId).startsWith(String(i.targetFileId)) : String(fileId).startsWith(String(i.targetFileId) + "::"));
-    // Only a manual grant ever carries a `category` — matching it against
-    // the file being checked is what makes "Hand Notes Only" (etc.) from
-    // the admin panel actually scope to just that section instead of
-    // unlocking everything. Every other grant kind has no category, so
-    // this is always true for them regardless of fileCategory.
+    const requiresExactTarget = ["file_unlock", "classroom", "ad", "folder_lifetime"].includes(i?.kind) || i?.source === "notes_earn" || (i?.kind === "manual" && !!i?.targetFileId);
+    const targetOk = requiresExactTarget
+      ? (typeof i?.targetFileId === "string" && i.targetFileId === fileId)
+      : true;
+    const grantTime = eventTime(i, i?.kind === "classroom" ? "approvedAt" : "unlockedAt")?.getTime?.() || eventTime(i, "grantedAt")?.getTime?.() || eventTime(i, "uploadedAt")?.getTime?.() || 0;
+    const notGloballyLocked = !globalLockAt || grantTime > Number(globalLockAt);
     const categoryOk = !i?.category || !fileCategory || i.category === fileCategory;
-    return targetOk && categoryOk;
+    return targetOk && categoryOk && notGloballyLocked;
   });
   return computeResourceAccessStatus(relevant, now);
 }

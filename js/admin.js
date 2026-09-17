@@ -1,6 +1,6 @@
 import { db, auth, CLOUDINARY_UPLOAD_URL, CLOUDINARY_UPLOAD_PRESET } from "./firebase-config.js";
 import {
-  collection, getDocs, doc, updateDoc, deleteDoc, addDoc, orderBy, query, where, limit, Timestamp, writeBatch, serverTimestamp
+  collection, getDocs, doc, updateDoc, deleteDoc, addDoc, setDoc, orderBy, query, where, limit, Timestamp, writeBatch, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
   signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail
@@ -218,6 +218,37 @@ function showLoadError(container, label, err) {
 }
 
 // ============================================
+// GLOBAL RESOURCE LOCK
+// ============================================
+async function assertAdminClaim() {
+  const user = auth.currentUser;
+  if (!user) throw new Error("Admin authentication required.");
+  const token = await user.getIdTokenResult(true);
+  if (token?.claims?.admin !== true) throw new Error("Admin permission required.");
+  return user;
+}
+
+async function lockAllCurrentlyUnlockedFiles() {
+  await assertAdminClaim();
+  const btn = document.getElementById("global-resource-lock-btn");
+  const status = document.getElementById("global-resource-lock-status");
+  if (!confirm("Lock all currently unlocked files for students? Their own uploaded files will remain permanently available.")) return;
+  if (btn) { btn.disabled = true; btn.textContent = "Locking…"; }
+  try {
+    const lockRef = doc(db, "resourceLocks", "global");
+    await setDoc(lockRef, { lockedAt: Timestamp.now(), lockedBy: getCurrentUserEmail() }, { merge: true });
+    if (status) status.textContent = "✓ All existing unlock grants were locked. New unlocks can still be earned normally.";
+    if (btn) btn.textContent = "🔒 Locked Current Access";
+  } catch (err) {
+    console.error("[AgriAdmin] global resource lock failed:", err);
+    if (status) status.textContent = "Could not lock current access. Please try again.";
+    if (btn) { btn.disabled = false; btn.textContent = "🔒 Lock Current Access"; }
+  }
+}
+
+document.getElementById("global-resource-lock-btn")?.addEventListener("click", lockAllCurrentlyUnlockedFiles);
+
+// ============================================
 // AUTH
 // ============================================
 const loginBox = document.getElementById("login-box");
@@ -244,18 +275,24 @@ logoutBtn.addEventListener("click", () => signOut(auth));
 
 let currentAdminEmail = "";
 
-onAuthStateChanged(auth, (user) => {
+onAuthStateChanged(auth, async (user) => {
   if (user) {
-    currentAdminEmail = user.email || "";
-    loginBox.classList.add("hidden");
-    adminPanel.classList.remove("hidden");
-    logoutBtn.classList.remove("hidden");
-    if (adminUserChip) adminUserChip.textContent = currentAdminEmail;
-    loadResources();
-    // Alerts the admin (in this browser, while the panel tab is open) the
-    // moment a new registration, term, resource, or classroom code comes
-    // in — see js/admin-notify.js for how and its limitations.
-    initAdminNotifications();
+    try {
+      const token = await user.getIdTokenResult(true);
+      if (token?.claims?.admin !== true) throw new Error("Admin permission required.");
+      currentAdminEmail = user.email || "";
+      loginBox.classList.add("hidden");
+      adminPanel.classList.remove("hidden");
+      logoutBtn.classList.remove("hidden");
+      if (adminUserChip) adminUserChip.textContent = currentAdminEmail;
+      loadResources();
+      initAdminNotifications();
+    } catch (err) {
+      console.warn("[AgriAdmin] authenticated user is not an admin:", err);
+      await signOut(auth);
+      loginError.textContent = "This account does not have admin permission.";
+      loginError.classList.remove("hidden");
+    }
   } else {
     loginBox.classList.remove("hidden");
     adminPanel.classList.add("hidden");
@@ -330,6 +367,7 @@ const timelineList = document.getElementById("admin-timeline-list");
 const regList = document.getElementById("admin-registrations-list");
 const msgList = document.getElementById("admin-messages-list");
 const classroomCodesList = document.getElementById("admin-classroom-codes-list");
+const adUnlocksList = document.getElementById("admin-ad-unlocks-list");
 const coffeeRequestsList = document.getElementById("admin-coffee-requests-list");
 const folderAccessList = document.getElementById("admin-folder-access-list");
 const blogList = document.getElementById("admin-blog-list");
@@ -591,7 +629,7 @@ async function loadCoffeeRequests() {
         if (snap.empty) throw new Error("Request not found."); const d=snap.docs[0].data();
         const regSnap = await getDocs(query(collection(db,"registrations"), where("emailNormalized", "==", normalizeEmail(d.fromEmail || ""))));
         if (regSnap.empty) throw new Error("Registered student not found."); const regId=regSnap.docs[0].id;
-        await addDoc(collection(db,"manualUnlocks"), { kind:"manual", source:"coffee", fromEmail:normalizeEmail(d.fromEmail), userEmail:normalizeEmail(d.fromEmail), studentName:d.fromName||"", unlockType:"all_resources", category:null, days:n, durationMs:n*24*60*60*1000, reason:"Buy Me a Coffee", creditsGranted, grantedAt:serverTimestamp(), grantedBy:getCurrentUserEmail() });
+        await addDoc(collection(db,"manualUnlocks"), { kind:"manual", source:"coffee", fromEmail:normalizeEmail(d.fromEmail), userEmail:normalizeEmail(d.fromEmail), studentName:d.fromName||"", unlockType:d.targetFileId ? (d.category || "hand_notes") : "all_resources", targetFileId:d.targetFileId || "", category:d.targetFileId ? (d.category || "hand_notes") : null, days:n, durationMs:n*24*60*60*1000, reason:"Buy Me a Coffee", creditsGranted, grantedAt:serverTimestamp(), grantedBy:currentAdminEmail || getCurrentUserEmail() });
         await syncStudentAccessStatus(db, normalizeEmail(d.fromEmail));
         await sendMessageToUser({ toRegId:regId, toEmail:d.fromEmail, toName:d.fromName, subject:"☕ Coffee support access approved", body:message, sentBy:getCurrentUserEmail() });
         await updateDoc(ref, { status:"approved", approvedAt:serverTimestamp(), approvedDays:n, creditsGranted, adminMessage:message, approvedBy:getCurrentUserEmail() });
@@ -604,43 +642,6 @@ async function loadCoffeeRequests() {
     }));
   } catch(err) { showLoadError(coffeeRequestsList,"coffee support requests",err); }
 }
-
-// ============================================
-// LOCK ALL UNLOCKED FILES — one-click bulk lock. Revokes every active
-// fileUnlocks (per-file Hand Note credit spends) and folderUnlocks
-// (lifetime Class Slides/Images grants) document, mirroring what the
-// individual "🔒 Lock Again" button does per-row (js/access.js only
-// counts a grant while revoked !== true). Manual admin grants
-// (manualUnlocks) are left untouched here — those are separate,
-// account-wide grants the admin controls individually from the Manual
-// Unlock tab, not a per-file "unlocked file".
-// ============================================
-document.getElementById("admin-lock-all-files-btn")?.addEventListener("click", async () => {
-  if (!confirm("Lock every currently unlocked file for every student? This revokes all active Hand Note credit unlocks and all lifetime Class Slides/Images folder grants. This cannot be undone (students can always re-unlock with a fresh credit).")) return;
-  const btn = document.getElementById("admin-lock-all-files-btn");
-  btn.disabled = true;
-  btn.textContent = "Locking…";
-  try {
-    const [fileSnap, folderSnap] = await Promise.all([
-      getDocs(query(collection(db, "fileUnlocks"))),
-      getDocs(query(collection(db, "folderUnlocks")))
-    ]);
-    const revokedBy = getCurrentUserEmail();
-    const targets = [
-      ...fileSnap.docs.filter(d => !d.data().revoked).map(d => doc(db, "fileUnlocks", d.id)),
-      ...folderSnap.docs.filter(d => !d.data().revoked).map(d => doc(db, "folderUnlocks", d.id))
-    ];
-    await Promise.all(targets.map(ref => updateDoc(ref, { revoked: true, revokedAt: serverTimestamp(), revokedBy })));
-    alert(`✅ Locked ${targets.length} file/folder unlock${targets.length === 1 ? "" : "s"}.`);
-    loadFolderAccess();
-  } catch (err) {
-    console.error("[Lock All Files] failed:", err);
-    alert("❌ Could not lock all files: " + err.message);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = "🔒 Lock All Unlocked Files";
-  }
-});
 
 // ============================================
 // LIFETIME FOLDER ACCESS CONTROL
@@ -1864,7 +1865,7 @@ async function loadClassroomCodes() {
     });
     classroomCodesList.querySelectorAll(".lock-classroom-code-btn").forEach(btn => {
       btn.addEventListener("click", async () => {
-        if (!confirm("Lock this classroom-code access again? The related folder will become locked for this student.")) return;
+        if (!confirm("Lock this classroom-code access again? The selected file access will become locked for this student.")) return;
         btn.disabled = true;
         try { await updateDoc(doc(db,"classroomCodes",btn.dataset.id),{status:"locked",lockedAt:serverTimestamp(),lockedBy:getCurrentUserEmail()}); loadClassroomCodes(); } catch(err){ console.error(err); btn.disabled=false; }
       });
@@ -1902,6 +1903,60 @@ async function loadClassroomCodes() {
     });
   } catch (err) {
     showLoadError(classroomCodesList, "classroom codes", err);
+  }
+}
+
+// ============================================
+// AD UNLOCKS ("Unlock by Watching an Ad" submissions, slides-notes.html)
+// ============================================
+// These already granted 6h access to their targetFileId the instant they
+// were created (see js/access.js's `kind === "ad"` branch) — there is no
+// approve/reject step here, only visibility for abuse monitoring and a
+// delete button to revoke a specific grant early if needed.
+async function loadAdUnlocks() {
+  if (!adUnlocksList) return;
+  adUnlocksList.innerHTML = `<p style="color:var(--moss-600);">Loading…</p>`;
+  try {
+    const q = query(collection(db, "adUnlocks"), orderBy("submittedAt", "desc"));
+    const snap = await getDocs(q);
+
+    if (snap.empty) { adUnlocksList.innerHTML = `<p style="color:var(--moss-600);">No ad unlocks yet.</p>`; return; }
+
+    adUnlocksList.innerHTML = "";
+    snap.forEach(d => {
+      const item = d.data();
+      const when = item.submittedAt?.toDate?.() ? item.submittedAt.toDate().toLocaleString() : "—";
+      const row = document.createElement("div");
+      row.className = "resource-row";
+      row.innerHTML = `
+        <div>
+          <span style="display:inline-block;font-size:.75rem;font-weight:700;padding:.15rem .5rem;border-radius:999px;background:#E4F2E7;color:var(--leaf-600,#2D4A35);">🎬 Unlocked instantly</span>
+          <div style="font-size:.85rem;color:var(--moss-700);margin-top:.35rem;">
+            ${item.fromName ? esc(item.fromName) : "Anonymous"}${item.fromEmail ? ` — ${esc(item.fromEmail)}` : ""}
+            <div style="font-size:.78rem;color:var(--moss-500,#7a8f7d);margin-top:.15rem;">Watched ${esc(String(item.watchedSeconds ?? "?"))}s · ${esc(when)} · file: <code>${esc(item.targetFileId || "—")}</code></div>
+          </div>
+        </div>
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
+          <button type="button" class="btn-danger delete-ad-unlock-btn" data-id="${d.id}" style="padding:.35rem .7rem;font-size:.78rem;">🗑 Revoke / Delete</button>
+        </div>`;
+      adUnlocksList.appendChild(row);
+    });
+
+    adUnlocksList.querySelectorAll(".delete-ad-unlock-btn").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        if (!confirm("Delete this ad-unlock record? This revokes the access it granted.")) return;
+        btn.disabled = true;
+        try {
+          await deleteDoc(doc(db, "adUnlocks", btn.dataset.id));
+          loadAdUnlocks();
+        } catch (err) {
+          console.error("[AgriAdmin] Failed to delete ad unlock:", err);
+          btn.disabled = false;
+        }
+      });
+    });
+  } catch (err) {
+    showLoadError(adUnlocksList, "ad unlocks", err);
   }
 }
 

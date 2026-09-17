@@ -78,29 +78,12 @@ function renderAuthSlot() {
   if (!slot) return;
   const session = getSession();
 
-  // "My Profile" in the side/mobile drawer menu — see .nav-profile-mobile-item
-  // in css/style.css (hidden on the desktop nav, shown only in the
-  // slide-in drawer, where the avatar+name link in .navbar-auth-slot
-  // isn't visible).
-  const navLinksList = document.querySelector("#nav-links ul");
-  let profileMobileLi = document.getElementById("nav-profile-mobile-item");
-
   if (!session) {
+    // Registration now happens as part of the Login flow (an email that
+    // isn't found there offers to register), so the navbar only needs a
+    // single Login entry point — no separate "Register Now" link.
     slot.innerHTML = `<a href="login.html" class="navbar-auth-login">Login</a>`;
-    profileMobileLi?.remove();
     return;
-  }
-
-  if (navLinksList && !profileMobileLi) {
-    profileMobileLi = document.createElement("li");
-    profileMobileLi.id = "nav-profile-mobile-item";
-    profileMobileLi.className = "nav-profile-mobile-item";
-    profileMobileLi.innerHTML = `<a href="profile.html"><span class="nav-link-icon">👤</span><span>My Profile</span></a>`;
-    navLinksList.insertBefore(profileMobileLi, navLinksList.firstChild);
-  }
-  if (profileMobileLi) {
-    const current = location.pathname.split("/").pop() || "index.html";
-    profileMobileLi.querySelector("a")?.classList.toggle("active", current === "profile.html");
   }
 
   const displayName = (session.fullName || session.email).split(" ")[0];
@@ -246,16 +229,11 @@ function pwdPopupDismissKey(regId) {
 }
 
 function maybeShowPasswordSetupPopup(regId, reg) {
+  // Profile has its own first-time setup modal; never create a second global popup there.
+  if (/\/?profile\.html$/.test(window.location.pathname)) return;
   if (!regId || reg.passwordHash) return;
-  if (document.getElementById("pwd-setup-overlay")) return;
-  // BUG FIX — "duplicate password-setup popup": profile.html has its own
-  // dedicated first-time password card/modal (#profile-password-modal,
-  // see js/profile.js renderPasswordSection). If this site-wide popup also
-  // fired there, a passwordless student landing on Profile could end up
-  // looking at two separate "set your password" prompts stacked on top
-  // of each other. Profile's own UI already covers this case, so skip
-  // the site-wide popup specifically on that page.
-  if (document.getElementById("profile-password-modal")) return;
+  if (window.__agriPasswordPopupOpen || document.getElementById("pwd-setup-overlay")) return;
+  window.__agriPasswordPopupOpen = true;
   try {
     if (sessionStorage.getItem(pwdPopupDismissKey(regId))) return;
   } catch { /* storage unavailable — just show it */ }
@@ -297,6 +275,7 @@ function maybeShowPasswordSetupPopup(regId, reg) {
   overlay.querySelector("#pwd-setup-later").addEventListener("click", () => {
     try { sessionStorage.setItem(pwdPopupDismissKey(regId), "1"); } catch { /* ignore */ }
     overlay.remove();
+    window.__agriPasswordPopupOpen = false;
   });
 
   overlay.querySelector("#pwd-setup-form").addEventListener("submit", async (e) => {
@@ -322,7 +301,7 @@ function maybeShowPasswordSetupPopup(regId, reg) {
       const passwordHash = await hashPassword(password, reg.email);
       await updateDoc(doc(db, "registrations", regId), { passwordHash });
       showStatus("✅ Password saved!");
-      setTimeout(() => overlay.remove(), 900);
+      setTimeout(() => { overlay.remove(); window.__agriPasswordPopupOpen = false; }, 900);
     } catch (err) {
       console.error("[Session] password setup failed:", err);
       showStatus("Something went wrong saving your password. Please try again.", true);

@@ -277,26 +277,6 @@ function renderPasswordSection(regId, reg) {
     modal.addEventListener("click", e => { if (e.target === modal) closeModal(); });
   }
 
-  // Auto-open this modal once per browser tab for a first-time (no
-  // password yet) account — mirrors the site-wide popup's behavior on
-  // every other page, but only fires HERE since js/session.js
-  // deliberately skips its own popup whenever this modal exists (see
-  // maybeShowPasswordSetupPopup) to avoid showing two password prompts
-  // at once.
-  if (!hasPassword && !modal?.dataset.autoShown) {
-    try {
-      const dismissKey = `agri_pwd_popup_dismissed_${regId}`;
-      if (!sessionStorage.getItem(dismissKey)) {
-        modal.dataset.autoShown = "1";
-        modal.classList.remove("hidden");
-        modal.setAttribute("aria-hidden", "false");
-        modalClose?.addEventListener("click", () => {
-          try { sessionStorage.setItem(dismissKey, "1"); } catch { /* ignore */ }
-        }, { once: true });
-      }
-    } catch { /* storage unavailable — just skip the auto-open */ }
-  }
-
   const setupSubmitBtn = document.getElementById("profile-password-submit-btn");
   const setupStatusEl = document.getElementById("profile-password-status");
   const setupNewInput = document.getElementById("profile-new-password");
@@ -332,7 +312,8 @@ function renderPasswordSection(regId, reg) {
     }
   }
 
-  // First-time setup: popup only, and it opens automatically for legacy accounts.
+  // First-time setup: popup only. The profile button opens it; session.js deliberately
+  // skips its global popup on profile.html so this is the only setup dialog here.
   if (setupSubmitBtn && !setupSubmitBtn.dataset.wired) {
     setupSubmitBtn.dataset.wired = "1";
     setupSubmitBtn.addEventListener("click", async () => {
@@ -387,53 +368,47 @@ function renderPasswordSection(regId, reg) {
     });
   }
 
-  if (!hasPassword) {
-    setTimeout(() => {
-      modal?.classList.remove("hidden");
-      modal?.setAttribute("aria-hidden", "false");
-      setupNewInput?.focus();
-    }, 250);
-  } else {
-    closeModal();
-  }
+  if (hasPassword) closeModal();
 }
 
-async function renderCredits(email, fullName, reg) {
-  const [resourcesSnap, termsSnap, classroomSnap, manualSnap, fileUnlockSnap, folderUnlockSnap] = await Promise.all([
-    getDocs(query(collection(db, "resources"), where("uploaderEmail", "==", email))),
-    getDocs(query(collection(db, "terms"), where("uploaderEmail", "==", email))),
-    getDocs(query(collection(db, "classroomCodes"), where("fromEmail", "==", email))).catch(() => ({ docs: [] })),
-    getDocs(query(collection(db, "manualUnlocks"), where("fromEmail", "==", email))).catch(() => ({ docs: [] })),
-    getDocs(query(collection(db, "fileUnlocks"), where("fromEmail", "==", email))).catch(() => ({ docs: [] })),
-    getDocs(query(collection(db, "folderUnlocks"), where("fromEmail", "==", email))).catch(() => ({ docs: [] }))
+async function renderCredits(email, fullName, reg = {}) {
+  // Load each source independently. One unavailable/legacy collection must not
+  // blank the entire profile or hide the guaranteed registration credits.
+  const safeDocs = async (q) => { try { const snap = await getDocs(q); return snap.docs; } catch (err) { console.warn("[Profile] optional credit query failed:", err); return []; } };
+  const [resourceDocs, termDocs, classroomDocsRaw, manualDocsRaw, fileUnlockDocsRaw, folderUnlockDocsRaw] = await Promise.all([
+    safeDocs(query(collection(db, "resources"), where("uploaderEmail", "==", email))),
+    safeDocs(query(collection(db, "terms"), where("uploaderEmail", "==", email))),
+    safeDocs(query(collection(db, "classroomCodes"), where("fromEmail", "==", email))),
+    safeDocs(query(collection(db, "manualUnlocks"), where("fromEmail", "==", email))),
+    safeDocs(query(collection(db, "fileUnlocks"), where("fromEmail", "==", email))),
+    safeDocs(query(collection(db, "folderUnlocks"), where("fromEmail", "==", email)))
   ]);
 
   const items = [
-    ...resourcesSnap.docs.map(d => ({ id: d.id, kind: "resource", ...d.data() })),
-    ...termsSnap.docs.map(d => ({ id: d.id, kind: "term", ...d.data() }))
+    ...resourceDocs.map(d => ({ id: d.id, kind: "resource", ...d.data() })),
+    ...termDocs.map(d => ({ id: d.id, kind: "term", ...d.data() }))
   ].sort((a, b) => (b.submittedAt?.toDate?.() || 0) - (a.submittedAt?.toDate?.() || 0));
 
   // Classroom-code unlocks aren't shown in "My Contributions" (they aren't
   // reviewed uploads) but they DO count toward resource access time.
-  const classroomItems = classroomSnap.docs.map(d => ({ id: d.id, kind: "classroom", ...d.data() }));
-  const manualItems = manualSnap.docs.map(d => ({ id: d.id, kind: "manual", ...d.data() }));
-  const fileUnlockItems = fileUnlockSnap.docs.map(d => ({ id:d.id, ...d.data() }));
-  const folderUnlockItems = folderUnlockSnap.docs.map(d => ({ id:d.id, ...d.data() }));
+  const classroomItems = classroomDocsRaw.map(d => ({ id: d.id, kind: "classroom", ...d.data() }));
+  const manualItems = manualDocsRaw.map(d => ({ id: d.id, kind: "manual", ...d.data() }));
+  const fileUnlockItems = fileUnlockDocsRaw.map(d => ({ id:d.id, ...d.data() }));
+  const folderUnlockItems = folderUnlockDocsRaw.map(d => ({ id:d.id, ...d.data() }));
 
   const approved = items.filter(i => i.status === "approved").length;
   const pending = items.filter(i => (i.status || "pending") === "pending").length;
   const rejected = items.filter(i => i.status === "rejected").length;
 
   document.getElementById("stat-total").textContent = items.length;
+  document.getElementById("stat-total-card")?.replaceChildren(document.createTextNode(String(items.length)));
   document.getElementById("stat-approved").textContent = approved;
   document.getElementById("stat-pending").textContent = pending;
   document.getElementById("stat-rejected").textContent = rejected;
 
-  // Resource access is based only on actual resource files (Slides/Notes).
-  // Hand Note uploads create one 36h unlock credit per uploaded file, while Class Slides and Images create lifetime folder access, whether or
-  // not it's been reviewed yet — see js/access.js for the stacking rules.
-  const resourceItems = items.filter(i => i.kind === "resource" && i.resourceType === "slides_notes");
-  // Every uploaded resource file earns one credit, regardless of folder type.
+  // Every uploaded resource file earns one credit. This includes files in
+  // Hand Notes, Class Slides, Images, and other resource uploads.
+  const resourceItems = items.filter(i => i.kind === "resource");
   const uploadCredits = resourceItems.reduce((n, i) => n + (Array.isArray(i.fileUrls) ? i.fileUrls.length : 1), 0);
   // Every approved Classroom unlock earns 10 credits. Locked/rejected codes do not.
   const classroomCredits = classroomItems.reduce((n, i) => n + (i.status === "approved" ? 10 : 0), 0);
@@ -444,7 +419,9 @@ async function renderCredits(email, fullName, reg) {
   // document does not yet contain the new field.
   const registrationCredits = Math.max(5, Number(reg?.registrationCredits || 0));
   const creditsEarned = registrationCredits + uploadCredits + classroomCredits + coffeeCredits;
-  const creditsUsed = fileUnlockItems.filter(i => !i.revoked).length;
+  // Only wallet-credit unlocks consume credits. Notes/Classroom access grants
+  // are access records, not credit deductions.
+  const creditsUsed = fileUnlockItems.filter(i => !i.revoked && i.source !== "notes_earn" && i.source !== "classroom_earn").length;
   const creditsRemaining = Math.max(0, creditsEarned - creditsUsed);
   document.getElementById("handnote-credit-earned-top")?.replaceChildren(document.createTextNode(String(creditsEarned)));
   document.getElementById("handnote-credit-remaining-top")?.replaceChildren(document.createTextNode(String(creditsRemaining)));
@@ -533,8 +510,8 @@ async function renderCredits(email, fullName, reg) {
     return `
       <div class="upload-row">
         <div>
-          <div style="font-weight:600;font-size:.92rem;">${title}</div>
-          <div style="font-size:.75rem;color:var(--moss-600);">${date}</div>
+          <div class="upload-title">${title}</div>
+          <div class="upload-date">${date}</div>
         </div>
         <span class="status-tag ${esc(status)}">${status === "approved" ? "✅ Approved" : status === "rejected" ? "❌ Rejected" : "⏳ Pending"}</span>
       </div>`;

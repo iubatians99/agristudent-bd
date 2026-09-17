@@ -154,7 +154,17 @@
         <div id="mu-history" style="margin-top:2rem;"></div>
       </div>
 
-      <div id="resources-panel" class="admin-panel-card">
+      <div class="admin-global-lock-card">
+          <div>
+            <span class="admin-global-lock-kicker">RESOURCE CONTROL</span>
+            <h2>🔒 Lock all currently unlocked files</h2>
+            <p>This immediately ends existing user unlock grants. Students' own uploaded files remain permanently available to them.</p>
+            <div id="global-resource-lock-status" class="admin-global-lock-status"></div>
+          </div>
+          <button type="button" id="global-resource-lock-btn" class="admin-global-lock-btn">🔒 Lock Current Access</button>
+        </div>
+
+        <div id="resources-panel" class="admin-panel-card">
         <h2 class="admin-panel-heading">Resources — Pending / Approved / Rejected</h2>
         <div class="admin-filter-bar">
           <label for="resource-status-filter">Status</label>
@@ -385,9 +395,8 @@
       </div>
 
       <div id="folder-access-panel" class="admin-panel-card hidden">
-        <h2 class="admin-panel-heading">🔒 Unlocked Files — Admin Control</h2>
-        <p style="font-size:.84rem;color:var(--moss-600);margin-top:-.5rem;margin-bottom:1rem;">Class Slides and Images unlocked by upload or approved classroom code, and individual Hand Notes unlocked with a credit, stay open until you lock them here — one at a time, or all at once.</p>
-        <button type="button" id="admin-lock-all-files-btn" style="background:var(--terracotta-500);color:#fff;border:0;border-radius:8px;padding:.6rem 1rem;font-weight:700;cursor:pointer;margin-bottom:1rem;">🔒 Lock All Unlocked Files</button>
+        <h2 class="admin-panel-heading">♾️ Lifetime Folder Access — Admin Control</h2>
+        <p style="font-size:.84rem;color:var(--moss-600);margin-top:-.5rem;margin-bottom:1rem;">Class Slides and Images unlocked by upload or approved classroom code stay open until you lock the grant here.</p>
         <div id="admin-folder-access-list"></div>
       </div>
 
