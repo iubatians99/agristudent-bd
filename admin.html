@@ -84,6 +84,8 @@
       <button id="tab-notify-user" class="admin-nav-item" data-label="Notify User"><span class="admin-nav-icon">🔔</span><span>Notify User</span></button>
       <button id="tab-classroom-codes" class="admin-nav-item" data-label="Classroom Codes"><span class="admin-nav-icon">🔑</span><span>Classroom Codes</span></button>
       <button id="tab-ad-unlocks" class="admin-nav-item" data-label="Ad Unlocks"><span class="admin-nav-icon">🎬</span><span>Ad Unlocks</span></button>
+      <button id="tab-coffee-requests" class="admin-nav-item" data-label="Coffee Support"><span class="admin-nav-icon">☕</span><span>Coffee Support</span></button>
+      <button id="tab-folder-access" class="admin-nav-item" data-label="Folder Access"><span class="admin-nav-icon">♾️</span><span>Folder Access</span></button>
       <button id="tab-danger" class="admin-nav-item admin-nav-item--danger" data-label="Danger Zone"><span class="admin-nav-icon">⚠️</span><span>Danger Zone</span></button>
     </nav>
 
@@ -378,6 +380,18 @@
         <h2 class="admin-panel-heading">Ad Unlocks — Watch-an-Ad unlock log</h2>
         <p style="color:var(--moss-600);font-size:.85rem;margin-top:-.5rem;margin-bottom:1rem;">Read-only log for abuse monitoring — these already granted 6h access instantly, so nothing here needs approval. Delete an entry to revoke that file's access early.</p>
         <div id="admin-ad-unlocks-list"></div>
+      </div>
+
+      <div id="coffee-requests-panel" class="admin-panel-card hidden">
+        <h2 class="admin-panel-heading">☕ Buy Me a Coffee — Support Requests</h2>
+        <p style="font-size:.84rem;color:var(--moss-600);margin-top:-.5rem;margin-bottom:1rem;">Review sender number, amount and transaction ID. When everything is correct, approve and choose a custom number of access days; the student receives an Inbox message and a profile popup.</p>
+        <div id="admin-coffee-requests-list"></div>
+      </div>
+
+      <div id="folder-access-panel" class="admin-panel-card hidden">
+        <h2 class="admin-panel-heading">♾️ Lifetime Folder Access — Admin Control</h2>
+        <p style="font-size:.84rem;color:var(--moss-600);margin-top:-.5rem;margin-bottom:1rem;">Class Slides and Images unlocked by upload or approved classroom code stay open until you lock the grant here.</p>
+        <div id="admin-folder-access-list"></div>
       </div>
 
       <div id="danger-panel" class="admin-panel-card hidden">

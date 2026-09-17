@@ -42,7 +42,6 @@
   <div class="container">
     <div class="crumb"><a href="index.html">Home</a> / <a href="resources.html">Resources</a> / <span id="resource-crumb-current">Hand Notes</span></div>
     <h1 id="resource-page-title">📝 Hand Notes</h1>
-    <p id="resource-page-desc" style="color:var(--moss-600);max-width:560px;margin-bottom:1.4rem;">Search by course code to find lecture materials.</p>
 
     <!-- ACCESS STATUS BAR -->
     <div id="access-status-bar" class="access-status-bar hidden">
@@ -69,9 +68,9 @@
             <div style="font-size:1.7rem;width:3.4rem;height:3.4rem;line-height:3.4rem;margin:0 auto .9rem;border-radius:50%;background:linear-gradient(135deg, var(--moss-900), var(--moss-700));box-shadow:0 10px 22px rgba(31,46,34,.28);">🔓</div>
             <h2 style="font-size:1.35rem;margin-bottom:.3rem;">Unlock Resources</h2>
             <p style="color:var(--moss-600);font-size:.9rem;margin-bottom:1.4rem;line-height:1.6;">Choose how you'd like to unlock access — this opens Hand Notes, Class Slides, and Images together.</p>
-            <button type="button" id="hn-choose-notes" class="btn-primary" style="display:block;width:100%;padding:.8rem;margin-bottom:.7rem;">📤 Unlock with Notes <span style="font-weight:400;opacity:.85;">— upload a file, 24h on approval</span></button>
-            <button type="button" id="hn-choose-classroom" class="btn-primary" style="display:block;width:100%;padding:.8rem;background:var(--moss-600);margin-bottom:.7rem;">🏫 Unlock with Google Classroom <span style="font-weight:400;opacity:.85;">— send a code, 6h access</span></button>
-            <button type="button" id="hn-choose-ad" class="btn-primary" style="display:block;width:100%;padding:.8rem;background:var(--wheat-500,#c8933a);">🎬 Unlock by Watching an Ad <span style="font-weight:400;opacity:.85;">— instant, 6h access</span></button>
+            <button type="button" id="hn-choose-notes" class="btn-primary" style="display:block;width:100%;padding:.8rem;margin-bottom:.7rem;">📤 Unlock with Notes <span style="font-weight:400;opacity:.85;">— 36h per Hand Note unlock credit / lifetime folder for Slides & Images</span></button>
+            <button type="button" id="hn-choose-classroom" class="btn-primary" style="display:block;width:100%;padding:.8rem;background:var(--moss-600);margin-bottom:.7rem;">🏫 Unlock with Google Classroom <span style="font-weight:400;opacity:.85;">— 36h Hand Note folder / lifetime Slides & Images folder</span></button>
+            <button type="button" id="hn-choose-coffee" class="btn-primary" style="display:block;width:100%;padding:.8rem;background:#7a4a24;margin-bottom:.7rem;">☕ Buy Me a Coffee <span style="font-weight:400;opacity:.85;">— admin-approved custom access</span></button>
           </div>
 
           <!-- STEP: UNLOCK WITH NOTES (existing upload form) -->
@@ -176,7 +175,7 @@
           <div id="hn-notes-success" class="uc-panel hidden" style="border-color:var(--leaf-500);background:rgba(107,155,94,.06);margin-top:1rem;">
             <span class="badge" style="background:var(--leaf-500);">🎉 Congratulations!</span>
             <h3 id="hn-notes-success-title">You've got temporary access</h3>
-            <p id="hn-notes-success-detail">Your upload is pending review — you have temporary access for up to 12 hours. Once approved, each file gives 24 hours.</p>
+            <p id="hn-notes-success-detail">Your upload is pending review. Hand Notes use one 36-hour unlock credit per uploaded file; Class Slides and Images unlock the full folder for lifetime access.</p>
             <button type="button" id="hn-notes-success-close" class="btn-primary" style="margin-top:.8rem;">See the Notes</button>
           </div>
           </div>
@@ -187,7 +186,7 @@
             <div style="text-align:center;">
               <div style="font-size:1.7rem;width:3.4rem;height:3.4rem;line-height:3.4rem;margin:0 auto .9rem;border-radius:50%;background:linear-gradient(135deg, var(--moss-900), var(--moss-700));box-shadow:0 10px 22px rgba(31,46,34,.28);">🏫</div>
               <h2 style="font-size:1.35rem;margin-bottom:.3rem;">Unlock with Google Classroom</h2>
-              <p style="color:var(--moss-600);font-size:.9rem;margin-bottom:1rem;line-height:1.6;">Share your Google Classroom code — once an admin reviews and confirms it, this file unlocks for 6 hours. Each code can only be used once — a code that's already on file won't unlock access.</p>
+              <p style="color:var(--moss-600);font-size:.9rem;margin-bottom:1rem;line-height:1.6;">Share your Google Classroom code — after admin confirmation, Hand Notes unlock the selected folder for 36 hours; Class Slides and Images unlock the selected course folder for lifetime access.</p>
               <p style="background:rgba(214,171,74,.15);color:var(--wheat-400,#a3791f);border-radius:8px;padding:.6rem .8rem;font-size:.82rem;margin-bottom:1.2rem;text-align:left;">⚠️ Please share only a genuine classroom code for real academic/educational content. A false or misused code may result in your profile being restricted by an admin.</p>
             </div>
             <form id="hn-classroom-form">
@@ -202,12 +201,32 @@
             <div id="hn-classroom-success" class="uc-panel hidden" style="border-color:var(--leaf-500);background:rgba(107,155,94,.06);margin-top:1rem;">
               <span class="badge" style="background:var(--leaf-500);">✅ Sent for review</span>
               <h3>Your code is with an admin now</h3>
-              <p>This file unlocks for 6 hours as soon as an admin reviews and confirms your code — no need to keep this page open.</p>
+              <p>After admin confirmation, the selected Hand Notes folder is unlocked for 36 hours, while Class Slides and Images receive lifetime folder access.</p>
               <button type="button" id="hn-classroom-success-close" class="btn-primary" style="margin-top:.8rem;">Back to Notes</button>
             </div>
           </div>
 
           <!-- STEP: UNLOCK BY WATCHING AN AD (new) -->
+          <div id="hn-gate-step-coffee" class="hidden">
+            <button type="button" id="hn-coffee-back" class="modal-close" title="Back" style="position:static;float:right;">✕</button>
+            <div style="text-align:center;">
+              <div style="font-size:2rem;width:4rem;height:4rem;line-height:4rem;margin:0 auto .8rem;border-radius:50%;background:rgba(214,171,74,.16);">☕</div>
+              <h2 style="font-size:1.35rem;margin-bottom:.3rem;">Buy the Admin a Coffee</h2>
+              <p style="color:var(--moss-600);font-size:.9rem;line-height:1.6;">A small coffee helps keep Agri Core running. Send your coffee support via bKash, then submit the transaction details below. After checking, the admin can grant custom access.</p>
+            </div>
+            <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:1rem;align-items:stretch;margin:1rem 0;">
+              <div style="border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#fff;box-shadow:0 8px 24px rgba(31,46,34,.08);"><img src="https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=900&q=85" alt="A cup of coffee" style="width:100%;height:190px;object-fit:cover;display:block;"><div style="padding:.9rem;text-align:center;"><strong>Buy the admin a coffee ☕</strong><div style="font-size:.82rem;color:var(--moss-600);margin-top:.3rem;">Thank you for supporting Agri Core.</div></div></div>
+              <div style="border:1px solid var(--line);border-radius:14px;padding:1rem;background:linear-gradient(180deg,#fff,#f8fbf7);display:flex;flex-direction:column;justify-content:center;"><div style="font-size:.78rem;color:var(--moss-600);">bKash Number</div><div style="font-size:1.35rem;font-weight:800;letter-spacing:.04em;margin:.25rem 0 1rem;">01753486065</div><div style="font-size:.8rem;color:var(--moss-600);line-height:1.5;">Send the coffee amount, then enter the same sender number and transaction ID below.</div></div>
+            </div>
+            <form id="hn-coffee-form">
+              <div class="form-field"><label for="hn-coffee-sender">Your bKash Number *</label><input id="hn-coffee-sender" type="tel" inputmode="numeric" maxlength="20" required placeholder="01XXXXXXXXX"></div>
+              <div class="form-field"><label for="hn-coffee-txid">Transaction ID *</label><input id="hn-coffee-txid" type="text" maxlength="80" required placeholder="e.g. 9A1B2C3D"></div>
+              <div class="form-field"><label for="hn-coffee-amount">Amount (BDT) *</label><input id="hn-coffee-amount" type="number" min="1" step="1" required placeholder="Amount sent"></div>
+              <button type="submit" id="hn-coffee-submit" class="btn-primary" style="width:100%;padding:.85rem;">☕ Submit Coffee Support</button>
+              <p id="hn-coffee-error" class="hidden" style="color:var(--terracotta-500);font-size:.85rem;margin-top:.6rem;"></p>
+            </form>
+          </div>
+
           <div id="hn-gate-step-ad" class="hidden">
             <button type="button" id="hn-ad-back" class="modal-close" title="Back" style="position:static;float:right;">✕</button>
             <div style="text-align:center;">
@@ -253,22 +272,16 @@
       <!-- the .locked class on #resource-content blurs it and shows the overlay below) -->
       <div class="resource-preview-wrap">
 
-        <!-- Tab switcher: one section at a time gets the full width, which reads
-             far better on a phone than three squeezed columns. Counts mirror the
-             per-card counters automatically (see the script at the end of this file). -->
-        <div class="resource-tabs" role="tablist" aria-label="Resource sections">
-          <button type="button" class="resource-tab is-active" role="tab" aria-selected="true" aria-controls="panel-handnotes" data-panel="panel-handnotes">
-            <span class="tab-emoji">📝</span><span>Hand Notes</span><span class="tab-badge" data-mirror="handnotes-count">0</span>
-          </button>
-          <button type="button" class="resource-tab" role="tab" aria-selected="false" aria-controls="panel-slides" data-panel="panel-slides">
-            <span class="tab-emoji">🖥️</span><span>Class Slides</span><span class="tab-badge" data-mirror="slides-count">0</span>
-          </button>
-          <button type="button" class="resource-tab" role="tab" aria-selected="false" aria-controls="panel-images" data-panel="panel-images">
-            <span class="tab-emoji">🖼️</span><span>Images</span><span class="tab-badge" data-mirror="image-count">0</span>
-          </button>
+        <!-- Segment switcher: a dropdown instead of tabs, so only the
+             selected section (folders + search + its own "View All") ever
+             shows — nothing else on screen. -->
+        <div class="resource-segment-switcher" style="max-width:280px;margin-bottom:1.2rem;">
+          <select id="resource-segment-select" class="card-search" aria-label="Switch resource section" style="width:100%;font-weight:600;cursor:pointer;">
+            <option value="panel-handnotes">📝 Hand Notes</option>
+            <option value="panel-slides">🖥️ Class Slides</option>
+            <option value="panel-images">🖼️ Image Notes</option>
+          </select>
         </div>
-
-        <p class="resource-tab-hint" id="resource-tab-hint">Single files — unlock one Hand Note at a time.</p>
 
         <div class="premium-cards-grid is-tabbed">
 
@@ -287,7 +300,7 @@
                 </div>
               </div>
               <div class="card-footer">
-                <a href="#" class="view-all-link" id="handnotes-view-all" style="display:none;">View All →</a>
+                <a href="#" class="view-all-link" id="handnotes-view-all" style="display:none;">See More →</a>
               </div>
             </div>
           </div>
@@ -307,17 +320,17 @@
                 </div>
               </div>
               <div class="card-footer">
-                <a href="#" class="view-all-link" id="slides-view-all" style="display:none;">View All →</a>
+                <a href="#" class="view-all-link" id="slides-view-all" style="display:none;">See More →</a>
               </div>
             </div>
           </div>
 
-          <!-- IMAGE CARD -->
+          <!-- IMAGE NOTES CARD -->
           <div class="resource-tab-panel" id="panel-images" role="tabpanel" hidden>
             <div class="premium-card image-card">
               <div class="card-header">
                 <span class="card-icon">🖼️</span>
-                <span class="card-title">Images</span>
+                <span class="card-title">Image Notes</span>
                 <span class="card-count" id="image-count">(0)</span>
               </div>
               <div class="card-body">
@@ -327,7 +340,7 @@
                 </div>
               </div>
               <div class="card-footer">
-                <a href="#" class="view-all-link" id="image-view-all" style="display:none;">See All Images →</a>
+                <a href="#" class="view-all-link" id="image-view-all" style="display:none;">See More →</a>
               </div>
             </div>
           </div>
@@ -335,10 +348,6 @@
         </div>
 
         <!-- LOCK OVERLAY: shown only while #resource-content has the .locked class -->
-      </div>
-
-      <div id="resource-unlock-strip" class="uc-panel hidden" style="margin-top:1.2rem;display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
-        <span style="font-size:.88rem;color:var(--moss-600);">🔒 Folders are open to browse. Hand Notes unlock one file at a time. Class Lecture Slides unlock a whole course at once — click 🔒 Unlock on any slide to open every slide in that course's folder.</span>
       </div>
 
     </div>
@@ -501,92 +510,52 @@
 // ============================================
 // HAND NOTES / CLASS SLIDES / IMAGES — TAB SWITCHER
 // --------------------------------------------------
+// ============================================
+// HAND NOTES / CLASS SLIDES / IMAGE NOTES — SEGMENT DROPDOWN
+// --------------------------------------------------
 // Purely presentational. Every element ID the loaders in js/resources.js and
 // js/slides-notes-loading-fix.js look for still exists in the DOM at all
 // times — hidden panels are only visually hidden — so none of that logic
 // needed to change.
 // ============================================
 (function () {
-  const tabs = document.querySelectorAll(".resource-tab");
+  const select = document.getElementById("resource-segment-select");
   const panels = document.querySelectorAll(".resource-tab-panel");
-  const hint = document.getElementById("resource-tab-hint");
-  if (!tabs.length) return;
-
-  const HINTS = {
-    "panel-handnotes": "Single files — unlock one Hand Note at a time.",
-    "panel-slides": "Unlocking any slide opens every slide in that course's folder.",
-    "panel-images": "Tap any image to open it full size."
-  };
+  if (!select || !panels.length) return;
 
   // Titles shown above the folder cards — kept in sync with whichever
-  // section (Hand Notes / Class Slides / Images) is currently active, so
-  // the page reads correctly whether someone landed here from the
-  // Resources page's Hand Notes, Class Slides, or Images Folder card.
+  // section (Hand Notes / Class Slides / Image Notes) is currently active,
+  // so the page reads correctly whether someone landed here from the
+  // Resources page's Hand Notes, Class Slides, or Image Notes card.
   const TITLES = {
-    "panel-handnotes": { crumb: "Hand Notes", h1: "📝 Hand Notes", desc: "Search by course code to find lecture materials.", title: "Hand Notes — Agri Core" },
-    "panel-slides": { crumb: "Class Slides", h1: "🖥️ Class Slides", desc: "Search by course code to find lecture slides — unlocking one opens the whole folder.", title: "Class Slides — Agri Core" },
-    "panel-images": { crumb: "Images", h1: "🖼️ Images", desc: "Search by course code to find scanned pages and photos.", title: "Images — Agri Core" }
+    "panel-handnotes": { crumb: "Hand Notes", h1: "📝 Hand Notes", title: "Hand Notes — Agri Core" },
+    "panel-slides": { crumb: "Class Slides", h1: "🖥️ Class Slides", title: "Class Slides — Agri Core" },
+    "panel-images": { crumb: "Image Notes", h1: "🖼️ Image Notes", title: "Image Notes — Agri Core" }
   };
 
   const crumbEl = document.getElementById("resource-crumb-current");
   const h1El = document.getElementById("resource-page-title");
-  const descEl = document.getElementById("resource-page-desc");
 
-  function activate(tab) {
-    const target = tab.dataset.panel;
-    tabs.forEach(t => {
-      const on = t === tab;
-      t.classList.toggle("is-active", on);
-      t.setAttribute("aria-selected", on ? "true" : "false");
-    });
-    panels.forEach(p => { p.hidden = p.id !== target; });
-    if (hint) hint.textContent = HINTS[target] || "";
-    const meta = TITLES[target];
+  function activate(panelId) {
+    panels.forEach(p => { p.hidden = p.id !== panelId; });
+    const meta = TITLES[panelId];
     if (meta) {
       if (crumbEl) crumbEl.textContent = meta.crumb;
       if (h1El) h1El.textContent = meta.h1;
-      if (descEl) descEl.textContent = meta.desc;
       document.title = meta.title;
     }
   }
 
-  tabs.forEach(tab => tab.addEventListener("click", () => activate(tab)));
+  select.addEventListener("change", () => activate(select.value));
 
   // Deep link from the Resources page cards: ?tab=handnotes | slides | images
   // opens straight into that section's folder view instead of always
   // defaulting to Hand Notes.
   const requestedTab = new URLSearchParams(window.location.search).get("tab");
   const TAB_PANEL_MAP = { handnotes: "panel-handnotes", slides: "panel-slides", images: "panel-images" };
-  const initialPanelId = TAB_PANEL_MAP[requestedTab];
-  if (initialPanelId) {
-    const initialTab = Array.from(tabs).find(t => t.dataset.panel === initialPanelId);
-    if (initialTab) activate(initialTab);
-  }
-
-  // Left/right arrow keys move between tabs, as expected of a tablist.
-  document.querySelector(".resource-tabs")?.addEventListener("keydown", (e) => {
-    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
-    const arr = Array.from(tabs);
-    const i = arr.indexOf(document.activeElement);
-    if (i === -1) return;
-    e.preventDefault();
-    const next = arr[(i + (e.key === "ArrowRight" ? 1 : arr.length - 1)) % arr.length];
-    next.focus();
-    activate(next);
-  });
-
-  // The loaders write counts into the "(12)" span inside each card header.
-  // Rather than touching that code, mirror those values into the tab badges
-  // whenever they change.
-  document.querySelectorAll(".tab-badge[data-mirror]").forEach(badge => {
-    const source = document.getElementById(badge.dataset.mirror);
-    if (!source) return;
-    const sync = () => {
-      badge.textContent = (source.textContent || "").replace(/[()\s]/g, "") || "0";
-    };
-    sync();
-    new MutationObserver(sync).observe(source, { childList: true, characterData: true, subtree: true });
-  });
+  const initialPanelId = TAB_PANEL_MAP[requestedTab] || "panel-handnotes";
+  select.value = initialPanelId;
+  activate(initialPanelId);
 })();
 </script>
 </body>

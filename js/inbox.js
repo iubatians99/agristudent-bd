@@ -27,7 +27,7 @@ import {
 const COLLECTION = "adminMessages";
 
 /** Admin panel only — composes and sends a new message to one student. */
-export async function sendMessageToUser({ toRegId, toEmail, toName, body, sentBy }) {
+export async function sendMessageToUser({ toRegId, toEmail, toName, body, sentBy, subject }) {
   if (!toRegId || !toEmail) throw new Error("No recipient selected.");
   if (!body || !body.trim()) throw new Error("Please write a message.");
 
@@ -35,6 +35,7 @@ export async function sendMessageToUser({ toRegId, toEmail, toName, body, sentBy
     toRegId,
     toEmail,
     toName: toName || "",
+    subject: subject || "Message from Agri Core Admin",
     body: body.trim(),
     sentBy: sentBy || "",
     sentAt: serverTimestamp(),

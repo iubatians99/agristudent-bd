@@ -224,6 +224,47 @@ service cloud.firestore {
     }
 
     // ============================================
+    // FILE UNLOCK CREDITS — one uploaded Hand Note file = one credit.
+    match /fileUnlocks/{id} {
+      allow create: if
+        request.resource.data.keys().hasAll(['kind','fromEmail','targetFileId','sourceResourceId']) &&
+        request.resource.data.kind == "file_unlock" &&
+        request.resource.data.fromEmail is string && request.resource.data.fromEmail.size() > 0 &&
+        request.resource.data.targetFileId is string && request.resource.data.targetFileId.size() > 0 &&
+        request.resource.data.sourceResourceId is string && request.resource.data.sourceResourceId.size() > 0;
+      allow list, get: if true;
+      allow update, delete: if request.auth != null;
+    }
+
+    // ============================================
+    // FOLDER LIFETIME UNLOCKS — Class Slides / Images. Admin can revoke.
+    match /folderUnlocks/{id} {
+      allow create: if
+        request.resource.data.keys().hasAll(['kind','fromEmail','targetFileId','category','revoked']) &&
+        request.resource.data.kind == "folder_lifetime" &&
+        request.resource.data.fromEmail is string && request.resource.data.fromEmail.size() > 0 &&
+        request.resource.data.targetFileId is string && request.resource.data.targetFileId.size() > 0 &&
+        request.resource.data.category in ["hand_notes","class_slides","images"] &&
+        request.resource.data.revoked == false;
+      allow list, get: if true;
+      allow update, delete: if request.auth != null;
+    }
+
+    // ============================================
+    // COFFEE SUPPORT REQUESTS — student submits payment proof; admin reviews.
+    match /coffeeRequests/{id} {
+      allow create: if
+        request.resource.data.keys().hasAll(['fromEmail','fromName','senderNumber','transactionId','amount','status','submittedAt']) &&
+        request.resource.data.fromEmail is string && request.resource.data.fromEmail.size() > 0 &&
+        request.resource.data.senderNumber is string && request.resource.data.senderNumber.size() > 0 &&
+        request.resource.data.transactionId is string && request.resource.data.transactionId.size() > 0 &&
+        request.resource.data.amount is number && request.resource.data.amount > 0 &&
+        request.resource.data.status == "pending";
+      allow list, get: if true;
+      allow update, delete: if request.auth != null;
+    }
+
+    // ============================================
     // SETTINGS: Configuration (admin-only, unchanged)
     // ============================================
     match /settings/{id} {

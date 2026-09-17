@@ -27,7 +27,9 @@ const WATCHED = [
   { collection: "resources", label: "Resource", icon: "📚",
     text: (d) => `${d.courseName || d.courseCode || "New resource"}${d.facultyName ? " — " + d.facultyName : ""}` },
   { collection: "classroomCodes", label: "Classroom Code", icon: "🔑",
-    text: (d) => d.purpose === "materials_request" ? `Code for course materials: ${d.classroomCode || ""}` : `Unlock request: ${d.classroomCode || ""}` }
+    text: (d) => d.purpose === "materials_request" ? `Code for course materials: ${d.classroomCode || ""}` : `Unlock request: ${d.classroomCode || ""}` },
+  { collection: "coffeeRequests", label: "Coffee Support", icon: "☕",
+    text: (d) => `${d.fromName || d.fromEmail || "Student"} — Txn ${d.transactionId || ""}` }
 ];
 
 let unreadCount = 0;

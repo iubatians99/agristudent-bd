@@ -33,8 +33,9 @@
 import { sendReviewEmail } from "./email-config.js";
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
-export const ACCESS_PER_FILE_MS = DAY_MS; // 24h per uploaded resource file
-export const ACCESS_PER_CLASSROOM_MS = 6 * 60 * 60 * 1000; // 6h per classroom code
+export const ACCESS_PER_FILE_MS = 36 * 60 * 60 * 1000; // 36h per Hand Note file unlock
+export const ACCESS_PER_CLASSROOM_MS = 36 * 60 * 60 * 1000; // 36h per classroom-code unlock
+export const LIFETIME_ACCESS_MS = 100 * 365 * DAY_MS; // practical lifetime sentinel for folder access
 export const ACCESS_PER_AD_MS = 6 * 60 * 60 * 1000; // 6h per watched rewarded ad
 export const RESTRICTION_MS = 30 * DAY_MS;
 const REMINDER_WINDOW_DAYS = 1;
@@ -94,6 +95,35 @@ export function computeResourceAccessStatus(items, now = Date.now()) {
       continue;
     }
 
+    // A folder-lifetime grant is used only by Class Slides and Images.
+    // Admins can revoke it by setting revoked=true.
+    if (item?.kind === "folder_lifetime") {
+      if (item?.revoked) continue;
+      grants.push({
+        item,
+        kind: "folder_lifetime",
+        status: "granted",
+        time: eventTime(item, "grantedAt")?.getTime?.() || now,
+        durationMs: LIFETIME_ACCESS_MS,
+        lifetime: true
+      });
+      continue;
+    }
+
+    // A file-credit unlock consumes one uploaded Hand Note credit and
+    // unlocks exactly one target file for 36 hours.
+    if (item?.kind === "file_unlock") {
+      if (item?.revoked) continue;
+      grants.push({
+        item,
+        kind: "file_unlock",
+        status: "granted",
+        time: eventTime(item, "unlockedAt")?.getTime?.() || now,
+        durationMs: ACCESS_PER_FILE_MS
+      });
+      continue;
+    }
+
     if (item?.kind === "classroom") {
       // The "Send Us Your Classroom Code" box (resources.html) is a
       // materials-sourcing request, not an unlock request — it must NEVER
@@ -109,12 +139,33 @@ export function computeResourceAccessStatus(items, now = Date.now()) {
       if (status !== "approved") continue;
       const approvedAt = eventTime(item, "approvedAt");
       const submittedAt = eventTime(item, "submittedAt");
+      const classroomFolder = item?.unlockScope === "folder";
+      const lifetimeFolder = classroomFolder && ["class_slides", "images"].includes(item?.category);
       grants.push({
         item,
-        kind: "classroom",
+        kind: lifetimeFolder ? "folder_lifetime" : "classroom",
         status: "approved",
         time: (approvedAt || submittedAt)?.getTime?.() || now,
-        durationMs: ACCESS_PER_CLASSROOM_MS
+        durationMs: lifetimeFolder ? LIFETIME_ACCESS_MS : ACCESS_PER_CLASSROOM_MS,
+        lifetime: lifetimeFolder
+      });
+      continue;
+    }
+
+    // A manual grant from the admin panel's Manual Unlock tool — an
+    // immediate, unreviewed grant for a custom number of days (see
+    // grantManualUnlock() in js/admin.js). Optionally scoped to one
+    // category via item.category ("hand_notes" | "class_slides" |
+    // "images"); computeFileAccessStatus() below is what applies that
+    // scoping per file. No category means account-wide, same as an ad
+    // unlock or classroom code.
+    if (item?.kind === "manual") {
+      grants.push({
+        item,
+        kind: "manual",
+        status: "granted",
+        time: eventTime(item, "grantedAt")?.getTime?.() || now,
+        durationMs: Number(item.durationMs) || DAY_MS
       });
       continue;
     }
@@ -134,10 +185,11 @@ export function computeResourceAccessStatus(items, now = Date.now()) {
       continue;
     }
 
-    // Any other non-rejected resource upload (pending OR approved) grants
-    // its full 24h-per-file window immediately from the upload time —
-    // students get access right away and don't lose it while waiting on
-    // review. If it's later rejected, the branch above takes over instead.
+    // New Hand Note uploads create explicit file credits; new Class Slides
+    // and Images create explicit lifetime-folder grants. Do not double-count
+    // those source resource documents as blanket access. Legacy documents
+    // without unlockMode retain their historical behaviour for compatibility.
+    if (item?.unlockMode === "file_credit" || item?.unlockMode === "folder_lifetime") continue;
     grants.push({
       item,
       kind: "resource",
@@ -166,7 +218,8 @@ export function computeResourceAccessStatus(items, now = Date.now()) {
       startsAt,
       endsAt,
       durationMs: g.durationMs,
-      active: endsAt > now
+      active: endsAt > now,
+      lifetime: !!g.lifetime
     });
     if (g.kind === "resource") {
       if (g.status === "approved") approvedFileCount += fileCount(g.item);
@@ -176,7 +229,8 @@ export function computeResourceAccessStatus(items, now = Date.now()) {
 
   const accessUntil = runningEnd;
   const restricted = restrictedUntil > now;
-  const active = !restricted && accessUntil > now;
+  const lifetimeActive = !restricted && grants.some(g => g.lifetime && g.time <= now);
+  const active = !restricted && (accessUntil > now);
   const msRemaining = active ? accessUntil - now : 0;
   const daysRemaining = Math.max(0, Math.ceil(msRemaining / DAY_MS));
   const hoursRemaining = Math.max(0, Math.ceil(msRemaining / (60 * 60 * 1000)));
@@ -193,6 +247,7 @@ export function computeResourceAccessStatus(items, now = Date.now()) {
 
   return {
     active,
+    lifetimeActive,
     restricted,
     restrictedUntil: restrictedUntil || null,
     accessUntil: accessUntil || null,
@@ -215,9 +270,18 @@ export function computeResourceAccessStatus(items, now = Date.now()) {
  * "Unlock" on a specific file always attaches that file's id, so from
  * then on that submission only ever unlocks that one file.
  */
-export function computeFileAccessStatus(items, fileId, now = Date.now()) {
+export function computeFileAccessStatus(items, fileId, now = Date.now(), fileCategory = null) {
   const list = Array.isArray(items) ? items : [];
-  const relevant = list.filter(i => !i?.targetFileId || i.targetFileId === fileId);
+  const relevant = list.filter(i => {
+    const targetOk = !i?.targetFileId || i.targetFileId === fileId || (String(i.targetFileId).endsWith("::") ? String(fileId).startsWith(String(i.targetFileId)) : String(fileId).startsWith(String(i.targetFileId) + "::"));
+    // Only a manual grant ever carries a `category` — matching it against
+    // the file being checked is what makes "Hand Notes Only" (etc.) from
+    // the admin panel actually scope to just that section instead of
+    // unlocking everything. Every other grant kind has no category, so
+    // this is always true for them regardless of fileCategory.
+    const categoryOk = !i?.category || !fileCategory || i.category === fileCategory;
+    return targetOk && categoryOk;
+  });
   return computeResourceAccessStatus(relevant, now);
 }
 
@@ -276,10 +340,10 @@ export function renderAccessBadge({ badgeEl, detailEl }, access) {
   }
 
   if (access.active) {
-    badgeEl.textContent = "🔓 Resource Access Active";
+    badgeEl.textContent = access.lifetimeActive ? "♾️ Lifetime Folder Access" : "🔓 Resource Access Active";
     badgeEl.className = "access-badge active";
     const expires = formatDate(access.accessUntil);
-    detailEl.textContent = `⏱ ${formatRemaining(access.msRemaining)} remaining · expires ${expires}`;
+    detailEl.textContent = access.lifetimeActive ? "Class Slides / Images folder access is active until an admin locks it again." : `⏱ ${formatRemaining(access.msRemaining)} remaining · expires ${expires}`;
     return;
   }
 
@@ -371,11 +435,12 @@ export function renderAccessScale({ wrapEl, fillEl, remainingEl, untilEl }, acce
       return;
     }
     wrapEl.classList.remove("hidden");
-    const pct = Math.max(0, Math.min(100, (msLeft / windowMs) * 100));
+    const pct = access.lifetimeActive ? 100 : Math.max(0, Math.min(100, (msLeft / windowMs) * 100));
     fillEl.style.width = pct + "%";
+    fillEl.style.setProperty("--access-pct", pct + "%");
     fillEl.classList.toggle("is-low", pct < 20);
-    if (remainingEl) remainingEl.textContent = `⏱ ${formatRemaining(msLeft)} left`;
-    if (untilEl) untilEl.textContent = `until ${formatDate(access.accessUntil)}`;
+    if (remainingEl) remainingEl.textContent = access.lifetimeActive ? "♾️ Lifetime" : `⏱ ${formatRemaining(msLeft)} left`;
+    if (untilEl) untilEl.textContent = access.lifetimeActive ? "Admin controlled" : `until ${formatDate(access.accessUntil)}`;
   }
 
   tick();

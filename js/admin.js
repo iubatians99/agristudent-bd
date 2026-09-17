@@ -1,6 +1,6 @@
 import { db, auth, CLOUDINARY_UPLOAD_URL, CLOUDINARY_UPLOAD_PRESET } from "./firebase-config.js";
 import {
-  collection, getDocs, doc, updateDoc, deleteDoc, addDoc, orderBy, query, where, Timestamp, writeBatch, serverTimestamp
+  collection, getDocs, doc, updateDoc, deleteDoc, addDoc, orderBy, query, where, limit, Timestamp, writeBatch, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
   signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail
@@ -324,6 +324,8 @@ const regList = document.getElementById("admin-registrations-list");
 const msgList = document.getElementById("admin-messages-list");
 const classroomCodesList = document.getElementById("admin-classroom-codes-list");
 const adUnlocksList = document.getElementById("admin-ad-unlocks-list");
+const coffeeRequestsList = document.getElementById("admin-coffee-requests-list");
+const folderAccessList = document.getElementById("admin-folder-access-list");
 const blogList = document.getElementById("admin-blog-list");
 
 // Caches of last-loaded docs, keyed by id — used to populate the "Edit any content" modal
@@ -345,6 +347,8 @@ const tabs = {
   notifyUser: { btn: document.getElementById("tab-notify-user"), panel: document.getElementById("notify-user-panel"), load: loadNotifyUser },
   classroomCodes: { btn: document.getElementById("tab-classroom-codes"), panel: document.getElementById("classroom-codes-panel"), load: loadClassroomCodes },
   adUnlocks: { btn: document.getElementById("tab-ad-unlocks"), panel: document.getElementById("ad-unlocks-panel"), load: loadAdUnlocks },
+  coffeeRequests: { btn: document.getElementById("tab-coffee-requests"), panel: document.getElementById("coffee-requests-panel"), load: loadCoffeeRequests },
+  folderAccess: { btn: document.getElementById("tab-folder-access"), panel: document.getElementById("folder-access-panel"), load: loadFolderAccess },
   danger: { btn: document.getElementById("tab-danger"), panel: document.getElementById("danger-panel"), load: () => {} }
 };
 
@@ -423,88 +427,50 @@ async function initManualUnlock() {
 
 async function grantManualUnlock(email, days, unlockType, reason) {
   try {
-    const db = getFirestore();
-    
-    // Find user by email
-    const usersSnap = await getDocs(
-      query(collection(db, "users"), where("emailNormalized", "==", email))
+    const normalizedEmail = normalizeEmail(email);
+
+    // Students live in "registrations" (see js/login.js, js/resources.js) —
+    // there is no separate "users" collection in this app.
+    const regSnap = await getDocs(
+      query(collection(db, "registrations"), where("email", "==", normalizedEmail))
     );
 
-    if (usersSnap.empty) {
+    if (regSnap.empty) {
       alert("❌ User not found. Make sure email is registered.");
       return;
     }
 
-    const userId = usersSnap.docs[0].id;
-    const userData = usersSnap.docs[0].data();
+    const userData = regSnap.docs[0].data();
+    const durationMs = days * 24 * 60 * 60 * 1000;
+    // "all_resources" grants everywhere (no category filter); the three
+    // specific options scope the grant to that one section only — see the
+    // category check in js/access.js computeFileAccessStatus().
+    const category = unlockType === "all_resources" ? null : unlockType;
 
-    // Calculate expiry
-    const expiryDate = new Date();
-    expiryDate.setDate(expiryDate.getDate() + days);
-
-    // Store unlock record
-    const unlocksRef = collection(db, "manualUnlocks");
-    await addDoc(unlocksRef, {
-      userId: userId,
-      userEmail: email,
-      studentName: userData.studentName || "Unknown",
-      unlockType: unlockType,
-      days: days,
-      reason: reason,
+    // This is the record js/resources.js reads (kind: "manual") to
+    // actually compute the student's live access — see getResourceAccessState()
+    // there and the "manual" branch in js/access.js.
+    await addDoc(collection(db, "manualUnlocks"), {
+      fromEmail: normalizedEmail,
+      studentName: userData.fullName || userData.studentName || "Unknown",
+      userEmail: normalizedEmail,
+      kind: "manual",
+      category,
+      unlockType,
+      days,
+      durationMs,
+      reason,
       grantedAt: serverTimestamp(),
-      expiresAt: Timestamp.fromDate(expiryDate),
       grantedBy: getCurrentUserEmail()
     });
 
-    // Update student access
-    if (unlockType === "all_resources") {
-      // Grant access to all resources
-      const resourcesSnap = await getDocs(
-        query(collection(db, "resources"), where("status", "==", "approved"))
-      );
+    alert(`✅ Access granted to ${userData.fullName || normalizedEmail} for ${days} days!`);
 
-      for (const resourceDoc of resourcesSnap.docs) {
-        const accessId = `${userId}_${resourceDoc.id}`;
-        await setDoc(doc(db, "studentAccess", accessId), {
-          userId: userId,
-          resourceId: resourceDoc.id,
-          unlockType: "manual_all",
-          unlockedAt: serverTimestamp(),
-          expiresAt: Timestamp.fromDate(expiryDate)
-        });
-      }
-    } else {
-      // Grant access to specific type
-      const resourcesSnap = await getDocs(
-        query(collection(db, "resources"), where("status", "==", "approved"))
-      );
-
-      for (const resourceDoc of resourcesSnap.docs) {
-        const data = resourceDoc.data();
-        
-        // Check if resource matches unlock type
-        if (unlockType === "hand_notes" && data.noteType !== "hand_notes") continue;
-        if (unlockType === "class_slides" && data.noteType !== "class_slide") continue;
-        if (unlockType === "images" && data.fileType !== "image") continue;
-
-        const accessId = `${userId}_${resourceDoc.id}`;
-        await setDoc(doc(db, "studentAccess", accessId), {
-          userId: userId,
-          resourceId: resourceDoc.id,
-          unlockType: `manual_${unlockType}`,
-          unlockedAt: serverTimestamp(),
-          expiresAt: Timestamp.fromDate(expiryDate)
-        });
-      }
-    }
-
-    alert(`✅ Access granted to ${userData.studentName} (${email}) for ${days} days!`);
-    
     // Reset form
     document.getElementById("manual-unlock-form").reset();
     document.getElementById("mu-days").value = "";
     document.querySelectorAll(".mu-preset-btn").forEach(b => b.style.background = "white");
-    
+
     // Reload history
     await loadUnlockHistory();
 
@@ -519,8 +485,6 @@ async function loadUnlockHistory() {
   if (!historyEl) return;
 
   try {
-    const db = getFirestore();
-    
     // Load recent manual unlocks
     const unlocksSnap = await getDocs(
       query(
@@ -538,18 +502,17 @@ async function loadUnlockHistory() {
     let html = "<h3 style='font-size:1rem;margin-bottom:1rem;'>Recent Unlocks</h3>";
     html += "<div style='border-top:1px solid var(--line);'>";
 
-    unlocksSnap.docs.forEach(doc => {
-      const data = doc.data();
+    unlocksSnap.docs.forEach(docSnap => {
+      const data = docSnap.data();
       const granted = fmtAdminDate(data.grantedAt);
-      const expires = fmtAdminDate(data.expiresAt);
       const typeEmoji = data.unlockType === "all_resources" ? "🔓" : data.unlockType === "hand_notes" ? "📝" : data.unlockType === "class_slides" ? "🖥️" : "🖼️";
 
       html += `
         <div style='padding:.8rem;border-bottom:1px solid var(--line);'>
-          <p style='margin:0 0 .3rem;font-weight:600;'>${typeEmoji} ${data.studentName}</p>
-          <p style='margin:0 0 .2rem;font-size:.85rem;color:var(--moss-600);'>${data.userEmail}</p>
-          <p style='margin:0 0 .2rem;font-size:.85rem;color:var(--moss-600);'>${data.days} days | Expires: ${expires}</p>
-          <p style='margin:0;font-size:.8rem;color:var(--moss-500);'>Reason: ${data.reason}</p>
+          <p style='margin:0 0 .3rem;font-weight:600;'>${typeEmoji} ${esc(data.studentName)}</p>
+          <p style='margin:0 0 .2rem;font-size:.85rem;color:var(--moss-600);'>${esc(data.userEmail)}</p>
+          <p style='margin:0 0 .2rem;font-size:.85rem;color:var(--moss-600);'>${data.days} days | Granted: ${granted}</p>
+          <p style='margin:0;font-size:.8rem;color:var(--moss-500);'>Reason: ${esc(data.reason || "—")}</p>
         </div>
       `;
     });
@@ -563,11 +526,72 @@ async function loadUnlockHistory() {
 }
 
 // ============================================
+// COFFEE SUPPORT REQUESTS
+// ============================================
+async function loadCoffeeRequests() {
+  if (!coffeeRequestsList) return;
+  coffeeRequestsList.innerHTML = `<p style="color:var(--moss-600);">Loading…</p>`;
+  try {
+    const snap = await getDocs(query(collection(db, "coffeeRequests"), orderBy("submittedAt", "desc"), limit(100)));
+    if (snap.empty) { coffeeRequestsList.innerHTML = `<p style="color:var(--moss-600);">No coffee support requests yet.</p>`; return; }
+    coffeeRequestsList.innerHTML = "";
+    snap.forEach(ds => {
+      const d = ds.data(); const approved = d.status === "approved"; const rejected = d.status === "rejected";
+      const row = document.createElement("div"); row.className="resource-row";
+      row.innerHTML = `<div style="min-width:0;flex:1;">
+        <strong>☕ ${esc(d.fromName || "Student")}</strong> <span style="font-size:.8rem;color:var(--moss-600);">${esc(d.fromEmail || "")}</span>
+        <div style="font-size:.82rem;margin-top:.35rem;color:var(--moss-700);">bKash: <strong>${esc(d.senderNumber || "—")}</strong> · Amount: <strong>৳${esc(d.amount || "—")}</strong> · Txn: <strong>${esc(d.transactionId || "—")}</strong></div>
+        <div style="font-size:.75rem;color:var(--moss-500);margin-top:.2rem;">${esc(formatMessageDateTime(d.submittedAt))} · ${esc(d.status || "pending")}</div>
+      </div>
+      <div style="display:flex;gap:.45rem;flex-wrap:wrap;align-items:center;">
+        ${approved || rejected ? `<span style="font-size:.75rem;font-weight:700;">${approved ? "✅ Approved" : "❌ Rejected"}</span>` : `<button type="button" class="coffee-approve-btn" data-id="${ds.id}" style="background:var(--leaf-500);color:#fff;border:0;border-radius:7px;padding:.4rem .7rem;cursor:pointer;">Approve & Grant</button><button type="button" class="coffee-reject-btn" data-id="${ds.id}" style="background:none;border:1px solid var(--line);border-radius:7px;padding:.4rem .7rem;cursor:pointer;">Reject</button>`}
+      </div>`;
+      coffeeRequestsList.appendChild(row);
+    });
+    coffeeRequestsList.querySelectorAll(".coffee-approve-btn").forEach(btn => btn.addEventListener("click", async () => {
+      const days = prompt("How many days of access should be granted?", "7"); if (days === null) return;
+      const n = Number(days); if (!Number.isFinite(n) || n < 1 || n > 3650) { alert("Enter a valid duration between 1 and 3650 days."); return; }
+      const message = prompt("Message to the student (shown in Profile → Inbox):", "Thank you for buying the admin a coffee! Your access has been granted."); if (message === null) return;
+      btn.disabled=true;
+      try {
+        const ref = doc(db, "coffeeRequests", btn.dataset.id); const snap = await getDocs(query(collection(db,"coffeeRequests"), where("__name__", "==", btn.dataset.id)));
+        if (snap.empty) throw new Error("Request not found."); const d=snap.docs[0].data();
+        const regSnap = await getDocs(query(collection(db,"registrations"), where("emailNormalized", "==", normalizeEmail(d.fromEmail || ""))));
+        if (regSnap.empty) throw new Error("Registered student not found."); const regId=regSnap.docs[0].id;
+        await addDoc(collection(db,"manualUnlocks"), { kind:"manual", source:"coffee", fromEmail:normalizeEmail(d.fromEmail), userEmail:normalizeEmail(d.fromEmail), studentName:d.fromName||"", unlockType:"all_resources", category:null, days:n, durationMs:n*24*60*60*1000, reason:"Buy Me a Coffee", grantedAt:serverTimestamp(), grantedBy:getCurrentUserEmail() });
+        await sendMessageToUser({ toRegId:regId, toEmail:d.fromEmail, toName:d.fromName, subject:"☕ Coffee support access approved", body:message, sentBy:getCurrentUserEmail() });
+        await updateDoc(ref, { status:"approved", approvedAt:serverTimestamp(), approvedDays:n, adminMessage:message, approvedBy:getCurrentUserEmail() });
+        loadCoffeeRequests();
+      } catch(err) { alert("Could not approve request: " + err.message); btn.disabled=false; }
+    }));
+    coffeeRequestsList.querySelectorAll(".coffee-reject-btn").forEach(btn => btn.addEventListener("click", async () => {
+      if (!confirm("Reject this coffee support request?")) return;
+      try { await updateDoc(doc(db,"coffeeRequests",btn.dataset.id), {status:"rejected", rejectedAt:serverTimestamp(), rejectedBy:getCurrentUserEmail()}); loadCoffeeRequests(); } catch(err){ alert(err.message); }
+    }));
+  } catch(err) { showLoadError(coffeeRequestsList,"coffee support requests",err); }
+}
+
+// ============================================
+// LIFETIME FOLDER ACCESS CONTROL
+// ============================================
+async function loadFolderAccess() {
+  if (!folderAccessList) return;
+  folderAccessList.innerHTML = `<p style="color:var(--moss-600);">Loading…</p>`;
+  try {
+    const snap = await getDocs(query(collection(db,"folderUnlocks"), orderBy("grantedAt","desc"), limit(100)));
+    if (snap.empty) { folderAccessList.innerHTML=`<p style="color:var(--moss-600);">No lifetime folder grants yet.</p>`; return; }
+    folderAccessList.innerHTML="";
+    snap.forEach(ds=>{ const d=ds.data(); const row=document.createElement("div"); row.className="resource-row";
+      row.innerHTML=`<div><strong>${d.category === "class_slides" ? "🖥️" : d.category === "images" ? "🖼️" : "📝"} ${esc(d.courseCode || d.targetFileId || "Folder")}</strong><div style="font-size:.8rem;color:var(--moss-600);margin-top:.2rem;">${esc(d.fromName || d.fromEmail || "Student")} · ${esc(d.category || "")}</div><div style="font-size:.75rem;color:var(--moss-500);margin-top:.2rem;">${d.revoked ? "Locked by admin" : "Lifetime access active"}</div></div><button type="button" class="folder-revoke-btn" data-id="${ds.id}" ${d.revoked ? "disabled" : ""} style="background:${d.revoked ? "#eee" : "var(--terracotta-500)"};color:${d.revoked ? "#777" : "#fff"};border:0;border-radius:7px;padding:.4rem .7rem;cursor:${d.revoked ? "default" : "pointer"};">${d.revoked ? "🔒 Locked" : "🔒 Lock Again"}</button>`; folderAccessList.appendChild(row); });
+    folderAccessList.querySelectorAll(".folder-revoke-btn").forEach(btn=>btn.addEventListener("click",async()=>{ if(!confirm("Lock this folder access again? The student's lifetime access from this grant will stop.")) return; btn.disabled=true; try{await updateDoc(doc(db,"folderUnlocks",btn.dataset.id),{revoked:true,revokedAt:serverTimestamp(),revokedBy:getCurrentUserEmail()}); loadFolderAccess();}catch(err){alert(err.message);btn.disabled=false;} }));
+  } catch(err){ showLoadError(folderAccessList,"lifetime folder access",err); }
+}
+
+// ============================================
 // HELPER FUNCTIONS
 // ============================================
 function getCurrentUserEmail() {
-  const auth = getAuth();
-  return auth.currentUser?.email || "admin@system";
+  return currentAdminEmail || auth.currentUser?.email || "admin@system";
 }
 
 // ============================================
@@ -1710,6 +1734,7 @@ async function loadClassroomCodes() {
     snap.forEach(d => {
       const item = d.data();
       const isApproved = item.status === "approved";
+      const isLocked = item.status === "locked";
       const isContacted = item.status === "contacted";
       // "materials_request" = the general "Send Us Your Classroom Code" box
       // (resources.html) — a request to source course materials, NOT an
@@ -1718,6 +1743,7 @@ async function loadClassroomCodes() {
       const isMaterialsRequest = item.purpose === "materials_request";
       const statusLabel = isApproved
         ? (isMaterialsRequest ? "Reviewed" : "Approved & Unlocked")
+        : isLocked ? "Locked by Admin"
         : isContacted ? "Contacted" : "New";
       const statusStyle = isApproved
         ? "background:#E4F2E7;color:var(--leaf-600,#2D4A35);"
@@ -1741,7 +1767,9 @@ async function loadClassroomCodes() {
           </div>
         </div>
         <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
-          ${isApproved ? "" : `<button type="button" class="confirm-classroom-code-btn" data-id="${d.id}" style="background:var(--leaf-500);color:#fff;border:none;padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">${isMaterialsRequest ? "✅ Mark Reviewed" : "✅ Confirm &amp; Unlock"}</button>`}
+          ${isApproved && !isMaterialsRequest ? `<button type="button" class="lock-classroom-code-btn" data-id="${d.id}" style="background:var(--terracotta-500);color:#fff;border:none;padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">🔒 Lock Again</button>` : ""}
+          ${isLocked && !isMaterialsRequest ? `<button type="button" class="unlock-classroom-code-btn" data-id="${d.id}" style="background:var(--leaf-500);color:#fff;border:none;padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">🔓 Unlock Again</button>` : ""}
+          ${isApproved || isLocked ? "" : `<button type="button" class="confirm-classroom-code-btn" data-id="${d.id}" style="background:var(--leaf-500);color:#fff;border:none;padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">${isMaterialsRequest ? "✅ Mark Reviewed" : "✅ Confirm &amp; Unlock"}</button>`}
           ${isApproved || isContacted ? "" : `<button type="button" class="mark-contacted-btn" data-id="${d.id}" style="background:none;border:1px solid var(--line);padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">Mark Contacted</button>`}
           <button type="button" class="btn-danger delete-classroom-code-btn" data-id="${d.id}" style="padding:.35rem .7rem;font-size:.78rem;">🗑 Delete</button>
         </div>`;
@@ -1755,12 +1783,25 @@ async function loadClassroomCodes() {
       btn.addEventListener("click", async () => {
         btn.disabled = true;
         try {
-          await updateDoc(doc(db, "classroomCodes", btn.dataset.id), { status: "approved", approvedAt: serverTimestamp() });
+          await updateDoc(doc(db, "classroomCodes", btn.dataset.id), { status: "approved", approvedAt: serverTimestamp(), approvedBy:getCurrentUserEmail() });
           loadClassroomCodes();
         } catch (err) {
           console.error("[AgriAdmin] Failed to confirm classroom code:", err);
           btn.disabled = false;
         }
+      });
+    });
+    classroomCodesList.querySelectorAll(".lock-classroom-code-btn").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        if (!confirm("Lock this classroom-code access again? The related folder will become locked for this student.")) return;
+        btn.disabled = true;
+        try { await updateDoc(doc(db,"classroomCodes",btn.dataset.id),{status:"locked",lockedAt:serverTimestamp(),lockedBy:getCurrentUserEmail()}); loadClassroomCodes(); } catch(err){ console.error(err); btn.disabled=false; }
+      });
+    });
+    classroomCodesList.querySelectorAll(".unlock-classroom-code-btn").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        try { await updateDoc(doc(db,"classroomCodes",btn.dataset.id),{status:"approved",approvedAt:serverTimestamp(),approvedBy:getCurrentUserEmail()}); loadClassroomCodes(); } catch(err){ console.error(err); btn.disabled=false; }
       });
     });
     classroomCodesList.querySelectorAll(".mark-contacted-btn").forEach(btn => {

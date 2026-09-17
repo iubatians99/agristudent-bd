@@ -292,10 +292,12 @@ function renderPasswordSection(regId, reg) {
 }
 
 async function renderCredits(email, fullName) {
-  const [resourcesSnap, termsSnap, classroomSnap] = await Promise.all([
+  const [resourcesSnap, termsSnap, classroomSnap, fileUnlockSnap, folderUnlockSnap] = await Promise.all([
     getDocs(query(collection(db, "resources"), where("uploaderEmail", "==", email))),
     getDocs(query(collection(db, "terms"), where("uploaderEmail", "==", email))),
-    getDocs(query(collection(db, "classroomCodes"), where("fromEmail", "==", email))).catch(() => ({ docs: [] }))
+    getDocs(query(collection(db, "classroomCodes"), where("fromEmail", "==", email))).catch(() => ({ docs: [] })),
+    getDocs(query(collection(db, "fileUnlocks"), where("fromEmail", "==", email))).catch(() => ({ docs: [] })),
+    getDocs(query(collection(db, "folderUnlocks"), where("fromEmail", "==", email))).catch(() => ({ docs: [] }))
   ]);
 
   const items = [
@@ -305,7 +307,9 @@ async function renderCredits(email, fullName) {
 
   // Classroom-code unlocks aren't shown in "My Contributions" (they aren't
   // reviewed uploads) but they DO count toward resource access time.
-  const classroomItems = classroomSnap.docs.map(d => ({ id: d.id, kind: "classroom", status: "approved", ...d.data() }));
+  const classroomItems = classroomSnap.docs.map(d => ({ id: d.id, kind: "classroom", ...d.data() }));
+  const fileUnlockItems = fileUnlockSnap.docs.map(d => ({ id:d.id, ...d.data() }));
+  const folderUnlockItems = folderUnlockSnap.docs.map(d => ({ id:d.id, ...d.data() }));
 
   const approved = items.filter(i => i.status === "approved").length;
   const pending = items.filter(i => (i.status || "pending") === "pending").length;
@@ -317,10 +321,10 @@ async function renderCredits(email, fullName) {
   document.getElementById("stat-rejected").textContent = rejected;
 
   // Resource access is based only on actual resource files (Slides/Notes).
-  // Every upload grants 24h starting the moment it's uploaded, whether or
+  // Hand Note uploads create one 36h unlock credit per uploaded file, while Class Slides and Images create lifetime folder access, whether or
   // not it's been reviewed yet — see js/access.js for the stacking rules.
   const resourceItems = items.filter(i => i.kind === "resource" && i.resourceType === "slides_notes");
-  const access = computeResourceAccessStatus([...resourceItems, ...classroomItems]);
+  const access = computeResourceAccessStatus([...resourceItems, ...classroomItems, ...fileUnlockItems, ...folderUnlockItems]);
   renderAccessBadge({
     badgeEl: document.getElementById("access-badge"),
     detailEl: document.getElementById("access-detail")
@@ -328,7 +332,7 @@ async function renderCredits(email, fullName) {
   maybeSendAccessReminder(access, { email, name: fullName });
 
   // The scale bar shows how much of the MOST RECENTLY granted top-up is
-  // left (24h/file, 6h/code, 12h pending) — access.lastGrantMs already
+  // left (36h Hand Note credit / lifetime folder) — access.lastGrantMs already
   // accounts for which kind of grant is currently the active one.
   renderAccessScale({
     wrapEl: document.getElementById("access-scale-wrap"),
@@ -355,7 +359,9 @@ async function renderCredits(email, fullName) {
       accessAlert.innerHTML = "";
     }
   }
-  if (accessDetail && access.restricted) {
+  if (accessDetail && access.lifetimeActive) {
+    accessDetail.textContent = "♾️ Lifetime folder access active · admin can lock it again";
+  } else if (accessDetail && access.restricted) {
     accessDetail.innerHTML = `⚠️ <strong>Upload relevant files only.</strong> You are restricted until <strong>${formatDate(access.restrictedUntil)}</strong>.`;
   } else if (accessDetail && access.active) {
     accessDetail.textContent = `${access.daysRemaining} day${access.daysRemaining === 1 ? "" : "s"} remaining · expires ${formatDate(access.accessUntil)}`;
@@ -556,6 +562,16 @@ async function renderInbox(regId) {
   if (!listEl) return;
 
   inboxCache = await fetchMessagesForUser(regId);
+  const coffeeMessage = inboxCache.find(m => !m.read && String(m.subject || "").toLowerCase().includes("coffee"));
+  if (coffeeMessage) {
+    let modal = document.getElementById("profile-coffee-popup");
+    if (!modal) {
+      modal = document.createElement("div"); modal.id="profile-coffee-popup"; modal.style.cssText="position:fixed;inset:0;background:rgba(20,28,22,.58);z-index:9998;display:flex;align-items:center;justify-content:center;padding:1rem;";
+      modal.innerHTML=`<div style="width:min(480px,100%);background:#fff;border-radius:18px;padding:1.4rem;box-shadow:0 24px 70px rgba(0,0,0,.25);text-align:center;"><div style="font-size:2.2rem;">☕</div><h2 style="margin:.4rem 0 .5rem;">Coffee Support Approved</h2><p id="profile-coffee-popup-body" style="color:var(--moss-700);line-height:1.65;"></p><button id="profile-coffee-popup-close" class="btn-primary" style="margin-top:.8rem;width:100%;">Open My Inbox</button></div>`; document.body.appendChild(modal);
+      modal.querySelector("#profile-coffee-popup-close").addEventListener("click", async()=>{ modal.remove(); const item=inboxCache.find(m=>m.id===coffeeMessage.id); if(item&&!item.read){item.read=true; try{await markMessageRead(item.id);}catch{}} renderInboxBadge(); document.getElementById("inbox")?.scrollIntoView({behavior:"smooth"}); });
+    }
+    modal.querySelector("#profile-coffee-popup-body").textContent = coffeeMessage.body || "Your custom access has been approved.";
+  }
 
   if (inboxCache.length === 0) {
     listEl.innerHTML = "";

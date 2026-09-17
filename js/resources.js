@@ -688,6 +688,41 @@ if (handNotesGate && handNotesContent) {
   let hnMatchedCourse = null;
   const HN_CIRCUMFERENCE = 226.19;
 
+  async function createFileCreditUnlock({ email, name, targetFileId, sourceResourceId, category }) {
+    return addDoc(collection(db, "fileUnlocks"), {
+      kind: "file_unlock",
+      fromEmail: normalizeEmail(email),
+      fromName: name || "",
+      targetFileId,
+      sourceResourceId,
+      category: category || "hand_notes",
+      unlockedAt: serverTimestamp(),
+      submittedAt: serverTimestamp(),
+      revoked: false
+    });
+  }
+
+  window.__tryUseHandNoteCredit = async function(fileId) {
+    const session = getSession();
+    if (!session || !fileId) return false;
+    const email = normalizeEmail(session.email);
+    try {
+      const items = window.__hnAccessItems || [];
+      const creditSources = items.filter(i => i.kind === "resource" && i.resourceType === "slides_notes" && i.noteType === "hand_notes" && i.unlockMode === "file_credit" && normalizeEmail(i.uploaderEmail) === email);
+      const totalCredits = creditSources.reduce((n, i) => n + fileCount(i), 0);
+      const usedSnap = await getDocs(query(collection(db, "fileUnlocks"), where("fromEmail", "==", email)));
+      const used = usedSnap.docs.map(d => ({id:d.id, ...d.data()})).filter(x => !x.revoked);
+      if (used.some(x => x.targetFileId === fileId)) return true;
+      if (used.length >= totalCredits) return false;
+      await createFileCreditUnlock({ email, name:session.fullName, targetFileId:fileId, sourceResourceId:creditSources[0]?.id || "", category:"hand_notes" });
+      await hnRefreshAccess(email);
+      return true;
+    } catch (err) {
+      console.error("[Hand Notes] automatic credit unlock failed:", err);
+      return false;
+    }
+  };
+
   // These were being called (submit handler, classroom-unlock handler)
   // but never defined — the missing functions threw a silent
   // ReferenceError right after the button flipped to "Uploading…",
@@ -759,7 +794,8 @@ if (handNotesGate && handNotesContent) {
   const hnStepNotes = document.getElementById("hn-gate-step-notes");
   const hnStepClassroom = document.getElementById("hn-gate-step-classroom");
   const hnStepAd = document.getElementById("hn-gate-step-ad");
-  const hnAllSteps = [hnStepLogin, hnStepChoice, hnStepNotes, hnStepClassroom, hnStepAd];
+  const hnStepCoffee = document.getElementById("hn-gate-step-coffee");
+  const hnAllSteps = [hnStepLogin, hnStepChoice, hnStepNotes, hnStepClassroom, hnStepCoffee, hnStepAd];
 
   function hnShowStep(step) {
     hnAllSteps.forEach(s => s?.classList.toggle("hidden", s !== step));
@@ -802,9 +838,11 @@ if (handNotesGate && handNotesContent) {
   const hnLoginLink = document.getElementById("hn-gate-login-link");
   const hnRegisterLink = document.getElementById("hn-gate-register-link");
 
-  window.hnOpenGate = function (fileId) {
+  window.hnOpenGate = function (fileId, folderKey = null, category = "hand_notes") {
     hnGateTargetId = fileId || null;
-    const returnHash = hnGateTargetId ? `unlock=${encodeURIComponent(hnGateTargetId)}` : "unlock";
+    window.__hnGateFolderKey = folderKey || null;
+    window.__hnGateCategory = category || "hand_notes";
+    const returnHash = hnGateTargetId ? `unlock=${encodeURIComponent(hnGateTargetId)}${folderKey ? `&folder=${encodeURIComponent(folderKey)}` : ""}&category=${encodeURIComponent(window.__hnGateCategory)}` : "unlock";
     if (hnLoginLink) hnLoginLink.href = `login.html?return=${encodeURIComponent(`slides-notes.html#${returnHash}`)}`;
     if (hnRegisterLink) hnRegisterLink.href = `register.html?return=${encodeURIComponent(`slides-notes.html#${returnHash}`)}`;
     handNotesGate.classList.remove("hidden");
@@ -819,13 +857,19 @@ if (handNotesGate && handNotesContent) {
   // file id rode along in the hash, restore it so the submission they're
   // about to make only unlocks that one file.
   if (window.location.hash.startsWith("#unlock")) {
-    const [, encodedFileId] = window.location.hash.split("=");
-    window.hnOpenGate(encodedFileId ? decodeURIComponent(encodedFileId) : null);
+    const params = new URLSearchParams(window.location.hash.slice(1));
+    window.hnOpenGate(params.get("unlock"), params.get("folder"), params.get("category") || "hand_notes");
   }
 
   hnGateBackBtn?.addEventListener("click", hnExitFormOnly);
   document.getElementById("hn-choose-notes")?.addEventListener("click", () => hnShowStep(hnStepNotes));
   document.getElementById("hn-choose-classroom")?.addEventListener("click", () => hnShowStep(hnStepClassroom));
+  document.getElementById("hn-choose-coffee")?.addEventListener("click", () => {
+    const session = getSession();
+    if (!session) { hnShowStep(hnStepLogin); return; }
+    hnShowStep(hnStepCoffee);
+  });
+  document.getElementById("hn-coffee-back")?.addEventListener("click", () => hnShowStep(hnStepChoice));
   document.getElementById("hn-choose-ad")?.addEventListener("click", () => {
     const session = getSession();
     if (!session) { hnShowStep(hnStepLogin); return; }
@@ -839,12 +883,32 @@ if (handNotesGate && handNotesContent) {
   document.getElementById("hn-classroom-success-close")?.addEventListener("click", hnExitFormOnly);
   document.getElementById("hn-ad-success-close")?.addEventListener("click", hnExitFormOnly);
   // ============================================
+  // BUY ME A COFFEE — payment proof request
+  // ============================================
+  const hnCoffeeForm = document.getElementById("hn-coffee-form");
+  hnCoffeeForm?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const session = getSession(); if (!session) { hnShowStep(hnStepLogin); return; }
+    const senderNumber = document.getElementById("hn-coffee-sender")?.value.trim();
+    const transactionId = document.getElementById("hn-coffee-txid")?.value.trim();
+    const amount = Number(document.getElementById("hn-coffee-amount")?.value);
+    const errEl = document.getElementById("hn-coffee-error"); const btn=document.getElementById("hn-coffee-submit");
+    if (!senderNumber || !transactionId || !Number.isFinite(amount) || amount <= 0) { errEl.textContent="Please enter your bKash number, transaction ID and amount."; errEl.classList.remove("hidden"); return; }
+    btn.disabled=true; btn.textContent="Submitting…"; errEl.classList.add("hidden");
+    try {
+      await addDoc(collection(db,"coffeeRequests"), { fromEmail:normalizeEmail(session.email), fromName:session.fullName || "", senderNumber, transactionId, amount, targetFileId:window.__hnGateFolderKey || hnGateTargetId || "", category:window.__hnGateCategory || "hand_notes", status:"pending", submittedAt:serverTimestamp() });
+      hnShowStatus("☕ Coffee support submitted — waiting for admin review.");
+      btn.textContent="Submitted ✓";
+    } catch(err) { errEl.textContent="Could not submit your request. Please try again."; errEl.classList.remove("hidden"); btn.disabled=false; btn.textContent="☕ Submit Coffee Support"; }
+  });
+
+  // ============================================
   // UNLOCK WITH GOOGLE CLASSROOM — same duplicate-code rule as the
   // resources.html "Send Us Classroom Code" form: a code already on file
   // can't be reused. Unlike an upload, a classroom code grants NO access
   // until an admin reviews and confirms it in the admin panel (see
   // js/access.js) — then it unlocks the ONE file this gate was opened
-  // for, for 6 hours from the moment it's approved.
+  // for, for 36 hours from the moment it's approved.
   // ============================================
   const hnClassroomForm = document.getElementById("hn-classroom-form");
   const hnClassroomInput = document.getElementById("hn-classroom-code-input");
@@ -892,7 +956,11 @@ if (handNotesGate && handNotesContent) {
           normalizedCode: normalized,
           fromName: session.fullName || session.email || "",
           fromEmail: normalizeEmail(session.email || ""),
-          targetFileId: hnGateTargetId,
+          targetFileId: window.__hnGateFolderKey || hnGateTargetId,
+          category: window.__hnGateCategory || "hand_notes",
+          unlockScope: window.__hnGateFolderKey ? "folder" : "file",
+          courseCode: String(window.__hnGateFolderKey || "").replace(/^course::/, ""),
+          facultyName: window.__hnGateFolderKey && window.__hnGateFolderKey.startsWith("hand_notes::") ? String(window.__hnGateFolderKey).split("::")[2] || "" : "",
           status: "new",
           submittedAt: serverTimestamp()
         });
@@ -918,7 +986,7 @@ if (handNotesGate && handNotesContent) {
   // must keep a Google AdSense ad on screen for AD_WATCH_SECONDS; once
   // that timer completes we write a doc to the "adUnlocks" collection
   // (kind: "ad") scoped to the ONE file this gate was opened for, and
-  // js/access.js grants that file 6h of access immediately (see its
+  // js/access.js grants that file 36h of access immediately (see its
   // `item?.kind === "ad"` branch) — same targetFileId scoping as the
   // classroom-code flow, just without waiting on an admin.
   //
@@ -1054,14 +1122,17 @@ if (handNotesGate && handNotesContent) {
       return computeResourceAccessStatus([]);
     }
 
-    const [resourcesSnap, classroomSnap, adSnap] = await Promise.all([
+    const [resourcesSnap, classroomSnap, adSnap, manualSnap, fileUnlockSnap, folderUnlockSnap] = await Promise.all([
       getDocs(query(
         collection(db, "resources"),
         where("uploaderEmail", "==", normalizedEmail),
         where("resourceType", "==", "slides_notes")
       )),
       getDocs(query(collection(db, "classroomCodes"), where("fromEmail", "==", normalizedEmail))),
-      getDocs(query(collection(db, "adUnlocks"), where("fromEmail", "==", normalizedEmail)))
+      getDocs(query(collection(db, "adUnlocks"), where("fromEmail", "==", normalizedEmail))),
+      getDocs(query(collection(db, "manualUnlocks"), where("fromEmail", "==", normalizedEmail))),
+      getDocs(query(collection(db, "fileUnlocks"), where("fromEmail", "==", normalizedEmail))),
+      getDocs(query(collection(db, "folderUnlocks"), where("fromEmail", "==", normalizedEmail)))
     ]);
     const docs = resourcesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     // Classroom codes keep their real status ("new"/"contacted"/"approved")
@@ -1071,7 +1142,11 @@ if (handNotesGate && handNotesContent) {
     // Ad unlocks are already "kind: ad" in Firestore and grant access the
     // instant they're written — see js/access.js's `item?.kind === "ad"` branch.
     const adDocs = adSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-    const items = [...docs, ...classroomDocs, ...adDocs];
+    // Manual grants from the admin panel — see js/access.js's `item?.kind === "manual"` branch.
+    const manualDocs = manualSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const fileUnlockDocs = fileUnlockSnap.docs.map(d => ({ id:d.id, ...d.data() }));
+    const folderUnlockDocs = folderUnlockSnap.docs.map(d => ({ id:d.id, ...d.data() }));
+    const items = [...docs, ...classroomDocs, ...adDocs, ...manualDocs, ...fileUnlockDocs, ...folderUnlockDocs];
     window.__hnAccessItems = items;
     return computeResourceAccessStatus(items);
   }
@@ -1079,10 +1154,13 @@ if (handNotesGate && handNotesContent) {
   // Whether ONE specific file is currently unlocked for this student.
   // Returns null while the very first access check hasn't resolved yet
   // (see window.__hnAccessKnown), so callers can show a neutral
-  // "checking…" state instead of a false 🔒.
-  window.__hnIsFileUnlocked = function (fileId) {
+  // "checking…" state instead of a false 🔒. `category` — one of
+  // "hand_notes" | "class_slides" | "images" — lets a category-scoped
+  // Manual Unlock grant apply to only that section; omit it and any
+  // grant (scoped or not) counts.
+  window.__hnIsFileUnlocked = function (fileId, category) {
     if (!window.__hnAccessKnown) return null;
-    return computeFileAccessStatus(window.__hnAccessItems || [], fileId).active;
+    return computeFileAccessStatus(window.__hnAccessItems || [], fileId, Date.now(), category).active;
   };
 
   const unlockStrip = document.getElementById("resource-unlock-strip");
@@ -1196,7 +1274,7 @@ if (handNotesGate && handNotesContent) {
     content.innerHTML = `
       <strong>🔒 NO FILES UNLOCKED YET</strong>
       <div class="file-info">Browse folders freely — for Hand Notes, click 🔒 Unlock on any file to unlock just that one. For Class Lecture Slides, unlocking any one slide unlocks that whole course's folder.</div>
-      <div class="file-info">Uploading a file gives that file <strong>24 hours</strong> of access right away. A classroom code gives that file <strong>6 hours</strong> — but only once an admin has reviewed and confirmed it.</div>
+      <div class="file-info">Uploading a file gives that file <strong>36 hours</strong> of access right away. A classroom code gives that file <strong>36 hours</strong> — but only once an admin has reviewed and confirmed it.</div>
       ${pendingClassroomCount > 0 ? `<div class="file-info">⏳ ${pendingClassroomCount} classroom code${pendingClassroomCount === 1 ? "" : "s"} awaiting admin review.</div>` : ""}
     `;
     loadThreeCardLayoutIfAvailable();
@@ -1410,21 +1488,47 @@ if (handNotesGate && handNotesContent) {
           courseCode, courseName: finalCourseName, facultyName,
           resourceType: "slides_notes", uploaderEmail, fileUrls, fileType: currentFileType, noteType: hnNoteType,
           targetFileId: hnGateTargetId,
-          status: "pending", submittedAt: serverTimestamp(), uploadedAt: Date.now()
+          status: "pending", submittedAt: serverTimestamp(), uploadedAt: Date.now(),
+          unlockMode: hnNoteType === "hand_notes" ? "file_credit" : "folder_lifetime"
         };
         const hnUploaderStudentId = await lookupStudentIdByEmail(uploaderEmail);
         if (hnUploaderStudentId) hnDocData.uploaderStudentId = hnUploaderStudentId;
-        await addDoc(collection(db, "resources"), hnDocData);
+        const resourceRef = await addDoc(collection(db, "resources"), hnDocData);
+        const uploadedFileIds = fileUrls.map((_, i) => `hand_notes::${courseCode}::${facultyName}::${resourceRef.id}::${i}`);
+        const isHandNotes = hnNoteType === "hand_notes";
+        const category = isHandNotes ? "hand_notes" : (currentFileType === "image" ? "images" : "class_slides");
+        if (isHandNotes) {
+          // One upload = one unlock credit. If this upload was started from a
+          // locked file, that exact file consumes the first credit; otherwise
+          // the first newly submitted file is the automatic unlocked item.
+          const firstTarget = hnGateTargetId || uploadedFileIds[0];
+          await createFileCreditUnlock({ email:uploaderEmail, name:getSession()?.fullName, targetFileId:firstTarget, sourceResourceId:resourceRef.id, category });
+        } else {
+          const folderKey = `course::${courseCode}`;
+          await addDoc(collection(db, "folderUnlocks"), {
+            kind:"folder_lifetime", fromEmail:uploaderEmail, fromName:getSession()?.fullName || "",
+            targetFileId:folderKey, category, courseCode, sourceResourceId:resourceRef.id,
+            grantedAt:serverTimestamp(), submittedAt:serverTimestamp(), revoked:false,
+            reason:"Upload unlock"
+          });
+        }
 
-        hnShowStatus("✅ Submitted! Unlocking Hand Notes…");
+        hnShowStatus("✅ Submitted! Unlocking…");
         setTimeout(() => {
           hnRefreshAccess(uploaderEmail);
           hnForm.classList.add("hidden");
           const successBoxEl = document.getElementById("hn-notes-success");
           const titleEl = document.getElementById("hn-notes-success-title");
           const detailEl = document.getElementById("hn-notes-success-detail");
-          if (titleEl) titleEl.textContent = "You've got 24 hours of access to this file";
-          if (detailEl) detailEl.textContent = "Access to this file started the moment you uploaded — no need to wait for admin review. Your file is still pending review in the background, and unlocking it doesn't unlock any other file.";
+          if (titleEl) titleEl.textContent = hnNoteType === "hand_notes" ? "🔓 36-hour access unlocked" : "♾️ Lifetime folder access unlocked";
+          if (detailEl) detailEl.textContent = hnNoteType === "hand_notes"
+            ? (files.length > 1 ? `Your first unlock is active for 36 hours. You have ${files.length - 1} additional unlock credit${files.length - 1 === 1 ? "" : "s"}. Click any locked Hand Note to use another credit.` : "This Hand Note unlock is active for 36 hours. Click another locked Hand Note anytime to use another upload credit.")
+            : "Your full Class Slides / Images course folder is unlocked for lifetime access. An admin can lock it again if necessary.";
+          if (successBoxEl && hnNoteType === "hand_notes" && files.length > 1) {
+            let credits = successBoxEl.querySelector("#hn-extra-credit-list");
+            if (!credits) { credits = document.createElement("div"); credits.id="hn-extra-credit-list"; credits.style.cssText="margin-top:1rem;display:grid;gap:.5rem;"; successBoxEl.appendChild(credits); }
+            credits.innerHTML = files.slice(1).map((f, i) => `<div style="display:flex;justify-content:space-between;align-items:center;gap:.6rem;padding:.55rem .7rem;border:1px solid var(--line);border-radius:9px;background:#fff;"><span style="font-size:.82rem;">Unlock credit ${i+2}</span><span style="font-size:.75rem;color:var(--moss-600);">Ready — click a locked file to use</span></div>`).join("");
+          }
           successBoxEl?.classList.remove("hidden");
         }, 700);
       } catch (err) {
@@ -1640,11 +1744,11 @@ if (handnotesList || slidesList || imageGrid) {
         // When lockScope is "folder" (Class Lecture Slides), every file
         // under the same course code shares one key instead, so unlocking
         // any one of them unlocks the whole course folder at once.
-        const fileId = lockScope === "folder" ? `course::${state.courseCode}` : `${item.id}::${idx}`;
-        const unlocked = checking ? false : (window.__hnIsFileUnlocked && window.__hnIsFileUnlocked(fileId));
+        const fileId = lockScope === "folder" ? `course::${state.courseCode}` : `hand_notes::${state.courseCode}::${state.faculty || ""}::${item.id}::${idx}`;
+        const unlocked = checking ? false : (window.__hnIsFileUnlocked && window.__hnIsFileUnlocked(fileId, opts.category));
         const locked = !checking && !unlocked;
         fileRows.push(`
-          <div class="file-item${locked ? " file-locked" : ""}${checking ? " file-checking" : ""}" ${locked ? `data-locked-file="1" data-file-id="${esc(fileId)}"` : ""}>
+          <div class="file-item${locked ? " file-locked" : ""}${checking ? " file-checking" : ""}" ${locked ? `data-locked-file="1" data-file-id="${esc(fileId)}" data-folder-key="${esc(lockScope === "folder" ? `course::${state.courseCode}` : `hand_notes::${state.courseCode}::${state.faculty || ""}`)}" data-category="${esc(opts.category || "hand_notes")}"` : ""}>
             <span class="file-status">${docIcon(item)}</span>
             <span class="file-name">${esc(fileDisplayName(file))} <span class="note-type-tag">${esc(noteTypeLabel(item))}</span></span>
             ${checking
@@ -1672,7 +1776,20 @@ if (handnotesList || slidesList || imageGrid) {
     });
 
     container.querySelectorAll("[data-locked-file]").forEach(el => {
-      el.addEventListener("click", () => window.hnOpenGate && window.hnOpenGate(el.dataset.fileId));
+      el.addEventListener("click", async () => {
+        const category = el.dataset.category || "hand_notes";
+        if (category === "hand_notes" && window.__tryUseHandNoteCredit) {
+          el.classList.add("unlocking-now");
+          const used = await window.__tryUseHandNoteCredit(el.dataset.fileId);
+          if (used) {
+            el.innerHTML = `<span class="file-status">✨</span><span class="file-name">Unlocked successfully</span><span class="file-action file-lock-badge unlock-success-badge">✓ Unlocked</span>`;
+            setTimeout(() => hnRefreshAccess(normalizeEmail(getSession()?.email || "")), 500);
+            return;
+          }
+          el.classList.remove("unlocking-now");
+        }
+        window.hnOpenGate && window.hnOpenGate(el.dataset.fileId, el.dataset.folderKey, category);
+      });
     });
   }
 
@@ -1681,7 +1798,7 @@ if (handnotesList || slidesList || imageGrid) {
   // Each card keeps its OWN drill-down state, its own search box and its
   // own "View All" link, but they share renderPdfFolder above.
   // ============================================
-  function createDocCard({ listEl, searchEl, countId, viewAllId, getItems, lockScope }) {
+  function createDocCard({ listEl, searchEl, countId, viewAllId, getItems, lockScope, category }) {
     const state = { courseCode: null, faculty: null };
     let searchWired = false;
     let loadedOnce = false;
@@ -1701,6 +1818,7 @@ if (handnotesList || slidesList || imageGrid) {
       renderPdfFolder(listEl, items, state, {
         limitTopLevel: 6,
         lockScope,
+        category,
         onTopLevelCount: (total, shown) => {
           const link = document.getElementById(viewAllId);
           if (link) link.style.display = total > shown ? "block" : "none";
@@ -1747,14 +1865,16 @@ if (handnotesList || slidesList || imageGrid) {
   const handNotesCard = createDocCard({
     listEl: handnotesList, searchEl: handnotesSearch,
     countId: "handnotes-count", viewAllId: "handnotes-view-all",
-    getItems: () => allHandNotes
+    getItems: () => allHandNotes,
+    category: "hand_notes"
   });
 
   const slidesCard = createDocCard({
     listEl: slidesList, searchEl: slidesSearch,
     countId: "slides-count", viewAllId: "slides-view-all",
     getItems: () => allSlides,
-    lockScope: "folder"
+    lockScope: "folder",
+    category: "class_slides"
   });
 
   let imageSearchWired = false;
@@ -1769,11 +1889,12 @@ if (handnotesList || slidesList || imageGrid) {
   function imageTileHtml(img, checking) {
     const file = img.fileUrls[0];
     const viewHref = buildViewHref(file, img);
-    const unlocked = checking ? false : (window.__hnIsFileUnlocked && window.__hnIsFileUnlocked(img.id));
+    const imageFileId = `course::${img.courseCode}`;
+    const unlocked = checking ? false : (window.__hnIsFileUnlocked && window.__hnIsFileUnlocked(imageFileId, "images"));
     const locked = !checking && !unlocked;
     const tag = locked ? "div" : "a";
     return `
-    <${tag} class="image-item${locked ? " image-locked" : ""}${checking ? " image-checking" : ""}"${locked ? ` data-locked-image="1" data-file-id="${esc(img.id)}"` : ` href="${viewHref}"`} style="text-decoration:none;">
+    <${tag} class="image-item${locked ? " image-locked" : ""}${checking ? " image-checking" : ""}"${locked ? ` data-locked-image="1" data-file-id="${esc(`course::${img.courseCode}`)}" data-folder-key="${esc(`course::${img.courseCode}`)}" data-category="images"` : ` href="${viewHref}"`} style="text-decoration:none;">
       <div class="image-item-thumb">
         <img src="${encodeURI(file.url)}" alt="${esc(file.title || img.courseName)}" loading="lazy">
         <div class="status-badge">✓</div>
@@ -1790,7 +1911,7 @@ if (handnotesList || slidesList || imageGrid) {
 
   function wireImageLockClicks(container) {
     container.querySelectorAll("[data-locked-image]").forEach(el => {
-      el.addEventListener("click", () => window.hnOpenGate && window.hnOpenGate(el.dataset.fileId));
+      el.addEventListener("click", () => window.hnOpenGate && window.hnOpenGate(el.dataset.fileId, el.dataset.folderKey, el.dataset.category));
     });
   }
 
@@ -1960,6 +2081,7 @@ if (handnotesList || slidesList || imageGrid) {
     const modalState = { courseCode: null, faculty: null };
     let source = () => [];
     let currentLockScope = "file";
+    let currentCategory = "hand_notes";
 
     function apply() {
       const term = (searchInput?.value || "").trim().toLowerCase();
@@ -1969,19 +2091,20 @@ if (handnotesList || slidesList || imageGrid) {
             (i.courseName || "").toLowerCase().includes(term)
           )
         : source();
-      renderPdfFolder(listEl, items, modalState, { lockScope: currentLockScope });
+      renderPdfFolder(listEl, items, modalState, { lockScope: currentLockScope, category: currentCategory });
     }
 
     [
-      { btnId: "handnotes-view-all", heading: "📝 All Hand Notes", getItems: () => allHandNotes, lockScope: "file" },
-      { btnId: "slides-view-all", heading: "🖥️ All Class Lecture Slides", getItems: () => allSlides, lockScope: "folder" }
-    ].forEach(({ btnId, heading, getItems, lockScope }) => {
+      { btnId: "handnotes-view-all", heading: "📝 All Hand Notes", getItems: () => allHandNotes, lockScope: "file", category: "hand_notes" },
+      { btnId: "slides-view-all", heading: "🖥️ All Class Lecture Slides", getItems: () => allSlides, lockScope: "folder", category: "class_slides" }
+    ].forEach(({ btnId, heading, getItems, lockScope, category }) => {
       const btn = document.getElementById(btnId);
       if (!btn) return;
       btn.addEventListener("click", (e) => {
         e.preventDefault();
         source = getItems;
         currentLockScope = lockScope;
+        currentCategory = category;
         if (titleEl) titleEl.textContent = heading;
         if (searchInput) searchInput.value = "";
         modalState.courseCode = null;
