@@ -811,23 +811,6 @@ function getCurrentUserEmail() {
   return auth.currentUser?.email || "admin@system";
 }
 
-function fmtAdminDate(timestamp) {
-  if (!timestamp) return "N/A";
-  const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit"
-  }).format(date);
-}
-
-function esc(str) {
-  const div = document.createElement("div");
-  div.textContent = str;
-  return div.innerHTML;
-}
-
 // ============================================
 // FILE-TYPE CATEGORIZATION — used to split the admin resources
 // list into separate PDF / Images / Other sections.

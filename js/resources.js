@@ -1178,8 +1178,8 @@ if (handNotesGate && handNotesContent) {
     if (unlockedFileCount > 0) {
       accessStatusBar.classList.add("approved");
       content.innerHTML = `
-        <strong>🔓 ${unlockedFileCount} FILE${unlockedFileCount === 1 ? "" : "S"} UNLOCKED</strong>
-        <div class="file-info">Each file you unlock (by uploading, or a classroom code once an admin confirms it) stays open on its own — it doesn't unlock any other file.</div>
+        <strong>🔓 ${unlockedFileCount} UNLOCK${unlockedFileCount === 1 ? "" : "S"} ACTIVE</strong>
+        <div class="file-info">Each Hand Note you unlock (by uploading, or a classroom code once an admin confirms it) stays open on its own. Class Lecture Slides work by course instead — unlocking any one slide unlocks every slide in that course's folder.</div>
         ${pendingClassroomCount > 0 ? `<div class="file-info">⏳ ${pendingClassroomCount} classroom code${pendingClassroomCount === 1 ? "" : "s"} awaiting admin review.</div>` : ""}
         <div class="file-info">Files counted: <strong>${count}</strong></div>
       `;
@@ -1195,7 +1195,7 @@ if (handNotesGate && handNotesContent) {
     accessStatusBar.classList.add("pending");
     content.innerHTML = `
       <strong>🔒 NO FILES UNLOCKED YET</strong>
-      <div class="file-info">Browse folders freely — click 🔒 Unlock on any file to unlock just that one.</div>
+      <div class="file-info">Browse folders freely — for Hand Notes, click 🔒 Unlock on any file to unlock just that one. For Class Lecture Slides, unlocking any one slide unlocks that whole course's folder.</div>
       <div class="file-info">Uploading a file gives that file <strong>24 hours</strong> of access right away. A classroom code gives that file <strong>6 hours</strong> — but only once an admin has reviewed and confirmed it.</div>
       ${pendingClassroomCount > 0 ? `<div class="file-info">⏳ ${pendingClassroomCount} classroom code${pendingClassroomCount === 1 ? "" : "s"} awaiting admin review.</div>` : ""}
     `;
@@ -1528,6 +1528,17 @@ if (handnotesList || slidesList || imageGrid) {
   // (used for the compact card preview); `opts.onTopLevelCount(total, shown)`
   // reports the true vs. displayed folder count so callers can show/hide a
   // "View All" link.
+  //
+  // `opts.lockScope` controls how a locked file's unlock-check key is
+  // built at level 3:
+  //   "file"   (default, used by Hand Notes) — every file gets its own
+  //            id (`${item.id}::${idx}`), so unlocking one file never
+  //            unlocks any other file in that course.
+  //   "folder" (used by Class Lecture Slides) — every file in the SAME
+  //            course code shares one key (`course::<courseCode>`), so
+  //            unlocking (uploading/classroom code/ad) against ANY slide
+  //            in that course unlocks every slide in that course's
+  //            folder at once, and stays unlocked as one unit.
   // ============================================
   function renderPdfFolder(container, items, state, opts = {}) {
     if (!container) return;
@@ -1620,12 +1631,16 @@ if (handnotesList || slidesList || imageGrid) {
     // locked just because the check hasn't finished yet.
     const checking = !window.__hnAccessKnown;
     const fileRows = [];
+    const lockScope = opts.lockScope || "file";
     facultyItems.forEach(item => {
       (item.fileUrls || []).forEach((file, idx) => {
-        // Each file gets its OWN id (a submission doc can bundle several
-        // files, so the doc id alone isn't unique per file) and is
+        // Each file normally gets its OWN id (a submission doc can bundle
+        // several files, so the doc id alone isn't unique per file) and is
         // unlocked independently of every other file — see hnOpenGate.
-        const fileId = `${item.id}::${idx}`;
+        // When lockScope is "folder" (Class Lecture Slides), every file
+        // under the same course code shares one key instead, so unlocking
+        // any one of them unlocks the whole course folder at once.
+        const fileId = lockScope === "folder" ? `course::${state.courseCode}` : `${item.id}::${idx}`;
         const unlocked = checking ? false : (window.__hnIsFileUnlocked && window.__hnIsFileUnlocked(fileId));
         const locked = !checking && !unlocked;
         fileRows.push(`
@@ -1666,7 +1681,7 @@ if (handnotesList || slidesList || imageGrid) {
   // Each card keeps its OWN drill-down state, its own search box and its
   // own "View All" link, but they share renderPdfFolder above.
   // ============================================
-  function createDocCard({ listEl, searchEl, countId, viewAllId, getItems }) {
+  function createDocCard({ listEl, searchEl, countId, viewAllId, getItems, lockScope }) {
     const state = { courseCode: null, faculty: null };
     let searchWired = false;
     let loadedOnce = false;
@@ -1685,6 +1700,7 @@ if (handnotesList || slidesList || imageGrid) {
       if (resetNav) { state.courseCode = null; state.faculty = null; }
       renderPdfFolder(listEl, items, state, {
         limitTopLevel: 6,
+        lockScope,
         onTopLevelCount: (total, shown) => {
           const link = document.getElementById(viewAllId);
           if (link) link.style.display = total > shown ? "block" : "none";
@@ -1737,10 +1753,113 @@ if (handnotesList || slidesList || imageGrid) {
   const slidesCard = createDocCard({
     listEl: slidesList, searchEl: slidesSearch,
     countId: "slides-count", viewAllId: "slides-view-all",
-    getItems: () => allSlides
+    getItems: () => allSlides,
+    lockScope: "folder"
   });
 
   let imageSearchWired = false;
+  let imageCardLoadedOnce = false;
+  const imageCardState = { courseCode: null };
+
+  // A single image tile's markup — one entry per image SUBMISSION (which
+  // may itself bundle several photos uploaded together as one "folder";
+  // only the first is used as the thumbnail, same as before). Shared by
+  // the compact card, its "View All" modal, and the search results in
+  // both, so lock/unlock behaviour never drifts between them.
+  function imageTileHtml(img, checking) {
+    const file = img.fileUrls[0];
+    const viewHref = buildViewHref(file, img);
+    const unlocked = checking ? false : (window.__hnIsFileUnlocked && window.__hnIsFileUnlocked(img.id));
+    const locked = !checking && !unlocked;
+    const tag = locked ? "div" : "a";
+    return `
+    <${tag} class="image-item${locked ? " image-locked" : ""}${checking ? " image-checking" : ""}"${locked ? ` data-locked-image="1" data-file-id="${esc(img.id)}"` : ` href="${viewHref}"`} style="text-decoration:none;">
+      <div class="image-item-thumb">
+        <img src="${encodeURI(file.url)}" alt="${esc(file.title || img.courseName)}" loading="lazy">
+        <div class="status-badge">✓</div>
+        <div class="view-overlay">
+          <button type="button">${checking ? "⏳" : locked ? "🔒" : "View"}</button>
+        </div>
+      </div>
+      <div class="image-item-caption">
+        <span class="image-item-code">${esc(img.courseCode)}</span>
+        ${file.title ? `<span class="image-item-title">${esc(file.title)}</span>` : ""}
+      </div>
+    </${tag}>`;
+  }
+
+  function wireImageLockClicks(container) {
+    container.querySelectorAll("[data-locked-image]").forEach(el => {
+      el.addEventListener("click", () => window.hnOpenGate && window.hnOpenGate(el.dataset.fileId));
+    });
+  }
+
+  // ============================================
+  // IMAGE FOLDER BROWSER
+  // Mirrors renderPdfFolder's course-code drill-down: Level 1 is one
+  // folder per course code, Level 2 is every image submitted under that
+  // course. Because every image (and hand note, and slide) is grouped by
+  // its `courseCode` field, the FIRST image uploaded for a course (e.g.
+  // AGR 351) creates that folder, and every image uploaded after it for
+  // the same course code lands in that same "AGR 351" folder automatically
+  // — no manual filing needed.
+  // ============================================
+  function renderImageFolder(container, items, state, opts = {}) {
+    if (!container) return;
+    if (items.length === 0) {
+      container.innerHTML = `<p style="color:var(--moss-600);font-size:.9rem;text-align:center;padding:1rem;grid-column:1/-1;">No images yet.</p>`;
+      if (opts.onTopLevelCount) opts.onTopLevelCount(0, 0);
+      return;
+    }
+
+    // LEVEL 1 — course code folders
+    if (!state.courseCode) {
+      const courses = groupDocs(items, i => i.courseCode || "Unknown");
+      let rows = [...courses.entries()].map(([code, docs]) => ({
+        code, name: docs[0].courseName || "",
+        imageCount: docs.reduce((n, d) => n + (d.fileUrls || []).length, 0)
+      })).sort((a, b) => a.code.localeCompare(b.code));
+
+      const total = rows.length;
+      if (opts.limitTopLevel) rows = rows.slice(0, opts.limitTopLevel);
+      if (opts.onTopLevelCount) opts.onTopLevelCount(total, rows.length);
+
+      container.innerHTML = rows.map(r => `
+        <div class="file-item folder-row" data-course="${esc(r.code)}" style="grid-column:1/-1;">
+          <span class="file-status">📁</span>
+          <span class="file-name">${esc(r.code)}${r.name ? `: ${esc(r.name)}` : ""}</span>
+          <span class="folder-meta">${r.imageCount} image${r.imageCount !== 1 ? "s" : ""} <span class="folder-chevron">›</span></span>
+        </div>`).join("");
+
+      container.querySelectorAll("[data-course]").forEach(el => {
+        el.addEventListener("click", () => {
+          state.courseCode = el.dataset.course;
+          renderImageFolder(container, items, state, opts);
+        });
+      });
+      return;
+    }
+
+    // LEVEL 2 — every image submitted under this course code
+    const courseItems = items.filter(i => (i.courseCode || "Unknown") === state.courseCode);
+    const courseName = courseItems[0]?.courseName || "";
+    const checking = !window.__hnAccessKnown;
+
+    container.innerHTML =
+      `<div class="file-item folder-row folder-back" data-back="1" style="grid-column:1/-1;">
+        <span class="file-status">←</span>
+        <span class="file-name">${esc(state.courseCode)}${courseName ? `: ${esc(courseName)}` : ""}</span>
+      </div>` +
+      (courseItems.length
+        ? courseItems.map(img => imageTileHtml(img, checking)).join("")
+        : `<p style="color:var(--moss-600);font-size:.9rem;text-align:center;padding:1rem;grid-column:1/-1;">No images here.</p>`);
+
+    container.querySelector("[data-back]").addEventListener("click", () => {
+      state.courseCode = null;
+      renderImageFolder(container, items, state, opts);
+    });
+    wireImageLockClicks(container);
+  }
 
   function renderImageCard() {
     const imageCount = allImages.length;
@@ -1758,7 +1877,6 @@ if (handnotesList || slidesList || imageGrid) {
     }
 
     if (imageSearch) imageSearch.style.display = "block";
-    const displayCount = Math.min(6, imageCount);
 
     // BUG FIX #1: this used to re-attach a brand-new "input" listener on
     // EVERY call — and this function reruns on every background access
@@ -1770,58 +1888,44 @@ if (handnotesList || slidesList || imageGrid) {
     // fired, their search results got silently replaced. Both are fixed
     // by re-applying whatever's currently in the search box on every
     // call, and wiring the listener exactly once.
-    const applyFilter = () => {
+    //
+    // A search term bypasses the folder browser entirely (flat matches,
+    // capped to a compact preview); an empty box shows the normal
+    // course-folder drill-down, reset to the top level only on the very
+    // first render so later background refreshes don't kick the student
+    // back out of a folder they're browsing.
+    const applyFilter = (resetNav) => {
+      if (resetNav) imageCardState.courseCode = null;
       const term = (imageSearch?.value || "").trim().toLowerCase();
-      const filtered = term
-        ? allImages.filter(img =>
-            (img.courseName || "").toLowerCase().includes(term) ||
-            (img.courseCode || "").toLowerCase().includes(term)
-          )
-        : allImages.slice(0, displayCount);
-      renderImageGrid(filtered);
+      if (term) {
+        const filtered = allImages.filter(img =>
+          (img.courseName || "").toLowerCase().includes(term) ||
+          (img.courseCode || "").toLowerCase().includes(term)
+        ).slice(0, 6);
+        const checking = !window.__hnAccessKnown;
+        imageGrid.innerHTML = filtered.length
+          ? filtered.map(img => imageTileHtml(img, checking)).join("")
+          : `<p style="color:var(--moss-600);font-size:.9rem;text-align:center;padding:1rem;grid-column:1/-1;">No matching images found.</p>`;
+        wireImageLockClicks(imageGrid);
+        if (viewAllLink) viewAllLink.style.display = "block";
+      } else {
+        renderImageFolder(imageGrid, allImages, imageCardState, {
+          limitTopLevel: 6,
+          onTopLevelCount: (total, shown) => {
+            if (viewAllLink) viewAllLink.style.display = total > shown ? "block" : "none";
+          }
+        });
+      }
     };
 
-    applyFilter();
-    if (viewAllLink) viewAllLink.style.display = imageCount > displayCount ? "block" : "none";
+    const resetNav = !imageCardLoadedOnce;
+    imageCardLoadedOnce = true;
+    applyFilter(resetNav);
 
     if (imageSearch && !imageSearchWired) {
       imageSearchWired = true;
-      imageSearch.addEventListener("input", applyFilter);
+      imageSearch.addEventListener("input", () => applyFilter(true));
     }
-  }
-
-  function renderImageGrid(images) {
-    if (images.length === 0) {
-      imageGrid.innerHTML = `<p style="color:var(--moss-600);font-size:.9rem;text-align:center;padding:1rem;grid-column:1/-1;">No matching images found.</p>`;
-      return;
-    }
-
-    const checking = !window.__hnAccessKnown;
-    imageGrid.innerHTML = images.map(img => {
-      const file = img.fileUrls[0];
-      const viewHref = buildViewHref(file, img);
-      const unlocked = checking ? false : (window.__hnIsFileUnlocked && window.__hnIsFileUnlocked(img.id));
-      const locked = !checking && !unlocked;
-      const tag = locked ? "div" : "a";
-      return `
-      <${tag} class="image-item${locked ? " image-locked" : ""}${checking ? " image-checking" : ""}"${locked ? ` data-locked-image="1" data-file-id="${esc(img.id)}"` : ` href="${viewHref}"`} style="text-decoration:none;">
-        <div class="image-item-thumb">
-          <img src="${encodeURI(file.url)}" alt="${esc(file.title || img.courseName)}" loading="lazy">
-          <div class="status-badge">✓</div>
-          <div class="view-overlay">
-            <button type="button">${checking ? "⏳" : locked ? "🔒" : "View"}</button>
-          </div>
-        </div>
-        <div class="image-item-caption">
-          <span class="image-item-code">${esc(img.courseCode)}</span>
-          ${file.title ? `<span class="image-item-title">${esc(file.title)}</span>` : ""}
-        </div>
-      </${tag}>`;
-    }).join("");
-
-    imageGrid.querySelectorAll("[data-locked-image]").forEach(el => {
-      el.addEventListener("click", () => window.hnOpenGate && window.hnOpenGate(el.dataset.fileId));
-    });
   }
 
   window.__onResourceAccessGranted = window.__onResourceAccessGranted || [];
@@ -1838,44 +1942,6 @@ if (handnotesList || slidesList || imageGrid) {
   // The small cards only ever preview up to 5/6 items. "View All" opens a
   // modal with the complete list — with a course-code search box.
   // ============================================
-  function wireViewAllModal({ openBtnId, modalId, closeBtnId, searchId, facultyId, getItems, renderList, matchFn }) {
-    const openBtn = document.getElementById(openBtnId);
-    const modal = document.getElementById(modalId);
-    if (!openBtn || !modal) return;
-    const closeBtn = closeBtnId ? document.getElementById(closeBtnId) : null;
-    const searchInput = searchId ? document.getElementById(searchId) : null;
-    const facultySelect = facultyId ? document.getElementById(facultyId) : null;
-
-    function apply() {
-      const term = (searchInput?.value || "").trim();
-      let items = getItems();
-      if (term) items = items.filter(i => matchFn(i, term));
-
-      if (facultySelect) {
-        const faculties = [...new Set(items.map(i => i.facultyName).filter(Boolean))].sort();
-        const current = facultySelect.value;
-        facultySelect.innerHTML = `<option value="">All Faculties</option>` +
-          faculties.map(f => `<option value="${esc(f)}">${esc(f)}</option>`).join("");
-        facultySelect.value = faculties.includes(current) ? current : "";
-        if (facultySelect.value) items = items.filter(i => i.facultyName === facultySelect.value);
-      }
-
-      renderList(items);
-    }
-
-    openBtn.addEventListener("click", (e) => {
-      e.preventDefault();
-      if (searchInput) searchInput.value = "";
-      if (facultySelect) facultySelect.value = "";
-      modal.classList.remove("hidden");
-      apply();
-    });
-    if (closeBtn) closeBtn.addEventListener("click", () => modal.classList.add("hidden"));
-    modal.addEventListener("click", (e) => { if (e.target === modal) modal.classList.add("hidden"); });
-    if (searchInput) searchInput.addEventListener("input", apply);
-    if (facultySelect) facultySelect.addEventListener("change", apply);
-  }
-
   // VIEW ALL — documents: one shared modal serving BOTH folder cards. The
   // card that opened it decides the heading and which list is shown; the
   // same folder browser as the compact card, just unlimited. Search filters
@@ -1893,6 +1959,7 @@ if (handnotesList || slidesList || imageGrid) {
     const titleEl = document.getElementById("pdf-viewall-title");
     const modalState = { courseCode: null, faculty: null };
     let source = () => [];
+    let currentLockScope = "file";
 
     function apply() {
       const term = (searchInput?.value || "").trim().toLowerCase();
@@ -1902,18 +1969,19 @@ if (handnotesList || slidesList || imageGrid) {
             (i.courseName || "").toLowerCase().includes(term)
           )
         : source();
-      renderPdfFolder(listEl, items, modalState);
+      renderPdfFolder(listEl, items, modalState, { lockScope: currentLockScope });
     }
 
     [
-      { btnId: "handnotes-view-all", heading: "📝 All Hand Notes", getItems: () => allHandNotes },
-      { btnId: "slides-view-all", heading: "🖥️ All Class Lecture Slides", getItems: () => allSlides }
-    ].forEach(({ btnId, heading, getItems }) => {
+      { btnId: "handnotes-view-all", heading: "📝 All Hand Notes", getItems: () => allHandNotes, lockScope: "file" },
+      { btnId: "slides-view-all", heading: "🖥️ All Class Lecture Slides", getItems: () => allSlides, lockScope: "folder" }
+    ].forEach(({ btnId, heading, getItems, lockScope }) => {
       const btn = document.getElementById(btnId);
       if (!btn) return;
       btn.addEventListener("click", (e) => {
         e.preventDefault();
         source = getItems;
+        currentLockScope = lockScope;
         if (titleEl) titleEl.textContent = heading;
         if (searchInput) searchInput.value = "";
         modalState.courseCode = null;
@@ -1932,42 +2000,47 @@ if (handnotesList || slidesList || imageGrid) {
     });
   })();
 
-  wireViewAllModal({
-    openBtnId: "image-view-all", modalId: "image-viewall-modal", closeBtnId: "image-viewall-close",
-    searchId: "image-viewall-search", facultyId: null,
-    getItems: () => allImages,
-    matchFn: (i, term) => (i.courseCode || "").toLowerCase().includes(term.toLowerCase()) || (i.courseName || "").toLowerCase().includes(term.toLowerCase()),
-    renderList: (items) => {
-      const grid = document.getElementById("image-viewall-grid");
-      if (!items.length) {
-        grid.innerHTML = `<p style="color:var(--moss-600);font-size:.9rem;text-align:center;padding:1rem;grid-column:1/-1;">No matching images found.</p>`;
-        return;
+  // VIEW ALL — images: same course-folder browser as the compact card,
+  // just unlimited. A search term flattens to matches across every
+  // course (as before); clearing it goes back to folder browsing, reset
+  // to the top level.
+  (function wireImageViewAllModal() {
+    const openBtn = document.getElementById("image-view-all");
+    const modal = document.getElementById("image-viewall-modal");
+    if (!openBtn || !modal) return;
+    const closeBtn = document.getElementById("image-viewall-close");
+    const searchInput = document.getElementById("image-viewall-search");
+    const grid = document.getElementById("image-viewall-grid");
+    const modalState = { courseCode: null };
+
+    function apply(resetNav) {
+      if (resetNav) modalState.courseCode = null;
+      const term = (searchInput?.value || "").trim().toLowerCase();
+      if (term) {
+        const filtered = allImages.filter(img =>
+          (img.courseCode || "").toLowerCase().includes(term) ||
+          (img.courseName || "").toLowerCase().includes(term)
+        );
+        const checking = !window.__hnAccessKnown;
+        grid.innerHTML = filtered.length
+          ? filtered.map(img => imageTileHtml(img, checking)).join("")
+          : `<p style="color:var(--moss-600);font-size:.9rem;text-align:center;padding:1rem;grid-column:1/-1;">No matching images found.</p>`;
+        wireImageLockClicks(grid);
+      } else {
+        renderImageFolder(grid, allImages, modalState, {});
       }
-      const checking = !window.__hnAccessKnown;
-      grid.innerHTML = items.map(img => {
-        const file = img.fileUrls[0];
-        const viewHref = buildViewHref(file, img);
-        const unlocked = checking ? false : (window.__hnIsFileUnlocked && window.__hnIsFileUnlocked(img.id));
-        const locked = !checking && !unlocked;
-        const tag = locked ? "div" : "a";
-        return `
-        <${tag} class="image-item${locked ? " image-locked" : ""}${checking ? " image-checking" : ""}"${locked ? ` data-locked-image="1" data-file-id="${esc(img.id)}"` : ` href="${viewHref}"`} style="text-decoration:none;">
-          <div class="image-item-thumb">
-            <img src="${encodeURI(file.url)}" alt="${esc(file.title || img.courseName)}" loading="lazy">
-            <div class="status-badge">✓</div>
-            <div class="view-overlay"><button type="button">${checking ? "⏳" : locked ? "🔒" : "View"}</button></div>
-          </div>
-          <div class="image-item-caption">
-            <span class="image-item-code">${esc(img.courseCode)}</span>
-            ${file.title ? `<span class="image-item-title">${esc(file.title)}</span>` : ""}
-          </div>
-        </${tag}>`;
-      }).join("");
-      grid.querySelectorAll("[data-locked-image]").forEach(el => {
-        el.addEventListener("click", () => window.hnOpenGate && window.hnOpenGate(el.dataset.fileId));
-      });
     }
-  });
+
+    openBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (searchInput) searchInput.value = "";
+      modal.classList.remove("hidden");
+      apply(true);
+    });
+    closeBtn?.addEventListener("click", () => modal.classList.add("hidden"));
+    modal.addEventListener("click", (e) => { if (e.target === modal) modal.classList.add("hidden"); });
+    searchInput?.addEventListener("input", () => apply(true));
+  })();
 }
 
 // ============================================
