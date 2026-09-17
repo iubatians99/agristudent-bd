@@ -567,12 +567,14 @@ async function renderInbox(regId) {
 
   listEl.innerHTML = inboxCache.map(item => {
     const isUnread = !item.read;
+    const preview = (item.body || "").trim().replace(/\s+/g, " ");
+    const previewText = preview.length > 60 ? preview.slice(0, 60) + "…" : preview;
     return `
       <div class="inbox-row ${isUnread ? "is-unread" : ""}" data-id="${esc(item.id)}">
         <div class="inbox-row-head">
           <span class="inbox-row-dot" aria-hidden="true"></span>
           <div class="inbox-row-headline">
-            <span class="inbox-row-subject">${esc(item.subject)}</span>
+            <span class="inbox-row-subject">${esc(previewText)}</span>
             <span class="inbox-row-date">${esc(formatMessageDateTime(item.sentAt))}</span>
           </div>
           <span class="inbox-row-chevron">▾</span>

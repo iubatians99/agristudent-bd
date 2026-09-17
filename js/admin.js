@@ -1602,8 +1602,7 @@ function nuRenderSentList(messages) {
     return `
       <div class="resource-row">
         <div style="min-width:0;">
-          <strong>${esc(item.subject)}</strong>
-          <div style="font-size:.78rem;color:var(--moss-600);margin-top:.2rem;">To: ${esc(item.toName) || "—"} (${esc(item.toEmail) || "—"})</div>
+          <div style="font-size:.85rem;color:var(--moss-600);">To: <strong style="color:var(--moss-900);">${esc(item.toName) || "—"}</strong> (${esc(item.toEmail) || "—"})</div>
           <div style="font-size:.78rem;color:var(--moss-500);margin-top:.15rem;">🕒 Sent ${esc(formatMessageDateTime(item.sentAt))}${item.sentBy ? " · by " + esc(item.sentBy) : ""}</div>
           <p style="font-size:.85rem;color:var(--moss-900);margin:.5rem 0 0;max-width:480px;">${esc(item.body)}</p>
         </div>
@@ -1665,7 +1664,6 @@ function initNotifyUser() {
       nuStatus("Please search for and select a student first.", true);
       return;
     }
-    const subject = document.getElementById("nu-subject").value;
     const body = document.getElementById("nu-body").value;
     const sendBtn = document.getElementById("nu-send-btn");
 
@@ -1678,7 +1676,6 @@ function initNotifyUser() {
         toRegId: nuSelected.id,
         toEmail: nuSelected.data.email,
         toName: nuSelected.data.fullName,
-        subject,
         body,
         sentBy: currentAdminEmail
       });

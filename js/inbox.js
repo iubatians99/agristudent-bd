@@ -13,7 +13,6 @@
 //   toRegId    — registrations/{id} of the recipient
 //   toEmail    — recipient email (denormalized, for display)
 //   toName     — recipient name at send time (denormalized, for display)
-//   subject    — short subject line
 //   body       — message text
 //   sentBy     — admin's email (from Firebase Auth)
 //   sentAt     — serverTimestamp()
@@ -28,16 +27,14 @@ import {
 const COLLECTION = "adminMessages";
 
 /** Admin panel only — composes and sends a new message to one student. */
-export async function sendMessageToUser({ toRegId, toEmail, toName, subject, body, sentBy }) {
+export async function sendMessageToUser({ toRegId, toEmail, toName, body, sentBy }) {
   if (!toRegId || !toEmail) throw new Error("No recipient selected.");
-  if (!subject || !subject.trim()) throw new Error("Please write a subject.");
   if (!body || !body.trim()) throw new Error("Please write a message.");
 
   return addDoc(collection(db, COLLECTION), {
     toRegId,
     toEmail,
     toName: toName || "",
-    subject: subject.trim(),
     body: body.trim(),
     sentBy: sentBy || "",
     sentAt: serverTimestamp(),

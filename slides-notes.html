@@ -40,9 +40,9 @@
 
 <section class="section-page">
   <div class="container">
-    <div class="crumb"><a href="index.html">Home</a> / <a href="resources.html">Resources</a> / Hand Notes</div>
-    <h1>📑 Hand Notes</h1>
-    <p style="color:var(--moss-600);max-width:560px;margin-bottom:1.4rem;">Search by course code to find lecture materials.</p>
+    <div class="crumb"><a href="index.html">Home</a> / <a href="resources.html">Resources</a> / <span id="resource-crumb-current">Hand Notes</span></div>
+    <h1 id="resource-page-title">📝 Hand Notes</h1>
+    <p id="resource-page-desc" style="color:var(--moss-600);max-width:560px;margin-bottom:1.4rem;">Search by course code to find lecture materials.</p>
 
     <!-- ACCESS STATUS BAR -->
     <div id="access-status-bar" class="access-status-bar hidden">
@@ -67,8 +67,8 @@
           <!-- STEP: CHOICE (shown once logged in) -->
           <div id="hn-gate-step-choice" class="hidden" style="text-align:center;">
             <div style="font-size:1.7rem;width:3.4rem;height:3.4rem;line-height:3.4rem;margin:0 auto .9rem;border-radius:50%;background:linear-gradient(135deg, var(--moss-900), var(--moss-700));box-shadow:0 10px 22px rgba(31,46,34,.28);">🔓</div>
-            <h2 style="font-size:1.35rem;margin-bottom:.3rem;">Unlock Hand Notes</h2>
-            <p style="color:var(--moss-600);font-size:.9rem;margin-bottom:1.4rem;line-height:1.6;">Choose how you'd like to unlock access.</p>
+            <h2 style="font-size:1.35rem;margin-bottom:.3rem;">Unlock Resources</h2>
+            <p style="color:var(--moss-600);font-size:.9rem;margin-bottom:1.4rem;line-height:1.6;">Choose how you'd like to unlock access — this opens Hand Notes, Class Slides, and Images together.</p>
             <button type="button" id="hn-choose-notes" class="btn-primary" style="display:block;width:100%;padding:.8rem;margin-bottom:.7rem;">📤 Unlock with Notes <span style="font-weight:400;opacity:.85;">— upload a file, 24h on approval</span></button>
             <button type="button" id="hn-choose-classroom" class="btn-primary" style="display:block;width:100%;padding:.8rem;background:var(--moss-600);margin-bottom:.7rem;">🏫 Unlock with Google Classroom <span style="font-weight:400;opacity:.85;">— send a code, 6h access</span></button>
             <button type="button" id="hn-choose-ad" class="btn-primary" style="display:block;width:100%;padding:.8rem;background:var(--wheat-500,#c8933a);">🎬 Unlock by Watching an Ad <span style="font-weight:400;opacity:.85;">— instant, 6h access</span></button>
@@ -518,6 +518,20 @@
     "panel-images": "Tap any image to open it full size."
   };
 
+  // Titles shown above the folder cards — kept in sync with whichever
+  // section (Hand Notes / Class Slides / Images) is currently active, so
+  // the page reads correctly whether someone landed here from the
+  // Resources page's Hand Notes, Class Slides, or Images Folder card.
+  const TITLES = {
+    "panel-handnotes": { crumb: "Hand Notes", h1: "📝 Hand Notes", desc: "Search by course code to find lecture materials.", title: "Hand Notes — Agri Core" },
+    "panel-slides": { crumb: "Class Slides", h1: "🖥️ Class Slides", desc: "Search by course code to find lecture slides — unlocking one opens the whole folder.", title: "Class Slides — Agri Core" },
+    "panel-images": { crumb: "Images", h1: "🖼️ Images", desc: "Search by course code to find scanned pages and photos.", title: "Images — Agri Core" }
+  };
+
+  const crumbEl = document.getElementById("resource-crumb-current");
+  const h1El = document.getElementById("resource-page-title");
+  const descEl = document.getElementById("resource-page-desc");
+
   function activate(tab) {
     const target = tab.dataset.panel;
     tabs.forEach(t => {
@@ -527,9 +541,27 @@
     });
     panels.forEach(p => { p.hidden = p.id !== target; });
     if (hint) hint.textContent = HINTS[target] || "";
+    const meta = TITLES[target];
+    if (meta) {
+      if (crumbEl) crumbEl.textContent = meta.crumb;
+      if (h1El) h1El.textContent = meta.h1;
+      if (descEl) descEl.textContent = meta.desc;
+      document.title = meta.title;
+    }
   }
 
   tabs.forEach(tab => tab.addEventListener("click", () => activate(tab)));
+
+  // Deep link from the Resources page cards: ?tab=handnotes | slides | images
+  // opens straight into that section's folder view instead of always
+  // defaulting to Hand Notes.
+  const requestedTab = new URLSearchParams(window.location.search).get("tab");
+  const TAB_PANEL_MAP = { handnotes: "panel-handnotes", slides: "panel-slides", images: "panel-images" };
+  const initialPanelId = TAB_PANEL_MAP[requestedTab];
+  if (initialPanelId) {
+    const initialTab = Array.from(tabs).find(t => t.dataset.panel === initialPanelId);
+    if (initialTab) activate(initialTab);
+  }
 
   // Left/right arrow keys move between tabs, as expected of a tablist.
   document.querySelector(".resource-tabs")?.addEventListener("keydown", (e) => {
