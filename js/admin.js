@@ -301,6 +301,7 @@ const blogCache = {};
 
 const tabs = {
   approvals: { btn: document.getElementById("tab-approvals"), panel: document.getElementById("approvals-panel"), load: loadApprovals },
+  arrange: { btn: document.getElementById("tab-arrange"), panel: document.getElementById("arrange-panel"), load: loadArrangeFiles },
   resources: { btn: document.getElementById("tab-resources"), panel: document.getElementById("resources-panel"), load: loadResources },
   blog: { btn: document.getElementById("tab-blog"), panel: document.getElementById("blog-panel"), load: loadBlogPosts },
   terms: { btn: document.getElementById("tab-terms"), panel: document.getElementById("terms-panel"), load: loadTerms },
@@ -329,6 +330,140 @@ Object.entries(tabs).forEach(([key, tab]) => {
 // Activate the first tab by default so the sidebar/topbar reflect the initial panel shown.
 tabs.approvals.btn.classList.add("is-active");
 if (adminPageTitle) adminPageTitle.textContent = tabs.approvals.btn.dataset.label || "Approvals";
+
+// ============================================
+// ARRANGE FILES — Categorize Existing Resources
+// ============================================
+async function loadArrangeFiles() {
+  const listEl = document.getElementById("admin-arrange-list");
+  const filterEl = document.getElementById("arrange-filter");
+  if (!listEl || !filterEl) return;
+
+  listEl.innerHTML = "<p style='text-align:center;color:var(--moss-600);padding:2rem;'>Loading uncategorized files…</p>";
+
+  try {
+    // Fetch all approved resources that don't have noteType or need categorization
+    const resSnap = await getDocs(
+      query(
+        collection(db, "resources"),
+        where("status", "==", "approved"),
+        orderBy("uploadedAt", "desc")
+      )
+    );
+
+    // Filter out resources that already have proper categorization
+    const uncategorized = resSnap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .filter(r => !r.noteType || r.noteType === "others" || r.noteType === "");
+
+    if (uncategorized.length === 0) {
+      listEl.innerHTML = "<p style='text-align:center;color:var(--moss-600);padding:2rem;'>✅ All files are properly categorized!</p>";
+      return;
+    }
+
+    // Setup filter listener
+    filterEl.addEventListener("change", () => {
+      const filter = filterEl.value;
+      renderArrangeTable(uncategorized, filter, listEl);
+    });
+
+    renderArrangeTable(uncategorized, "", listEl);
+  } catch (err) {
+    console.error("[Admin] Error loading arrange files:", err);
+    listEl.innerHTML = `<p style='color:var(--terracotta-500);'>Error loading files: ${err.message}</p>`;
+  }
+}
+
+function renderArrangeTable(items, filter, container) {
+  let filtered = items;
+  if (filter) {
+    filtered = items.filter(item => item.fileType === filter);
+  }
+
+  if (filtered.length === 0) {
+    container.innerHTML = "<p style='text-align:center;color:var(--moss-600);padding:2rem;'>No files need categorization</p>";
+    return;
+  }
+
+  let html = "<div style='display:flex;flex-direction:column;gap:1rem;'>";
+
+  filtered.forEach(item => {
+    const fileIcon = item.fileType === "pdf" ? "📄" : item.fileType === "image" ? "🖼️" : "📊";
+    const currentType = item.noteType || "—";
+
+    html += `
+      <div style='border:1px solid var(--line);padding:1rem;border-radius:8px;background:#fff;'>
+        <div style='display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;margin-bottom:.8rem;flex-wrap:wrap;'>
+          <div>
+            <p style='margin:0;font-weight:600;'>${fileIcon} ${esc(item.courseCode)} — ${esc(item.courseName)}</p>
+            <p style='margin:.3rem 0 0;font-size:.85rem;color:var(--moss-600);'>${esc(item.facultyName)}</p>
+            <p style='margin:.2rem 0 0;font-size:.8rem;color:var(--moss-500);'>Uploaded: ${fmtAdminDate(item.uploadedAt)}</p>
+          </div>
+          <div style='background:var(--leaf-50);border:1px solid var(--leaf-300);border-radius:6px;padding:.4rem .6rem;font-size:.8rem;color:var(--moss-700);font-weight:600;'>
+            Current: ${currentType}
+          </div>
+        </div>
+
+        <div style='display:grid;grid-template-columns:1fr 1fr;gap:.8rem;'>
+          <div>
+            <label style='display:block;font-size:.8rem;font-weight:600;margin-bottom:.3rem;'>Assign to Folder:</label>
+            <select id='noteType-${item.id}' style='padding:.5rem .6rem;border:1px solid var(--line);border-radius:6px;width:100%;'>
+              <option value=''>— Select Folder —</option>
+              <option value='hand_notes'>📝 Hand Notes</option>
+              <option value='class_slide'>🖥️ Class Lecture Slides</option>
+              <option value='image'>🖼️ Images</option>
+            </select>
+          </div>
+          <div>
+            <label style='display:block;font-size:.8rem;font-weight:600;margin-bottom:.3rem;'>File Type:</label>
+            <select id='fileType-${item.id}' style='padding:.5rem .6rem;border:1px solid var(--line);border-radius:6px;width:100%;'>
+              <option value='${item.fileType}' selected>${item.fileType}</option>
+              <option value='pdf'>📄 PDF</option>
+              <option value='image'>🖼️ Image</option>
+              <option value='ppt'>📊 PPT</option>
+            </select>
+          </div>
+        </div>
+
+        <button class='save-arrange-btn' data-id='${item.id}' style='background:var(--leaf-500);color:white;border:none;padding:.6rem 1rem;border-radius:6px;cursor:pointer;font-weight:600;margin-top:.8rem;width:100%;'>💾 Save Categorization</button>
+      </div>
+    `;
+  });
+
+  html += "</div>";
+  container.innerHTML = html;
+
+  // Add event listeners
+  container.querySelectorAll(".save-arrange-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const id = btn.dataset.id;
+      const noteType = document.getElementById(`noteType-${id}`).value;
+      const fileType = document.getElementById(`fileType-${id}`).value;
+
+      if (!noteType) {
+        alert("Please select a folder type");
+        return;
+      }
+
+      await saveArrangement(id, noteType, fileType, container, filter);
+    });
+  });
+}
+
+async function saveArrangement(id, noteType, fileType, container, filter) {
+  try {
+    await updateDoc(doc(db, "resources", id), {
+      noteType: noteType,
+      fileType: fileType,
+      arrangedAt: serverTimestamp()
+    });
+
+    alert("✅ File categorized successfully!");
+    loadArrangeFiles();
+  } catch (err) {
+    alert(`Error saving categorization: ${err.message}`);
+  }
+}
 
 // ============================================
 // UNIFIED APPROVALS

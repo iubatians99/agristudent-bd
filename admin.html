@@ -73,6 +73,7 @@
 
     <nav class="admin-nav">
       <button id="tab-approvals" class="admin-nav-item" data-label="Approvals"><span class="admin-nav-icon">✅</span><span>Approvals</span></button>
+      <button id="tab-arrange" class="admin-nav-item" data-label="Arrange Files"><span class="admin-nav-icon">🗂️</span><span>Arrange Files</span></button>
       <button id="tab-resources" class="admin-nav-item" data-label="Resources"><span class="admin-nav-icon">📚</span><span>Resources</span></button>
       <button id="tab-blog" class="admin-nav-item" data-label="Blog"><span class="admin-nav-icon">✍️</span><span>Blog</span></button>
       <button id="tab-terms" class="admin-nav-item" data-label="Terms"><span class="admin-nav-icon">📖</span><span>Terms</span></button>
@@ -112,6 +113,35 @@
           </select>
         </div>
         <div id="admin-approvals-list"></div>
+      </div>
+
+      <div id="arrange-panel" class="admin-panel-card hidden">
+        <h2 class="admin-panel-heading">🗂️ Arrange Existing Files — Categorize & Organize</h2>
+        <p style="font-size:.82rem;color:var(--moss-600);margin-top:-.8rem;margin-bottom:1.2rem;">
+          Categorize old uploaded files that don't have proper folder assignments. Shows all uncategorized resources.
+        </p>
+        
+        <div style="border:1px solid #e2b8b8;background:#fff5f5;border-radius:8px;padding:.9rem 1rem;margin-bottom:1.2rem;">
+          <strong style="font-size:.85rem;color:#8a3b3b;">📋 How to Use</strong>
+          <p style="font-size:.78rem;color:#8a3b3b;margin:.35rem 0 .7rem;line-height:1.5;">
+            1. Each file below is missing a folder type (Hand Notes, Class Slides, or Images)<br/>
+            2. Select the correct category from the dropdown<br/>
+            3. Click "Save" to update<br/>
+            4. File will disappear from this list once categorized
+          </p>
+        </div>
+
+        <div class="form-field" style="margin-bottom:1.2rem;">
+          <label for="arrange-filter">Filter by File Type:</label>
+          <select id="arrange-filter" style="padding:.5rem .7rem;border:1px solid var(--line);border-radius:6px;">
+            <option value="">All Files</option>
+            <option value="pdf">PDFs</option>
+            <option value="image">Images</option>
+            <option value="ppt">Presentations</option>
+          </select>
+        </div>
+
+        <div id="admin-arrange-list"></div>
       </div>
 
       <div id="resources-panel" class="admin-panel-card hidden">
