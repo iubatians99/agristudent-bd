@@ -8,6 +8,7 @@ import { initEmailNotifications } from "./email-config.js";
 import { hashPassword, isPasswordValid } from "./password.js";
 import { computeResourceAccessStatus, maybeSendAccessReminder, renderAccessBadge, renderAccessScale, formatDate, formatRemaining, DAY_MS } from "./access.js";
 import { fetchMessagesForUser, markMessageRead, formatMessageDateTime } from "./inbox.js";
+import { computeCreditWallet } from "./credits.js";
 
 initEmailNotifications();
 
@@ -371,6 +372,51 @@ function renderPasswordSection(regId, reg) {
   if (hasPassword) closeModal();
 }
 
+// ============================================
+// CREDIT WALLET — one premium card, fed entirely by the canonical
+// js/credits.js formula. Replaces the old design's two separate,
+// partially-duplicated displays (a top metrics row repeating "Earned" /
+// "Available" and a second wallet panel repeating the same two numbers
+// plus "Used") with a single place that shows the full, itemised story:
+// how many credits were earned, from what, how many were spent, and
+// how many are left to spend right now.
+// ============================================
+function renderCreditWallet(wallet) {
+  const { creditsEarned, creditsUsed, creditsRemaining, breakdown } = wallet;
+
+  document.getElementById("stat-credits-earned")?.replaceChildren(document.createTextNode(String(creditsEarned)));
+  document.getElementById("stat-credits-available")?.replaceChildren(document.createTextNode(String(creditsRemaining)));
+
+  const panel = document.getElementById("credit-wallet-card");
+  if (!panel) return;
+
+  document.getElementById("credit-wallet-ring-value")?.replaceChildren(document.createTextNode(String(creditsRemaining)));
+  document.getElementById("credit-wallet-earned")?.replaceChildren(document.createTextNode(String(creditsEarned)));
+  document.getElementById("credit-wallet-used")?.replaceChildren(document.createTextNode(String(creditsUsed)));
+  document.getElementById("credit-wallet-remaining")?.replaceChildren(document.createTextNode(String(creditsRemaining)));
+
+  const ring = document.getElementById("credit-wallet-ring");
+  if (ring) {
+    const pct = creditsEarned ? Math.max(0, Math.min(100, (creditsRemaining / creditsEarned) * 100)) : 0;
+    ring.style.setProperty("--wallet-pct", `${pct * 3.6}deg`);
+  }
+
+  const breakdownEl = document.getElementById("credit-wallet-breakdown");
+  if (breakdownEl) {
+    breakdownEl.innerHTML = breakdown.map(row => `
+      <div class="wallet-breakdown-row">
+        <span class="wallet-breakdown-icon" aria-hidden="true">${row.icon}</span>
+        <span class="wallet-breakdown-label">${esc(row.label)}${row.detail ? `<small>${esc(row.detail)}</small>` : ""}</span>
+        <span class="wallet-breakdown-amount">+${row.amount}</span>
+      </div>`).join("") + (creditsUsed > 0 ? `
+      <div class="wallet-breakdown-row is-spend">
+        <span class="wallet-breakdown-icon" aria-hidden="true">🔓</span>
+        <span class="wallet-breakdown-label">Files unlocked<small>1 credit per file</small></span>
+        <span class="wallet-breakdown-amount">−${creditsUsed}</span>
+      </div>` : "");
+  }
+}
+
 async function renderCredits(email, fullName, reg = {}) {
   // Load each source independently. One unavailable/legacy collection must not
   // blank the entire profile or hide the guaranteed registration credits.
@@ -409,44 +455,19 @@ async function renderCredits(email, fullName, reg = {}) {
   // Every uploaded resource file earns one credit. This includes files in
   // Hand Notes, Class Slides, Images, and other resource uploads.
   const resourceItems = items.filter(i => i.kind === "resource");
-  const uploadCredits = resourceItems.reduce((n, i) => n + (Array.isArray(i.fileUrls) ? i.fileUrls.length : 1), 0);
-  // Every approved Classroom unlock earns 10 credits. Locked/rejected codes do not.
-  const classroomCredits = classroomItems.reduce((n, i) => n + (i.status === "approved" ? 10 : 0), 0);
-  // Coffee approvals/manual credit grants can award a custom number of credits.
-  const coffeeCredits = manualItems.reduce((n, i) => n + (i.source === "coffee" ? Number(i.creditsGranted || 0) : 0), 0);
-  // Every registered user receives 5 free registration credits.
-  // The fallback keeps existing users eligible even if their older registration
-  // document does not yet contain the new field.
-  const registrationCredits = Math.max(5, Number(reg?.registrationCredits || 0));
-  const creditsEarned = registrationCredits + uploadCredits + classroomCredits + coffeeCredits;
-  // Only wallet-credit unlocks consume credits. Notes/Classroom access grants
-  // are access records, not credit deductions.
-  // A fileUnlocks doc means that credit was spent — stays true even if
-  // the unlock is later revoked as a restriction penalty. See
-  // js/admin.js computeCreditsBalance for why revoked must still count.
-  const creditsUsed = fileUnlockItems.filter(i => i.source !== "notes_earn" && i.source !== "classroom_earn").length;
-  // One-off penalty applied when an admin lifts an account restriction
-  // (js/admin.js deductFullCreditBalance) — wipes whatever balance existed
-  // at that moment. Stored as a running offset since credits aren't a
-  // single stored number; see js/resources.js hnGetRemainingCredits for
-  // the same subtraction on the student-facing unlock flow.
-  const creditDebt = Number(reg?.creditDebt || 0);
-  const creditsRemaining = Math.max(0, creditsEarned - creditsUsed - creditDebt);
-  document.getElementById("handnote-credit-earned-top")?.replaceChildren(document.createTextNode(String(creditsEarned)));
-  document.getElementById("handnote-credit-remaining-top")?.replaceChildren(document.createTextNode(String(creditsRemaining)));
-  const creditPanel = document.getElementById("handnote-credit-panel");
-  if (creditPanel) {
-    creditPanel.classList.toggle("hidden", creditsEarned === 0 && creditsUsed === 0);
-    document.getElementById("handnote-credit-earned")?.replaceChildren(document.createTextNode(String(creditsEarned)));
-    document.getElementById("handnote-credit-used")?.replaceChildren(document.createTextNode(String(creditsUsed)));
-    document.getElementById("handnote-credit-remaining")?.replaceChildren(document.createTextNode(String(creditsRemaining)));
-    document.getElementById("handnote-credit-remaining-mini")?.replaceChildren(document.createTextNode(String(creditsRemaining)));
-    const ring = document.querySelector(".credit-balance-ring");
-    if (ring) {
-      const pct = creditsEarned ? Math.max(0, Math.min(100, (creditsRemaining / creditsEarned) * 100)) : 0;
-      ring.style.background = `radial-gradient(circle,#fff 55%,transparent 56%), conic-gradient(var(--leaf-500) ${pct * 3.6}deg,#dfe9df ${pct * 3.6}deg)`;
-    }
-  }
+
+  // Single source of truth for the whole earn/spend formula — see
+  // js/credits.js. Previously this math was hand-copied here, in
+  // js/admin.js, and in js/resources.js, and had already drifted out of
+  // sync once; centralizing it is what keeps all three pages agreeing.
+  const wallet = computeCreditWallet({
+    resourceItems, classroomItems, manualItems, fileUnlockItems,
+    registrationCredits: reg?.registrationCredits,
+    creditDebt: reg?.creditDebt
+  });
+  const { creditsEarned, creditsUsed, creditsRemaining } = wallet;
+
+  renderCreditWallet(wallet);
   const access = computeResourceAccessStatus([...resourceItems, ...classroomItems, ...manualItems, ...fileUnlockItems, ...folderUnlockItems]);
   renderAccessBadge({
     badgeEl: document.getElementById("access-badge"),

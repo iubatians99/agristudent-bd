@@ -10,6 +10,7 @@ import { normalizeEmail, normalizeStudentId } from "./identity.js";
 import { computeResourceAccessStatus } from "./access.js";
 import { initAdminNotifications, stopAdminNotifications, initAdminNotifyBell, clearAdminNotifyBadge, clearAdminTabBlink } from "./admin-notify.js";
 import { sendMessageToUser, fetchAllSentMessages, formatMessageDateTime } from "./inbox.js";
+import { computeCreditWallet } from "./credits.js";
 
 initEmailNotifications();
 
@@ -179,6 +180,11 @@ async function restrictAccountByEmail(email, days, reason) {
 // only ever grows, so restricting the same account again later stacks
 // another full wipe on top instead of resetting anything.
 // ============================================
+// Delegates to the single canonical formula in js/credits.js — this used
+// to be its own hand-copied implementation here (and a third, separately
+// hand-copied implementation in js/resources.js), which is exactly how a
+// student could see a different "Available" number depending on which
+// page computed it. All three now share one formula.
 async function computeCreditsBalance(email) {
   const normalized = normalizeEmail(email || "");
   if (!normalized) return { earned: 0, used: 0 };
@@ -189,29 +195,22 @@ async function computeCreditsBalance(email) {
     getDocs(query(collection(db, "fileUnlocks"), where("fromEmail", "==", normalized))),
     getDocs(query(collection(db, "registrations"), where("email", "==", normalized)))
   ]);
-  const registrationCredits = regSnap.empty ? 5 : Math.max(5, Number(regSnap.docs[0].data().registrationCredits || 0));
-  const uploadCredits = resourcesSnap.docs.reduce((n, d) => {
-    const fileUrls = d.data().fileUrls;
-    return n + (Array.isArray(fileUrls) ? fileUrls.length : 1);
-  }, 0);
-  const classroomCredits = classroomSnap.docs.reduce((n, d) => n + (d.data().status === "approved" ? 10 : 0), 0);
-  const coffeeCredits = manualSnap.docs.reduce((n, d) => {
-    const data = d.data();
-    return n + (data.source === "coffee" ? Number(data.creditsGranted || 0) : 0);
-  }, 0);
-  // A fileUnlocks doc means the credit was spent at that moment — that
-  // stays true forever, whether or not the unlock itself is later
-  // revoked (e.g. by revokeAllUnlocksForEmail as a restriction penalty).
-  // Excluding revoked docs here used to "un-spend" the credit right back
-  // into the student's balance the instant it was revoked — fighting the
-  // very penalty this function exists to apply, and leaving a leftover
-  // balance behind after a restriction was lifted. Revocation is about
-  // access, not about whether a credit was ever used.
-  const used = fileUnlockSnap.docs.reduce((n, d) => {
-    const data = d.data();
-    return n + (data.source !== "notes_earn" && data.source !== "classroom_earn" ? 1 : 0);
-  }, 0);
-  return { earned: registrationCredits + uploadCredits + classroomCredits + coffeeCredits, used };
+  const regData = regSnap.empty ? {} : regSnap.docs[0].data();
+  const wallet = computeCreditWallet({
+    resourceItems: resourcesSnap.docs.map(d => d.data()),
+    classroomItems: classroomSnap.docs.map(d => d.data()),
+    manualItems: manualSnap.docs.map(d => d.data()),
+    // A fileUnlocks doc means the credit was spent at that moment — that
+    // stays true forever, whether or not the unlock itself is later
+    // revoked (e.g. by revokeAllUnlocksForEmail as a restriction
+    // penalty). Revocation is about access, not about whether a credit
+    // was ever used, so computeCreditWallet deliberately still counts
+    // revoked docs as spent here.
+    fileUnlockItems: fileUnlockSnap.docs.map(d => d.data()),
+    registrationCredits: regData.registrationCredits,
+    creditDebt: 0 // existing debt is applied separately below, not double-counted here
+  });
+  return { earned: wallet.creditsEarned, used: wallet.creditsUsed };
 }
 
 async function deductFullCreditBalance(regId, email) {

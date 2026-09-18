@@ -6,6 +6,7 @@ import { normalizeEmail, normalizeStudentId } from "./identity.js";
 import { getSession } from "./session.js";
 import { initEmailNotifications } from "./email-config.js";
 import { computeResourceAccessStatus, computeFileAccessStatus, formatDate, formatRemaining, normalizeClassroomCode, isAuthenticClassroomCode, fileCount } from "./access.js";
+import { computeCreditWallet } from "./credits.js";
 
 initEmailNotifications();
 
@@ -852,22 +853,24 @@ if (handNotesGate && handNotesContent) {
       // Resource docs (Hand Notes / Class Slides / Images uploads) are never
       // tagged kind:"resource" in this in-memory list (see
       // getResourceAccessState() below — they come straight off the
-      // "resources" collection), so filtering on i.kind === "resource" here
-      // matched nothing and silently zeroed out every upload-earned credit,
-      // even though the profile page (which DOES tag kind:"resource") showed
-      // the correct, larger total. A real resource doc is identified by its
-      // resourceType field instead.
-      const uploadCredits = items.filter(i => !i.kind && i.resourceType && normalizeEmail(i.uploaderEmail) === email).reduce((n, i) => n + fileCount(i), 0);
-      const classroomCredits = items.filter(i => i.kind === "classroom" && i.status === "approved").reduce(n => n + 10, 0);
-      const coffeeCredits = items.filter(i => i.kind === "manual" && i.source === "coffee").reduce((n, i) => n + Number(i.creditsGranted || 0), 0);
-      // A fileUnlocks doc means that credit was already spent — that
-      // stays true even if the unlock is later revoked (a restriction
-      // penalty), so revoked docs still count as "used" here. Excluding
-      // them used to hand the credit right back to the balance the
-      // instant it was revoked. See js/admin.js computeCreditsBalance
-      // for the matching admin-side calculation.
-      const used = items.filter(i => i.kind === "file_unlock" && i.source !== "notes_earn" && i.source !== "classroom_earn").length;
-      return Math.max(0, registrationCredits + uploadCredits + classroomCredits + coffeeCredits - used - creditDebt);
+      // "resources" collection), so a real resource doc is identified by
+      // its resourceType field instead, not by i.kind.
+      //
+      // The actual earn/spend math now lives in one place — js/credits.js
+      // computeCreditWallet() — shared with js/profile.js and js/admin.js,
+      // so this page can never again show a different balance than the
+      // profile page does. This function's own job is just to classify
+      // the already-fetched, already-cached items into the shapes that
+      // shared formula expects.
+      const resourceItems = items.filter(i => !i.kind && i.resourceType && normalizeEmail(i.uploaderEmail) === email);
+      const classroomItems = items.filter(i => i.kind === "classroom");
+      const manualItems = items.filter(i => i.kind === "manual");
+      const fileUnlockItems = items.filter(i => i.kind === "file_unlock");
+      const wallet = computeCreditWallet({
+        resourceItems, classroomItems, manualItems, fileUnlockItems,
+        registrationCredits, creditDebt
+      });
+      return wallet.creditsRemaining;
     } catch (err) {
       console.warn("[Resource Credit] balance check failed:", err);
       return 0;
