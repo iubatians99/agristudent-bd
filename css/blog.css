@@ -258,8 +258,15 @@
   margin-bottom:.8rem;
   position:relative;
   word-wrap:break-word;
+  background:var(--paper-50);
+  transition:border-color .18s ease, box-shadow .18s ease, background .18s ease;
 }
-#post-body-input:focus{ outline:none; border-color:var(--leaf-500); }
+#post-body-input:focus{
+  outline:none;
+  border-color:var(--leaf-500);
+  background:#fff;
+  box-shadow:0 0 0 3px rgba(107,155,94,.15);
+}
 /* Only affects a stray unwrapped <img> — actual inline images are wrapped in .inline-image and styled below */
 #post-body-input > img{
   max-width:100%;

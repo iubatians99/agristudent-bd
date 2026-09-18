@@ -37,8 +37,16 @@ const STAT_SOURCES = {
   "stat-pending": () =>
     getCountFromServer(query(collection(db, "resources"), where("status", "==", "pending"))),
 
-  "stat-terms": () =>
-    getCountFromServer(query(collection(db, "terms"), where("status", "==", "approved")))
+  // NOTE: getCountFromServer() was unreliable here the same way it was for
+  // "resources" above (see that comment) — it would silently fail and leave
+  // the homepage stat stuck on "—". Switched to a plain getDocs() count,
+  // matching the working "stat-resources" pattern.
+  "stat-terms": async () => {
+    const docsSnap = await getDocs(
+      query(collection(db, "terms"), where("status", "==", "approved"))
+    );
+    return { data: () => ({ count: docsSnap.size }) };
+  }
 };
 
 function animateCount(el, target) {
