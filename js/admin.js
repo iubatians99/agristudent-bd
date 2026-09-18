@@ -8,7 +8,7 @@ import {
 import { initEmailNotifications, sendReviewEmail } from "./email-config.js";
 import { normalizeEmail, normalizeStudentId } from "./identity.js";
 import { computeResourceAccessStatus } from "./access.js";
-import { initAdminNotifications, stopAdminNotifications, initAdminNotifyBell, clearAdminNotifyBadge } from "./admin-notify.js";
+import { initAdminNotifications, stopAdminNotifications, initAdminNotifyBell, clearAdminNotifyBadge, clearAdminTabBlink } from "./admin-notify.js";
 import { sendMessageToUser, fetchAllSentMessages, formatMessageDateTime } from "./inbox.js";
 
 initEmailNotifications();
@@ -132,14 +132,32 @@ function wireFilterControls(ids, reload) {
 // ============================================
 // ACCOUNT RESTRICTION — shared helpers (used from both the Registrations
 // tab and, one click away, right from a Resources review row).
+//
+// Restricting an account used to only freeze the whole site with an
+// overlay (js/session.js) while leaving every file that student had
+// already unlocked showing as unlocked, and leaving their credit
+// balance untouched. Now restriction also immediately revokes every
+// active unlock (file_unlock / classroom / manual / ad grants) so
+// locked files actually show locked, and zeroes the live credit
+// balance right away via the same creditDebt penalty previously only
+// applied when the restriction was later lifted (see
+// deductFullCreditBalance below) — so a restricted student can't keep
+// spending/holding credits during the restriction window.
 // ============================================
-async function restrictAccountById(id, days, reason) {
+async function restrictAccountById(id, days, reason, email) {
   const until = Date.now() + days * 24 * 60 * 60 * 1000;
-  await updateDoc(doc(db, "registrations", id), {
-    accountRestrictedUntil: until,
-    accountRestrictedReason: reason || "",
-    accountRestrictedAt: new Date()
-  });
+  const tasks = [
+    updateDoc(doc(db, "registrations", id), {
+      accountRestrictedUntil: until,
+      accountRestrictedReason: reason || "",
+      accountRestrictedAt: new Date()
+    })
+  ];
+  if (email) {
+    tasks.push(revokeAllUnlocksForEmail(email));
+    tasks.push(deductFullCreditBalance(id, email));
+  }
+  await Promise.all(tasks);
 }
 
 async function restrictAccountByEmail(email, days, reason) {
@@ -147,7 +165,7 @@ async function restrictAccountByEmail(email, days, reason) {
   if (!normalized) throw new Error("This submission has no uploader email to restrict.");
   const snap = await getDocs(query(collection(db, "registrations"), where("email", "==", normalized)));
   if (snap.empty) throw new Error(`No registered account found for ${email}.`);
-  await restrictAccountById(snap.docs[0].id, days, reason);
+  await restrictAccountById(snap.docs[0].id, days, reason, normalized);
 }
 
 // ============================================
@@ -194,6 +212,33 @@ async function deductFullCreditBalance(regId, email) {
   const existingDebt = Number(regSnap.data()?.creditDebt || 0);
   const remaining = Math.max(0, balance.earned - balance.used - existingDebt);
   await updateDoc(regRef, { creditDebt: existingDebt + remaining });
+}
+
+// ============================================
+// LOCK ALL FILES ON RESTRICTION — marks every unlock grant this student
+// currently holds (credit-based file unlocks, approved classroom-code
+// unlocks, admin manual grants, and watched-ad unlocks) as revoked, so
+// computeResourceAccessStatus/computeFileAccessStatus (js/access.js)
+// treats them as inactive and every file that was showing "View"
+// immediately shows locked again. Safe to call repeatedly — docs
+// already revoked are left alone.
+// ============================================
+async function revokeAllUnlocksForEmail(email) {
+  const normalized = normalizeEmail(email || "");
+  if (!normalized) return;
+  const [fileUnlockSnap, classroomSnap, manualSnap, adSnap] = await Promise.all([
+    getDocs(query(collection(db, "fileUnlocks"), where("fromEmail", "==", normalized))),
+    getDocs(query(collection(db, "classroomCodes"), where("fromEmail", "==", normalized))),
+    getDocs(query(collection(db, "manualUnlocks"), where("fromEmail", "==", normalized))),
+    getDocs(query(collection(db, "adUnlocks"), where("fromEmail", "==", normalized)))
+  ]);
+  const toRevoke = [
+    ...fileUnlockSnap.docs, ...classroomSnap.docs, ...manualSnap.docs, ...adSnap.docs
+  ].filter(d => !d.data().revoked);
+  if (!toRevoke.length) return;
+  const batch = writeBatch(db);
+  toRevoke.forEach(d => batch.update(d.ref, { revoked: true }));
+  await batch.commit();
 }
 
 // ============================================
@@ -458,6 +503,7 @@ Object.entries(tabs).forEach(([key, tab]) => {
     });
     tab.btn.classList.add("is-active");
     tab.panel.classList.remove("hidden");
+    clearAdminTabBlink(tab.btn.id);
     if (adminPageTitle) adminPageTitle.textContent = tab.btn.dataset.label || key;
     tab.load();
   });
@@ -1461,8 +1507,8 @@ async function loadRegistrations() {
               : `<button type="button" class="verify-id-btn" data-id="${esc(d.id)}" style="background:var(--leaf-500);border:none;color:#fff;padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">🟢 Mark Verified</button>`}
             ${item.accountRestrictedUntil
               ? `<button type="button" class="unrestrict-btn" data-id="${esc(d.id)}" data-email="${esc(item.email || "")}" style="background:none;border:1px solid var(--leaf-500);color:var(--leaf-500);padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">✅ Lift Restriction</button>`
-              : `<button type="button" class="restrict-week-btn" data-id="${esc(d.id)}" style="background:none;border:1px solid var(--terracotta-500);color:var(--terracotta-500);padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">⛔ Restrict 7d</button>
-                 <button type="button" class="restrict-custom-btn" data-id="${esc(d.id)}" style="background:none;border:1px solid var(--terracotta-500);color:var(--terracotta-500);padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">⛔ Custom…</button>`}
+              : `<button type="button" class="restrict-week-btn" data-id="${esc(d.id)}" data-email="${esc(item.email || "")}" style="background:none;border:1px solid var(--terracotta-500);color:var(--terracotta-500);padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">⛔ Restrict 7d</button>
+                 <button type="button" class="restrict-custom-btn" data-id="${esc(d.id)}" data-email="${esc(item.email || "")}" style="background:none;border:1px solid var(--terracotta-500);color:var(--terracotta-500);padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">⛔ Custom…</button>`}
             ${item.removed
               ? `<button type="button" class="restore-user-btn" data-id="${esc(d.id)}" data-name="${esc(item.fullName || "")}" style="background:var(--leaf-500);border:none;color:#fff;padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;font-weight:600;">↩️ Restore User</button>
                  <button type="button" class="erase-user-btn" data-id="${esc(d.id)}" data-email="${esc(item.email || "")}" data-name="${esc(item.fullName || "")}" style="background:none;border:1px solid var(--terracotta-500);color:var(--terracotta-500);padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.72rem;">🗑️ Erase Permanently</button>`
@@ -1588,9 +1634,9 @@ async function loadRegistrations() {
       });
     });
 
-    async function applyAccountRestriction(id, days, reason) {
+    async function applyAccountRestriction(id, days, reason, email) {
       try {
-        await restrictAccountById(id, days, reason);
+        await restrictAccountById(id, days, reason, email);
         loadRegistrations();
       } catch (err) {
         console.error("[AgriAdmin] account restriction failed:", err);
@@ -1600,8 +1646,8 @@ async function loadRegistrations() {
 
     regList.querySelectorAll(".restrict-week-btn").forEach(btn => {
       btn.addEventListener("click", () => {
-        if (!confirm("Restrict this account for 7 days? They'll see a freeze screen until then.")) return;
-        applyAccountRestriction(btn.dataset.id, 7, "Restricted for 7 days by admin");
+        if (!confirm("Restrict this account for 7 days? They'll see a freeze screen, all of their unlocked files will be locked again, and their credit balance will be wiped.")) return;
+        applyAccountRestriction(btn.dataset.id, 7, "Restricted for 7 days by admin", btn.dataset.email);
       });
     });
 
@@ -1612,7 +1658,7 @@ async function loadRegistrations() {
         const days = Number(daysStr);
         if (!Number.isFinite(days) || days <= 0) { alert("Please enter a valid number of days."); return; }
         const reason = prompt("Reason to show the user (optional):", "") || "";
-        applyAccountRestriction(btn.dataset.id, days, reason);
+        applyAccountRestriction(btn.dataset.id, days, reason, btn.dataset.email);
       });
     });
 
@@ -2279,7 +2325,7 @@ function uploadFileToCloudinary(file, onProgress) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", CLOUDINARY_UPLOAD_URL, true);
-    xhr.timeout = 120000;
+    xhr.timeout = 300000; // 5 min — was 2 min, too short for large files on slower mobile connections
     xhr.upload.addEventListener("progress", (e) => {
       if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100));
     });

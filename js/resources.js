@@ -55,7 +55,7 @@ function uploadFileToCloudinary(file, onProgress) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", CLOUDINARY_UPLOAD_URL, true);
-    xhr.timeout = 120000;
+    xhr.timeout = 300000; // 5 min — was 2 min, too short for large files on slower mobile connections
     xhr.upload.addEventListener("progress", (e) => {
       if (e.lengthComputable && onProgress) {
         onProgress(Math.round((e.loaded / e.total) * 100));

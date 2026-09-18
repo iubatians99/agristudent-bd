@@ -133,6 +133,11 @@ export function computeResourceAccessStatus(items, now = Date.now()) {
       // incorrectly unlock every file once approved.
       if (item?.purpose === "materials_request") continue;
 
+      // An admin can revoke an already-approved code (e.g. when
+      // restricting the account it came from) without changing its
+      // status, same pattern as file_unlock/folder_lifetime below.
+      if (item?.revoked) continue;
+
       // Classroom codes don't grant access on submission — an admin must
       // review and confirm the code first. Anything not yet approved
       // ("new", "contacted", etc.) contributes no grant at all.
@@ -160,6 +165,7 @@ export function computeResourceAccessStatus(items, now = Date.now()) {
     // scoping per file. No category means account-wide, same as an ad
     // unlock or classroom code.
     if (item?.kind === "manual") {
+      if (item?.revoked) continue;
       grants.push({
         item,
         kind: "manual",
@@ -175,6 +181,7 @@ export function computeResourceAccessStatus(items, now = Date.now()) {
     // upload, but a fixed 6h window like a classroom code (see
     // js/resources.js hnStepAd / "adUnlocks" collection).
     if (item?.kind === "ad") {
+      if (item?.revoked) continue;
       grants.push({
         item,
         kind: "ad",

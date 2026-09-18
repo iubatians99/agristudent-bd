@@ -20,15 +20,15 @@ import { db } from "./firebase-config.js";
 import { collection, query, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const WATCHED = [
-  { collection: "registrations", label: "Registration", icon: "📝",
+  { collection: "registrations", label: "Registration", icon: "📝", tabId: "tab-registrations",
     text: (d) => d.fullName || d.email || "New student registration" },
-  { collection: "terms", label: "Term", icon: "📖",
+  { collection: "terms", label: "Term", icon: "📖", tabId: "tab-terms",
     text: (d) => d.name || "New term submitted" },
-  { collection: "resources", label: "Resource", icon: "📚",
+  { collection: "resources", label: "Resource", icon: "📚", tabId: "tab-resources",
     text: (d) => `${d.courseName || d.courseCode || "New resource"}${d.facultyName ? " — " + d.facultyName : ""}` },
-  { collection: "classroomCodes", label: "Classroom Code", icon: "🔑",
+  { collection: "classroomCodes", label: "Classroom Code", icon: "🔑", tabId: "tab-classroom-codes",
     text: (d) => d.purpose === "materials_request" ? `Code for course materials: ${d.classroomCode || ""}` : `Unlock request: ${d.classroomCode || ""}` },
-  { collection: "coffeeRequests", label: "Coffee Support", icon: "☕",
+  { collection: "coffeeRequests", label: "Coffee Support", icon: "☕", tabId: "tab-coffee-requests",
     text: (d) => `${d.fromName || d.fromEmail || "Student"} — Txn ${d.transactionId || ""}` }
 ];
 
@@ -74,11 +74,31 @@ function showToast(icon, label, body) {
   setTimeout(() => { toast.style.opacity = "0"; toast.style.transition = "opacity .3s"; setTimeout(() => toast.remove(), 300); }, 8000);
 }
 
-function notify({ icon, label, body }) {
+// Makes a sidebar tab blink so the admin can tell, at a glance and
+// without opening every panel, which section just received something
+// new. Skipped for whichever tab is already open/active — no point
+// blinking the thing you're already looking at — and cleared the
+// instant that tab is clicked (see clearAdminTabBlink, called from
+// js/admin.js's tab-click handler).
+function blinkTab(tabId) {
+  if (!tabId) return;
+  const btn = document.getElementById(tabId);
+  if (!btn || btn.classList.contains("is-active")) return;
+  btn.classList.add("admin-nav-blink");
+}
+
+/** Stop a tab blinking — call the moment that tab is opened. */
+export function clearAdminTabBlink(tabId) {
+  const btn = tabId ? document.getElementById(tabId) : null;
+  if (btn) btn.classList.remove("admin-nav-blink");
+}
+
+function notify({ icon, label, body, tabId }) {
   unreadCount++;
   bumpTitle();
   playChime();
   showToast(icon, label, body);
+  blinkTab(tabId);
 
   if (typeof Notification !== "undefined" && Notification.permission === "granted") {
     try {
@@ -92,7 +112,7 @@ function notify({ icon, label, body }) {
   }
 }
 
-function watch({ collection: name, label, icon, text }) {
+function watch({ collection: name, label, icon, text, tabId }) {
   const q = query(collection(db, name), orderBy("submittedAt", "desc"));
   let knownIds = null;
   const unsub = onSnapshot(q, (snap) => {
@@ -105,7 +125,7 @@ function watch({ collection: name, label, icon, text }) {
       knownIds.add(change.doc.id);
       const data = change.doc.data();
       const body = text(data);
-      if (body) notify({ icon, label, body });
+      if (body) notify({ icon, label, body, tabId });
     });
   }, (err) => console.error(`[AdminNotify] ${name} listener failed:`, err));
   unsubscribers.push(unsub);
