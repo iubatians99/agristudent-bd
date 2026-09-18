@@ -82,7 +82,7 @@
         <button class="modal-close" id="upload-form-close">✕</button>
         <div class="modal-body">
           <h2 style="font-size:1.3rem;">⬆️ Upload Your Resource</h2>
-          <p style="color:var(--moss-600);font-size:.9rem;margin-bottom:1.4rem;">Upload relevant PDFs, images, or presentations. Max 40 files, 50MB each. Hand Notes unlocks last 36 hours per credit; Class Slides and Images can unlock the full folder for lifetime access.</p>
+          <p style="color:var(--moss-600);font-size:.9rem;margin-bottom:1.4rem;">Upload relevant PDFs, images, or presentations. Max 40 files, 1GB each. Hand Notes unlocks last 36 hours per credit; Class Slides and Images can unlock the full folder for lifetime access.</p>
 
           <form id="upload-form">
             <div class="form-field">
@@ -124,7 +124,7 @@
             </div>
             <div class="form-field">
               <label id="files-label" for="files">PDF, Image or Presentation File(s) *</label>
-              <input type="file" id="files" multiple required accept=".pdf,application/pdf">
+              <input type="file" id="files" multiple required accept=".pdf,application/pdf,.ppt,.pptx,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,image/*,.jpg,.jpeg,.png,.gif,.webp,.bmp,.svg">
               <div id="files-selected-preview" class="selected-files-preview hidden"></div>
             </div>
             <div class="form-field hidden" id="upload-images-wrapper">
