@@ -231,6 +231,27 @@ async function deductFullCreditBalance(regId, email) {
 // immediately shows locked again. Safe to call repeatedly — docs
 // already revoked are left alone.
 // ============================================
+// ============================================
+// REVOKE THE FILE UNLOCK A REJECTED UPLOAD GRANTED — when a student
+// uploads to unlock one specific file (js/resources.js hnOpenGate /
+// createFileCreditUnlock), the upload creates its own separate
+// `fileUnlocks` doc stamped with `sourceResourceId`. That doc is what
+// actually grants the 6-hour "View" access — rejecting the resources
+// doc alone never touched it, so a rejected upload kept the file
+// unlocked for the rest of its window. This revokes that specific
+// grant (and only that one, so no other file the student unlocked is
+// affected) the moment the resource is rejected.
+// ============================================
+async function revokeFileUnlockForResource(resourceId) {
+  if (!resourceId) return;
+  const snap = await getDocs(query(collection(db, "fileUnlocks"), where("sourceResourceId", "==", resourceId)));
+  const toRevoke = snap.docs.filter(d => !d.data().revoked);
+  if (!toRevoke.length) return;
+  const batch = writeBatch(db);
+  toRevoke.forEach(d => batch.update(d.ref, { revoked: true }));
+  await batch.commit();
+}
+
 async function revokeAllUnlocksForEmail(email) {
   const normalized = normalizeEmail(email || "");
   if (!normalized) return;
@@ -1030,7 +1051,7 @@ async function loadResources() {
             status: newStatus,
             reviewedAt: new Date(),
             ...(newStatus === "rejected"
-              ? { rejectedAt: new Date(), restrictedUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) }
+              ? { rejectedAt: new Date(), restrictedUntil: null }
               : { rejectedAt: null, restrictedUntil: null })
           };
           await updateDoc(doc(db, "resources", id), moderationData);
@@ -1048,9 +1069,14 @@ async function loadResources() {
               detail: item.fileUrls?.[0]?.name || ""
             });
             item.status = newStatus;
+            // A rejection no longer applies any account-wide restriction
+            // (see js/access.js) — it only needs to lock back up the one
+            // file this specific upload had unlocked, and re-sync the
+            // student's stored access status.
+            if (newStatus === "rejected") await revokeFileUnlockForResource(id);
+            if (item.uploaderEmail) await syncStudentAccessStatus(db, item.uploaderEmail);
           }
         } catch (err) {
-            await syncStudentAccessStatus(db, item.uploaderEmail);
           console.error("[AgriAdmin] resource status update failed:", err);
           alert("Something went wrong updating the status: " + (err && err.message ? err.message : "please try again."));
         }

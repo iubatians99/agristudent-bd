@@ -12,8 +12,13 @@
 //    replacing it) — so the total remaining time keeps growing. If you
 //    upload after everything you had has already run out, the new item
 //    simply starts a fresh window from its own upload time.
-//  • A REJECTED file blocks resource uploads/access for 30 days (and its
-//    own grant is dropped from the stack).
+//  • A REJECTED file's own grant is dropped from the stack (it never
+//    counted as real access to begin with). Rejection no longer applies
+//    an automatic 30-day restriction — the admin's dedicated account
+//    restriction tool (js/admin.js restrictAccountByEmail /
+//    accountRestrictedUntil) is the only restriction mechanism now, so a
+//    rejected upload just stops contributing access; it doesn't lock the
+//    student out of anything on its own.
 //  • All access is calculated from Firestore records (each item's own
 //    upload timestamp), not a browser-only timer, so refreshing the page
 //    or switching devices never resets or loses the access window — only
@@ -43,7 +48,6 @@ export const ACCESS_PER_FILE_MS = 36 * 60 * 60 * 1000; // 36h per credit unlock
 export const ACCESS_PER_CLASSROOM_MS = 48 * 60 * 60 * 1000; // 48h per approved Classroom code
 export const LIFETIME_ACCESS_MS = 100 * 365 * DAY_MS; // practical lifetime sentinel for folder access
 export const ACCESS_PER_AD_MS = 6 * 60 * 60 * 1000; // 6h per watched rewarded ad
-export const RESTRICTION_MS = 30 * DAY_MS;
 const REMINDER_WINDOW_DAYS = 1;
 
 function toDate(val) {
@@ -74,8 +78,9 @@ function eventTime(item, preferred) {
  * classroom code — and grants STACK in upload order: each new grant starts
  * the moment the running balance frees up (or at its own upload time if
  * that is later), so it always tops up remaining time rather than
- * replacing it. A rejected file drops out of the stack and instead opens
- * a 30-day restriction window.
+ * replacing it. A rejected file simply drops out of the stack — it no
+ * longer opens any automatic restriction window (see admin.js for the
+ * admin-driven account restriction tool used instead).
  */
 export function computeResourceAccessStatus(items, now = Date.now()) {
   const list = Array.isArray(items) ? items : [];
@@ -85,21 +90,12 @@ export function computeResourceAccessStatus(items, now = Date.now()) {
   for (const item of list) {
     const status = item?.status || "pending";
 
-    // Admin-set restrictions (rejection, or a manual/custom-duration
-    // restriction from the moderation panel) always take priority.
-    if (item?.restrictedUntil && (status === "rejected" || item?.restricted)) {
-      const explicit = toDate(item.restrictedUntil)?.getTime?.() || 0;
-      if (explicit) restrictedUntil = Math.max(restrictedUntil, explicit);
-      if (status !== "rejected") continue;
-    }
-
-    if (status === "rejected") {
-      const rejectedAt = eventTime(item, "rejectedAt")?.getTime?.() || 0;
-      const explicit = toDate(item?.restrictedUntil)?.getTime?.() || 0;
-      const until = explicit || ((rejectedAt || toDate(item?.submittedAt)?.getTime?.() || now) + RESTRICTION_MS);
-      restrictedUntil = Math.max(restrictedUntil, until);
-      continue;
-    }
+    // Rejection used to auto-open a 30-day restriction window here. That's
+    // removed: the admin's dedicated "Restrict Account" tool
+    // (restrictAccountByEmail / accountRestrictedUntil in js/admin.js) is
+    // now the only restriction mechanism, so a rejected item just drops
+    // out of the grant stack without imposing any restriction of its own.
+    if (status === "rejected") continue;
 
     // A folder-lifetime grant is used only by Class Slides and Images.
     // Admins can revoke it by setting revoked=true.

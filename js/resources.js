@@ -12,35 +12,6 @@ initEmailNotifications();
 const MAX_FILES = 20;
 const MAX_SIZE = 50 * 1024 * 1024; // 50MB
 
-// Global moderation guard used by every resource-upload form.
-// A rejected submission blocks new uploads for 30 days.
-window.__checkResourceRestriction = async function(userEmail) {
-  const email = normalizeEmail(userEmail);
-  if (!email) return 0;
-  try {
-    const q = query(
-      collection(db, "resources"),
-      where("uploaderEmail", "==", email),
-      where("resourceType", "==", "slides_notes")
-    );
-    const snap = await getDocs(q);
-    let until = 0;
-    snap.forEach(d => {
-      const item = d.data();
-      if (item.status !== "rejected") return;
-      const explicit = item.restrictedUntil?.toDate?.()?.getTime?.() || Number(item.restrictedUntil) || 0;
-      const rejectedAt = item.rejectedAt?.toDate?.()?.getTime?.() || Number(item.rejectedAt) || 0;
-      const submittedAt = item.submittedAt?.toDate?.()?.getTime?.() || 0;
-      until = Math.max(until, explicit || ((rejectedAt || submittedAt || Date.now()) + 30 * 24 * 60 * 60 * 1000));
-    });
-    return until > Date.now() ? until : 0;
-  } catch (err) {
-    console.error("[Resource restriction check] failed:", err);
-    // Fail closed: do not allow a new upload when moderation state cannot be checked.
-    return -1;
-  }
-};
-
 
 function detectFileType(file) {
   const name = String(file?.name || "").toLowerCase();
@@ -476,7 +447,8 @@ if (uploadForm) {
     if (files.length > MAX_FILES) { showError(`Maximum ${MAX_FILES} files allowed.`); return; }
     const detectedTypes = files.map(detectFileType);
     if (detectedTypes.some(t => t === "unknown")) { showError("One or more files have an unsupported type. Please use PDF, PPT/PPTX, JPG, PNG, GIF, WebP, or another standard image file."); return; }
-    currentFileType = [...new Set(detectedTypes)].length === 1 ? detectedTypes[0] : "mixed";
+    if (new Set(detectedTypes).size > 1) { showError("Please select files of a single type only — all PDF, all images, or all presentations, not a mix."); return; }
+    currentFileType = detectedTypes[0];
 
     const oversized = files.find(f => f.size > MAX_SIZE);
     if (oversized) { showError(`"${oversized.name}" is over 50MB.`); return; }
@@ -1475,14 +1447,15 @@ if (handNotesGate && handNotesContent) {
   }
 
   // File type selector
-  const imageTitlesWrap = document.getElementById("hn-image-titles-wrap");
-  const imageTitlesList = document.getElementById("hn-image-titles-list");
+  const imageTitlesWrap = document.getElementById("hn-images-titles-wrap");
+  const imageTitlesList = document.getElementById("hn-images-titles-list");
 
   function cleanFileNameAsTitle(name) {
     return name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim();
   }
 
   function renderImageTitleInputs() {
+    if (!imageTitlesWrap || !imageTitlesList) return;
     if (!hnFiles.files || hnFiles.files.length === 0 || !Array.from(hnFiles.files).some(f => detectFileType(f) === "image")) {
       imageTitlesWrap.classList.add("hidden");
       imageTitlesList.innerHTML = "";
@@ -1510,15 +1483,6 @@ if (handNotesGate && handNotesContent) {
       const uploaderEmail = normalizeEmail(document.getElementById("hn-uploaderEmail").value);
       const files = Array.from(hnFiles.files);
 
-      const restriction = await window.__checkResourceRestriction(uploaderEmail);
-      if (restriction !== 0) {
-        const msg = restriction === -1
-          ? "⚠️ We could not verify your upload status. Please try again."
-          : `⚠️ Uploads are restricted for 30 days after a rejected file. Please wait until the restriction ends.`;
-        hnShowStatus(msg, true);
-        return;
-      }
-
       if (files.length === 0) { 
         hnShowStatus("Please choose at least one PDF, image, or presentation file.", true); 
         return; 
@@ -1532,7 +1496,11 @@ if (handNotesGate && handNotesContent) {
         hnShowStatus("One or more files have an unsupported type. Please use PDF, PPT/PPTX, JPG, PNG, GIF, or WebP.", true);
         return;
       }
-      currentFileType = [...new Set(detectedTypes)].length === 1 ? detectedTypes[0] : "mixed";
+      if (new Set(detectedTypes).size > 1) {
+        hnShowStatus("Please select files of a single type only — all PDF, all images, or all presentations, not a mix.", true);
+        return;
+      }
+      currentFileType = detectedTypes[0];
 
       const oversized = files.find(f => f.size > MAX_SIZE);
       if (oversized) { 
@@ -1570,7 +1538,7 @@ if (handNotesGate && handNotesContent) {
 
         // Attach the per-image title captured at upload time (if any),
         // so the gallery and viewer can display it under the image.
-        if (detectedTypes.some(t => t === "image")) {
+        if (detectedTypes.some(t => t === "image") && imageTitlesList) {
           const titleInputs = imageTitlesList.querySelectorAll(".hn-image-title-input");
           fileUrls.forEach((f, i) => {
             const t = titleInputs[i] ? titleInputs[i].value.trim() : "";
@@ -2302,8 +2270,8 @@ if (anotherUploadBtn && anotherUploadModal) {
   const auProgressWrap = document.getElementById("au-progress-wrap");
   const auProgressBar = document.getElementById("au-progress-ring-bar");
   const auProgressText = document.getElementById("au-progress-ring-text");
-  const auImageTitlesWrap = document.getElementById("au-image-titles-wrap");
-  const auImageTitlesList = document.getElementById("au-image-titles-list");
+  const auImageTitlesWrap = document.getElementById("au-images-titles-wrap");
+  const auImageTitlesList = document.getElementById("au-images-titles-list");
   const auSuccess = document.getElementById("au-success");
   const AU_CIRCUMFERENCE = 226.19;
   let auFileType = "auto";
@@ -2379,6 +2347,7 @@ if (anotherUploadBtn && anotherUploadModal) {
     return name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim();
   }
   function renderAuImageTitleInputs() {
+    if (!auImageTitlesWrap || !auImageTitlesList) return;
     if (!auFiles.files || auFiles.files.length === 0 || !Array.from(auFiles.files).some(f => detectFileType(f) === "image")) {
       auImageTitlesWrap.classList.add("hidden");
       auImageTitlesList.innerHTML = "";
@@ -2414,20 +2383,12 @@ if (anotherUploadBtn && anotherUploadModal) {
     const uploaderEmail = normalizeEmail(document.getElementById("au-uploaderEmail").value);
     const files = Array.from(auFiles.files);
 
-    const restriction = await window.__checkResourceRestriction(uploaderEmail);
-    if (restriction !== 0) {
-      const msg = restriction === -1
-        ? "⚠️ We could not verify your upload status. Please try again."
-        : "⚠️ Uploads are restricted for 30 days after a rejected file. Please wait until the restriction ends.";
-      auShowStatus(msg, true);
-      return;
-    }
-
     if (files.length === 0) { auShowStatus("Please choose at least one PDF, image, or presentation file.", true); return; }
     if (files.length > MAX_FILES) { auShowStatus(`Maximum ${MAX_FILES} files allowed.`, true); return; }
     const detectedTypes = files.map(detectFileType);
     if (detectedTypes.some(t => t === "unknown")) { auShowStatus("One or more files have an unsupported type. Please use PDF, PPT/PPTX, JPG, PNG, GIF, or WebP.", true); return; }
-    auFileType = [...new Set(detectedTypes)].length === 1 ? detectedTypes[0] : "mixed";
+    if (new Set(detectedTypes).size > 1) { auShowStatus("Please select files of a single type only — all PDF, all images, or all presentations, not a mix.", true); return; }
+    auFileType = detectedTypes[0];
     const oversized = files.find(f => f.size > MAX_SIZE);
     if (oversized) { auShowStatus(`"${oversized.name}" is over 50MB.`, true); return; }
 
@@ -2458,7 +2419,7 @@ if (anotherUploadBtn && anotherUploadModal) {
       }
       fileUrls.forEach((f, i) => { f.fileType = detectedTypes[i]; });
 
-      if (detectedTypes.some(t => t === "image")) {
+      if (detectedTypes.some(t => t === "image") && auImageTitlesList) {
         const titleInputs = auImageTitlesList.querySelectorAll(".au-image-title-input");
         fileUrls.forEach((f, i) => {
           const t = titleInputs[i] ? titleInputs[i].value.trim() : "";
