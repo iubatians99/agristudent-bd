@@ -2,125 +2,48 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
     // ============================================
-    // HELPER FUNCTIONS
+    // THIS BUCKET IS NOT USED BY THE APP — DENY EVERYTHING.
     // ============================================
-    
-    function signedIn() { 
-      return request.auth != null; 
-    }
-    
-    function admin() { 
-      return signedIn() && request.auth.token.admin == true; 
-    }
-    
-    // Check if user has active resource access based on Firestore registration doc
-    // This queries the registrations collection to find an access record.
-    function hasActiveResourceAccess() {
-      let regId = request.auth.uid;
-      // Fallback: if uid-based lookup fails, try email-based lookup
-      let regData = firestore.get(/databases/(default)/documents/registrations/$(regId)).data;
-      
-      // Require the registration to exist
-      if (regData == null) return false;
-      
-      // Check if access is active (from access.js computation)
-      // Access is "active" when:
-      //   1. User is not restricted, AND
-      //   2. accessUntil is in the future
-      let accessUntil = regData.accessUntil;
-      // restrictedUntil is stored as a Firestore Timestamp (see
-      // js/profile.js / js/admin.js), so it must be converted to millis
-      // before comparing — comparing a Timestamp directly against a
-      // number always evaluates to false in security rules, which
-      // silently made every custom/rejection restriction a no-op here.
-      let restrictedUntilRaw = regData.get('restrictedUntil', null);
-      let restrictedUntilMs = restrictedUntilRaw is timestamp ? restrictedUntilRaw.toMillis() : 0;
-      let restricted = regData.get('restricted', false) == true || restrictedUntilMs > request.time.toMillis();
-      
-      if (restricted) return false;
-      if (accessUntil == null) return false;
-      
-      // Convert Firestore timestamp to milliseconds
-      let accessUntilMs = accessUntil.toMillis();
-      return accessUntilMs > request.time.toMillis();
-    }
-    
-    // ============================================
-    // RESOURCES (user-uploaded files for verification)
-    // ============================================
-    match /resources/{uid}/{fileName} {
-      // Read: requires either active access OR admin
-      allow read: if hasActiveResourceAccess() || admin();
-      
-      // Write: only the user themselves, only if not already approved
-      // (prevents self-approval)
-      allow write: if signedIn() 
-        && request.auth.uid == uid 
-        && admin() != true
-        && request.resource.size < 55 * 1024 * 1024
-        && request.resource.contentType.matches('application/pdf|image/(jpeg|png|gif|webp)|application/(vnd.ms-powerpoint|vnd.openxmlformats-officedocument.presentationml.presentation)');
-      
-      // Delete: user can delete their own, admin can delete anything
-      allow delete: if (signedIn() && request.auth.uid == uid && admin() != true) || admin();
-    }
-    
-    // ============================================
-    // STUDENT IDS (for verification, access-gated)
-    // ============================================
-    match /student-ids/{uid}/{fileName} {
-      // Read: user can read their own, OR admin can read any
-      allow read: if (signedIn() && request.auth.uid == uid && hasActiveResourceAccess()) || admin();
-      
-      // Write: user can write their own (for upload/update)
-      allow write: if signedIn() 
-        && request.auth.uid == uid 
-        && hasActiveResourceAccess()
-        && request.resource.size < 6 * 1024 * 1024
-        && request.resource.contentType.matches('image/(jpeg|png|webp)');
-      
-      // Delete: user can delete their own, admin can delete any
-      allow delete: if (signedIn() && request.auth.uid == uid && hasActiveResourceAccess()) || admin();
-    }
-    
-    // ============================================
-    // AVATARS (public read, auth write)
-    // ============================================
-    match /avatars/{uid}/{fileName} {
-      // Read: public (no auth required) — used in student listings, etc.
-      allow read: if true;
-      
-      // Write: user can write their own
-      allow write: if signedIn() 
-        && request.auth.uid == uid 
-        && request.resource.size < 2 * 1024 * 1024
-        && request.resource.contentType.matches('image/(jpeg|png|webp)');
-      
-      // Delete: user can delete their own, admin can delete any
-      allow delete: if (signedIn() && request.auth.uid == uid) || admin();
-    }
-    
-    // ============================================
-    // BLOG IMAGES (auth write, status-based read)
-    // ============================================
-    match /blog/{uid}/{fileName} {
-      // Read: requires auth and active access (blog posts are part of resource access)
-      allow read: if hasActiveResourceAccess() || admin();
-      
-      // Write: user can write their own (for blog posts)
-      allow write: if signedIn() 
-        && request.auth.uid == uid 
-        && request.resource.size < 10 * 1024 * 1024
-        && request.resource.contentType.matches('image/(jpeg|png|gif|webp)');
-      
-      // Delete: user can delete their own, admin can delete any
-      allow delete: if (signedIn() && request.auth.uid == uid) || admin();
-    }
-    
-    // ============================================
-    // DENY ALL OTHER PATHS
-    // ============================================
-    match /{allPaths=**} { 
-      allow read, write: if false; 
+    // Confirmed by checking the actual client code, not assumption:
+    //   - js/firebase-config.js never imports "firebase-storage.js" or
+    //     calls getStorage(). The Firebase Storage SDK is never even
+    //     loaded on any page.
+    //   - No file in the codebase calls uploadBytes/uploadBytesResumable,
+    //     ref(storage, ...), or getDownloadURL from the Storage SDK.
+    //   - Every real upload (student ID photos, Hand Notes/Class
+    //     Slides/Images, blog images, avatars) goes through Cloudinary
+    //     via uploadToCloudinary() (see js/firebase-config.js's
+    //     CLOUDINARY_* constants and every *.js file that imports them).
+    //   - js/view.js keeps "firebasestorage.googleapis.com" in its
+    //     ALLOWED_HOSTS allowlist only as defensive belt-and-braces for
+    //     rendering a URL, not because anything writes there.
+    //
+    // The previous version of this file (paths like /resources/{uid},
+    // /student-ids/{uid}, /avatars/{uid}, /blog/{uid}) was written as if
+    // students sign in with Firebase Auth and upload directly to this
+    // bucket (request.auth.uid, hasActiveResourceAccess() querying
+    // Firestore). Neither is true — only the admin panel ever calls
+    // signInWithEmailAndPassword (see js/admin.js), so under the old
+    // rules request.auth.uid was never a student's uid,
+    // hasActiveResourceAccess() could never resolve a real registration
+    // by uid, and reads from /avatars/{uid} were flatly public. None of
+    // that gated anything a real request in this app ever sent — the
+    // rules were dead weight that looked like protection.
+    //
+    // A storage bucket with no legitimate traffic should default-deny,
+    // not carry rules for paths nothing writes to: if the bucket is ever
+    // activated by mistake (a stray script, a console upload, a future
+    // feature added without updating this file), the safe default is
+    // that nothing is readable or writable until rules are deliberately
+    // written for that real use case.
+    //
+    // If Firebase Storage becomes real for this app in the future (e.g.
+    // migrating off Cloudinary), this file needs to be rewritten from
+    // scratch against however that feature actually authenticates and
+    // uploads — copying the shape below is not a starting point, since
+    // it intentionally grants nothing.
+    match /{allPaths=**} {
+      allow read, write: if false;
     }
   }
 }

@@ -864,6 +864,7 @@ img{ max-width:100%; display:block; }
   margin:0; padding:0;
 }
 .nav-links-head{ display:none; }
+.nav-links-foot{ display:none; }
 .nav-links a{
   display:flex;
   align-items:center;
@@ -1003,6 +1004,47 @@ img{ max-width:100%; display:block; }
   .nav-links a.active{ background:var(--leaf-500); color:#fff; }
   .nav-link-icon{ display:inline-flex; font-size:1.15rem; width:1.5rem; }
   .nav-toggle{ display:flex; }
+
+  /* Account row pinned to the bottom of the slide-in drawer — the
+     top-bar auth slot (avatar/name/Logout squeezed next to the search
+     icon and hamburger) has very little room on narrow phones and was
+     reported as "logout not shown on mobile". This gives Logout (and,
+     when signed out, Login) a full-width, always-visible row inside
+     the drawer itself, independent of how tight the top bar gets.
+     Populated by js/session.js (renderAuthSlot). */
+  .nav-links-foot{
+    display:block;
+    margin-top:.5rem;
+    padding:.9rem 1.2rem calc(.9rem + env(safe-area-inset-bottom, 0px));
+    border-top:1px solid var(--line);
+  }
+  .nav-drawer-account{
+    display:flex; align-items:center; gap:.65rem;
+    padding:.5rem .2rem .9rem;
+  }
+  .nav-drawer-avatar{ width:36px; height:36px; border-radius:50%; object-fit:cover; flex-shrink:0; }
+  .nav-drawer-account-name{
+    font-weight:700; font-size:.92rem; color:var(--moss-900);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .nav-drawer-logout, .nav-drawer-login{
+    display:flex; align-items:center; justify-content:center; gap:.4rem;
+    width:100%;
+    font-weight:700; font-size:.92rem;
+    padding:.75rem .9rem;
+    border-radius:12px;
+    cursor:pointer;
+  }
+  .nav-drawer-logout{
+    background:none; border:1px solid var(--terracotta-400);
+    color:var(--terracotta-500);
+  }
+  .nav-drawer-logout:hover{ background:rgba(196,90,63,.08); }
+  .nav-drawer-login{
+    background:var(--leaf-500); border:none; color:#fff;
+    text-decoration:none;
+  }
+  .nav-drawer-login:hover{ background:var(--moss-700); }
 }
 
 

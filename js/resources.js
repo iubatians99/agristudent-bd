@@ -5,7 +5,7 @@ import {
 import { normalizeEmail, normalizeStudentId } from "./identity.js";
 import { getSession } from "./session.js";
 import { initEmailNotifications } from "./email-config.js";
-import { computeResourceAccessStatus, computeFileAccessStatus, formatDate, formatRemaining, normalizeClassroomCode, isAuthenticClassroomCode } from "./access.js";
+import { computeResourceAccessStatus, computeFileAccessStatus, formatDate, formatRemaining, normalizeClassroomCode, isAuthenticClassroomCode, fileCount } from "./access.js";
 
 initEmailNotifications();
 

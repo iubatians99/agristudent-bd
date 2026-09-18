@@ -3,6 +3,33 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ============================================
+    // ADMIN CHECK — used everywhere a comment below says
+    // "admin panel only" / "admin-only".
+    // ============================================
+    // SECURITY FIX: every one of those spots previously read
+    // `request.auth != null` — i.e. "any Firebase Auth session", not
+    // "an admin session". That happened to work in practice ONLY
+    // because js/admin.js is the sole place in the app that ever calls
+    // signInWithEmailAndPassword(); no other page signs a student in
+    // with Firebase Auth. But admin.js's own admin check
+    // (`token.claims.admin !== true` → signOut()) is a CLIENT-SIDE UI
+    // gate — it decides what the browser shows, not what Firestore
+    // allows. Anyone holding ANY valid Firebase Auth account for this
+    // project (a leftover test account created in the console, a
+    // second admin who never got the custom claim set via
+    // scripts/set-admin-claim.mjs, or any account created through a
+    // sign-in method enabled later) could bypass the admin.js UI
+    // entirely and call the Firestore SDK directly with full
+    // update/delete rights over registrations, resources, terms,
+    // messages, classroom codes, unlock grants, coffee requests, blog
+    // moderation, etc. Requiring the actual `admin` custom claim here
+    // closes that gap without changing behavior for the real admin
+    // account, which already has the claim.
+    function isAdmin() {
+      return request.auth != null && request.auth.token.admin == true;
+    }
+
+    // ============================================
     // REGISTRATIONS: Student signup + OTP verification
     // ============================================
     // Students are auto-approved once the email OTP is verified. Admin authentication
@@ -44,7 +71,7 @@ service cloud.firestore {
       // that field must have (a real Cloudinary URL, or a 64-character
       // SHA-256 hex hash — never the plaintext password itself, which
       // never travels to Firestore at all).
-      allow update: if request.auth != null || (
+      allow update: if isAdmin() || (
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['avatarUrl']) &&
         request.resource.data.avatarUrl is string &&
         request.resource.data.avatarUrl.matches('^https://res[.]cloudinary[.]com/.*')
@@ -53,7 +80,7 @@ service cloud.firestore {
         request.resource.data.passwordHash is string &&
         request.resource.data.passwordHash.size() == 64
       );
-      allow delete: if request.auth != null;
+      allow delete: if isAdmin();
     }
 
     // ============================================
@@ -76,7 +103,7 @@ service cloud.firestore {
 
       allow get: if
         resource.data.status == "approved" ||
-        request.auth != null;
+        isAdmin();
 
       // "list: if true" — same reasoning as registrations above. Students
       // never sign in, so there is no request.auth.token.email to check
@@ -96,7 +123,7 @@ service cloud.firestore {
       allow list: if true;
 
       // Admin panel only (approve/reject/edit in js/admin.js)
-      allow update, delete: if request.auth != null;
+      allow update, delete: if isAdmin();
     }
 
     // ============================================
@@ -113,19 +140,19 @@ service cloud.firestore {
         request.resource.data.name.size() > 0 &&
         (
           (request.resource.data.status == "pending" && request.auth == null) ||
-          (request.resource.data.status == "approved" && request.auth != null)
+          (request.resource.data.status == "approved" && isAdmin())
         );
 
       allow get: if
         resource.data.status == "approved" ||
-        request.auth != null;
+        isAdmin();
 
       // See the matching comment on /resources/{id} above — same fix,
       // same reason (students' own pending/rejected contributions need
       // to be listable by uploaderEmail on their profile page).
       allow list: if true;
 
-      allow update, delete: if request.auth != null;
+      allow update, delete: if isAdmin();
     }
 
     // ============================================
@@ -142,7 +169,7 @@ service cloud.firestore {
         request.resource.data.keys().hasAll(['courseCode', 'courseName']) &&
         request.resource.data.courseCode is string &&
         request.resource.data.courseCode.size() > 0;
-      allow update, delete: if request.auth != null;
+      allow update, delete: if isAdmin();
     }
 
     // ============================================
@@ -150,7 +177,7 @@ service cloud.firestore {
     // ============================================
     match /timeline/{id} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if isAdmin();
     }
 
     // ============================================
@@ -171,7 +198,7 @@ service cloud.firestore {
         (!('read' in request.resource.data) || request.resource.data.read == false);
 
       // Admin-only inbox (js/admin.js loadMessages)
-      allow read, update, delete: if request.auth != null;
+      allow read, update, delete: if isAdmin();
     }
 
     // ============================================
@@ -198,7 +225,7 @@ service cloud.firestore {
       allow list, get: if true;
 
       // Admin panel only (js/admin.js loadClassroomCodes / moderation).
-      allow update, delete: if request.auth != null;
+      allow update, delete: if isAdmin();
     }
 
     // ============================================
@@ -226,7 +253,7 @@ service cloud.firestore {
       allow list, get: if true;
 
       // Admin panel only — reviewing/deleting for abuse monitoring.
-      allow update, delete: if request.auth != null;
+      allow update, delete: if isAdmin();
     }
 
     // ============================================
@@ -236,7 +263,7 @@ service cloud.firestore {
     // these grants.
     match /manualUnlocks/{id} {
       allow create: if
-        request.auth != null &&
+        isAdmin() &&
         request.resource.data.keys().hasAll(['kind','fromEmail','userEmail','unlockType','days','durationMs']) &&
         request.resource.data.kind == "manual" &&
         request.resource.data.fromEmail is string && request.resource.data.fromEmail.size() > 0 &&
@@ -245,7 +272,7 @@ service cloud.firestore {
         request.resource.data.days is number && request.resource.data.days >= 1 &&
         request.resource.data.durationMs is number && request.resource.data.durationMs >= 86400000;
       allow list, get: if true;
-      allow update, delete: if request.auth != null;
+      allow update, delete: if isAdmin();
     }
 
     // ============================================
@@ -270,7 +297,7 @@ service cloud.firestore {
            request.resource.data.durationMs > 0 &&
            request.resource.data.durationMs <= 172800000));
       allow list, get: if true;
-      allow update, delete: if request.auth != null;
+      allow update, delete: if isAdmin();
     }
 
     // ============================================
@@ -284,7 +311,7 @@ service cloud.firestore {
         request.resource.data.category in ["hand_notes","class_slides","images"] &&
         request.resource.data.revoked == false;
       allow list, get: if true;
-      allow update, delete: if request.auth != null;
+      allow update, delete: if isAdmin();
     }
 
     // ============================================
@@ -298,7 +325,7 @@ service cloud.firestore {
         request.resource.data.amount is number && request.resource.data.amount > 0 &&
         request.resource.data.status == "pending";
       allow list, get: if true;
-      allow update, delete: if request.auth != null;
+      allow update, delete: if isAdmin();
     }
 
     // ============================================
@@ -306,8 +333,8 @@ service cloud.firestore {
     // existing non-owner file unlock grants at once.
     match /resourceLocks/{id} {
       allow get, list: if true;
-      allow create, update: if request.auth != null && request.auth.token.admin == true;
-      allow delete: if request.auth != null && request.auth.token.admin == true;
+      allow create, update: if isAdmin();
+      allow delete: if isAdmin();
     }
 
     // ============================================
@@ -315,7 +342,7 @@ service cloud.firestore {
     // ============================================
     match /settings/{id} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if isAdmin();
     }
 
     // ============================================
@@ -332,7 +359,7 @@ service cloud.firestore {
     // read:false -> true (plus its timestamp), never touch the sender,
     // recipient, subject or body.
     match /adminMessages/{id} {
-      allow create: if request.auth != null &&
+      allow create: if isAdmin() &&
         request.resource.data.keys().hasAll(['toRegId', 'toEmail', 'subject', 'body', 'sentAt', 'read']) &&
         request.resource.data.toRegId is string && request.resource.data.toRegId.size() > 0 &&
         request.resource.data.toEmail is string && request.resource.data.toEmail.size() > 0 &&
@@ -349,12 +376,12 @@ service cloud.firestore {
       // A student may only ever mark their own received message as read
       // (read:false -> true, plus readAt) — every other field is frozen.
       // The admin panel can do anything (delete, edit) via its own auth.
-      allow update: if request.auth != null || (
+      allow update: if isAdmin() || (
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'readAt']) &&
         request.resource.data.read == true
       );
 
-      allow delete: if request.auth != null;
+      allow delete: if isAdmin();
     }
 
     // ============================================
@@ -399,7 +426,7 @@ service cloud.firestore {
       // likesCount branch also floors at 0 — an unlike can never push it
       // negative, even from a client bug, so a bad "unlike" caps out at
       // 0 instead of quietly going negative forever.
-      allow update: if request.auth != null || (
+      allow update: if isAdmin() || (
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likesCount']) &&
         request.resource.data.likesCount >= 0 &&
         (request.resource.data.likesCount == resource.data.likesCount + 1 ||
@@ -458,7 +485,7 @@ service cloud.firestore {
       // still pending/pending_edit/rejected — i.e. not yet public-approved
       // — which covers the legitimate "student deletes their own draft"
       // case. Deleting an approved post now requires an admin session.
-      allow delete: if request.auth != null ||
+      allow delete: if isAdmin() ||
         resource.data.status in ["pending", "pending_edit", "rejected"];
     }
 
@@ -480,7 +507,7 @@ service cloud.firestore {
       // without auth) also decrement the post's commentsCount here; that
       // decrement happens client-side via the blogPosts/{id} counter
       // update rule above, in the same admin action.
-      allow update, delete: if request.auth != null;
+      allow update, delete: if isAdmin();
     }
 
     // ============================================

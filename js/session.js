@@ -20,6 +20,23 @@ import { fetchMessagesForUser } from "./inbox.js";
 
 const SESSION_KEY = "agri_session_v1";
 
+// Minimal HTML-escape — session.fullName/avatarUrl come from the student's
+// own registration record (no format validated server-side beyond "is a
+// string"), and both the top-bar auth slot and the drawer account row
+// below insert them via innerHTML. Without this, a fullName like
+// `<img src=x onerror=...>` would execute in the student's own browser
+// every time the navbar renders (self-XSS at minimum; worth closing
+// since it's cheap and this is the one place that data reaches the DOM
+// unescaped).
+function esc(val) {
+  return String(val ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#x27;");
+}
+
 export function getSession() {
   try {
     const raw = localStorage.getItem(SESSION_KEY);
@@ -75,36 +92,61 @@ export function clearSession() {
 // ============================================
 function renderAuthSlot() {
   const slot = document.getElementById("navbar-auth-slot");
-  if (!slot) return;
+  const drawerFoot = document.getElementById("nav-links-foot");
+  if (!slot && !drawerFoot) return;
   const session = getSession();
 
   if (!session) {
-    // Registration now happens as part of the Login flow (an email that
-    // isn't found there offers to register), so the navbar only needs a
-    // single Login entry point — no separate "Register Now" link.
-    slot.innerHTML = `<a href="login.html" class="navbar-auth-login">Login</a>`;
+    if (slot) {
+      // Registration now happens as part of the Login flow (an email that
+      // isn't found there offers to register), so the navbar only needs a
+      // single Login entry point — no separate "Register Now" link.
+      slot.innerHTML = `<a href="login.html" class="navbar-auth-login">Login</a>`;
+    }
+    if (drawerFoot) {
+      drawerFoot.innerHTML = `<a href="login.html" class="nav-drawer-login">Login</a>`;
+    }
     return;
   }
 
   const displayName = (session.fullName || session.email).split(" ")[0];
-  slot.innerHTML = `
-    <a href="profile.html#inbox" class="navbar-auth-profile" title="${session.fullName || session.email}">
-      <span class="navbar-auth-avatar-wrap">
-        <img src="${session.avatarUrl}" alt="" class="navbar-auth-avatar">
-        <span id="navbar-inbox-dot" class="navbar-inbox-dot hidden" title="You have unread messages"></span>
-      </span>
-      <span>${displayName}</span>
-    </a>
-    <button type="button" class="navbar-auth-logout" id="navbar-logout-btn">Logout</button>
-  `;
-
-  const logoutBtn = document.getElementById("navbar-logout-btn");
-  if (logoutBtn) {
-    logoutBtn.addEventListener("click", () => {
-      clearSession();
-      window.location.href = "index.html";
-    });
+  if (slot) {
+    slot.innerHTML = `
+      <a href="profile.html#inbox" class="navbar-auth-profile" title="${esc(session.fullName || session.email)}">
+        <span class="navbar-auth-avatar-wrap">
+          <img src="${esc(session.avatarUrl)}" alt="" class="navbar-auth-avatar">
+          <span id="navbar-inbox-dot" class="navbar-inbox-dot hidden" title="You have unread messages"></span>
+        </span>
+        <span>${esc(displayName)}</span>
+      </a>
+      <button type="button" class="navbar-auth-logout" id="navbar-logout-btn">Logout</button>
+    `;
   }
+
+  // Dedicated, always-visible account row in the mobile slide-in drawer
+  // (see the "nav-drawer-*" CSS) — independent of the top-bar auth slot,
+  // which has very little room to work with on narrow phones.
+  if (drawerFoot) {
+    drawerFoot.innerHTML = `
+      <div class="nav-drawer-account">
+        <img src="${esc(session.avatarUrl)}" alt="" class="nav-drawer-avatar">
+        <span class="nav-drawer-account-name">${esc(session.fullName || session.email)}</span>
+      </div>
+      <button type="button" class="nav-drawer-logout" id="nav-drawer-logout-btn">↪ Logout</button>
+    `;
+  }
+
+  function wireLogout(id) {
+    const btn = document.getElementById(id);
+    if (btn) {
+      btn.addEventListener("click", () => {
+        clearSession();
+        window.location.href = "index.html";
+      });
+    }
+  }
+  wireLogout("navbar-logout-btn");
+  wireLogout("nav-drawer-logout-btn");
 
   // Best-effort — a failed/slow inbox check should never block the navbar.
   fetchMessagesForUser(session.regId)
