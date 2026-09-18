@@ -3133,7 +3133,7 @@ body.viewer-layout {
 @keyframes agriUnlockFail{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
 
 /* ============================================
-   V24 — RESPONSIVE NAVBAR PROFILE + PREMIUM PROFILE DASHBOARD
+   RESPONSIVE NAVBAR PROFILE (site-wide — used in the nav on every page)
    ============================================ */
 .navbar-auth-profile{min-width:0;max-width:190px;}
 .navbar-auth-profile > span:last-child{display:block;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
@@ -3147,58 +3147,16 @@ body.viewer-layout {
 @media (max-width:430px){
   .navbar-auth-profile > span:last-child{max-width:82px;}
 }
-
-.profile-dashboard{min-width:0;}
-.profile-page-head{padding:clamp(1.25rem,3vw,2rem) clamp(1rem,3vw,1.7rem);}
-.profile-identity-card,.profile-access-card,.credit-balance-card,.profile-content-card,.password-card{min-width:0;}
-.profile-card-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem;align-items:stretch;}
-.profile-content-card{border:1px solid rgba(31,46,34,.09);border-radius:22px;background:rgba(255,255,255,.94);box-shadow:0 12px 30px rgba(31,46,34,.065);overflow:hidden;display:flex;flex-direction:column;}
-.profile-content-card .card-head{display:flex;align-items:center;justify-content:space-between;gap:.6rem;padding:1rem 1.05rem;border-bottom:1px solid rgba(31,46,34,.07);font-weight:800;color:var(--moss-900);font-size:.83rem;}
-.profile-content-card .card-body{padding:1rem 1.05rem;flex:1;min-width:0;}
-.contribution-card{background:linear-gradient(145deg,#fff,#f5faf2);}
-.contribution-total{font:700 .66rem var(--font-mono);color:var(--leaf-500);white-space:nowrap;}
-.contribution-status-grid{display:grid;gap:.55rem;}
-.contribution-status{display:flex;align-items:center;justify-content:space-between;padding:.7rem .75rem;border:1px solid rgba(107,155,94,.15);border-radius:13px;background:#fbfdf9;}
-.contribution-status strong{font:800 1rem var(--font-mono);color:var(--moss-900);}
-.contribution-status-left{display:flex;align-items:center;gap:.48rem;font-size:.72rem;font-weight:700;color:var(--moss-700);}
-.contribution-dot{width:7px;height:7px;border-radius:50%;background:var(--leaf-500);display:inline-block;}
-.contribution-status.pending .contribution-dot{background:var(--wheat-400);}
-.contribution-status.rejected .contribution-dot{background:var(--terracotta-500);}
-#uploads-list,#my-posts-list{min-width:0;}
-#uploads-list > *,#my-posts-list > *{max-width:100%;}
-.password-card{border:1px solid rgba(31,46,34,.09);border-radius:22px;background:#fff;box-shadow:0 12px 30px rgba(31,46,34,.06);}
-@media (max-width:900px){
-  .profile-card-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
-  .profile-card-grid > :last-child{grid-column:1/-1;}
-}
-@media (max-width:640px){
-  .profile-page-head{border-radius:20px;margin-bottom:1rem;}
-  .profile-identity-card{grid-template-columns:1fr;text-align:center;padding:1.1rem;gap:.75rem;}
-  .profile-avatar-wrap{margin:0 auto;}
-  .profile-name-row{justify-content:center;}
-  .profile-meta{justify-items:center;overflow-wrap:anywhere;}
-  .profile-status-pill{margin-left:auto;margin-right:auto;}
-  .profile-metrics{grid-template-columns:1fr;gap:.55rem;}
-  .profile-metric{padding:.85rem .9rem;}
-  .profile-access-card{grid-template-columns:1fr;padding:1rem;gap:.8rem;text-align:center;}
-  .access-copy p{font-size:.78rem;}
-  .credit-panel-head{align-items:flex-start;}
-  .credit-balance-ring{width:76px;height:76px;}
-  .credit-panel-stats{grid-template-columns:1fr 1fr 1fr;}
-  .profile-card-grid{grid-template-columns:1fr;gap:.75rem;}
-  .profile-card-grid > :last-child{grid-column:auto;}
-  .profile-content-card .card-head{padding:.85rem .9rem;}
-  .profile-content-card .card-body{padding:.85rem .9rem;}
-  .password-card{padding:.9rem!important;}
-  .password-card > div:first-child{align-items:flex-start;}
-  .password-card .btn-primary{width:100%;}
-  .profile-password-inline-form{grid-template-columns:1fr;}
-}
 @media (max-width:380px){
   .container{padding-left:.85rem;padding-right:.85rem;}
-  .credit-panel-stats{grid-template-columns:1fr;}
   .navbar-auth-profile > span:last-child{display:block;max-width:54px;font-size:.64rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 }
+
+/* NOTE: the My Profile page (profile.html) styles its own dashboard,
+   identity card, credit wallet, access card, contribution/upload/blog
+   cards and password panel entirely in its own <style> block, so none
+   of those selectors live here — that keeps the profile redesign
+   self-contained instead of fighting global overrides. */
 
 /* Admin global lock control */
 .admin-global-lock-card{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:1rem;padding:1.05rem 1.15rem;border:1px solid rgba(181,101,29,.22);border-radius:18px;background:linear-gradient(135deg,#fffaf4,#fff);box-shadow:0 10px 25px rgba(31,46,34,.05);}
@@ -3210,10 +3168,8 @@ body.viewer-layout {
 .admin-global-lock-btn:disabled{opacity:.6;cursor:wait;}
 @media(max-width:700px){.admin-global-lock-card{align-items:stretch;flex-direction:column;}.admin-global-lock-btn{width:100%;}}
 
-/* V25 — profile/mobile hardening */
-.profile-container{max-width:1120px!important;}
-@media(max-width:680px){.profile-container{padding-left:.8rem!important;padding-right:.8rem!important;}.profile-identity-card{grid-template-columns:1fr!important;text-align:center;}.profile-meta{justify-items:center;overflow-wrap:anywhere;}.profile-metrics{grid-template-columns:repeat(3,minmax(0,1fr));gap:.5rem;}.profile-metric{padding:.8rem .6rem;}.profile-metric strong{font-size:1.15rem;}.profile-metric span{font-size:.62rem;}.profile-card-grid{grid-template-columns:1fr!important;}.profile-card-grid>:last-child{grid-column:auto!important;}}
-@media(max-width:430px){.profile-metrics{grid-template-columns:1fr;}.profile-metric{display:flex;align-items:center;justify-content:space-between;gap:1rem;}.profile-metric span{margin:0;}.navbar-auth-profile{max-width:122px!important;}.navbar-auth-profile>span:last-child{display:block!important;max-width:58px!important;font-size:.62rem!important;}.navbar-auth-avatar{width:30px!important;height:30px!important;}}
+/* Small-screen navbar avatar hardening (site-wide) */
+@media(max-width:430px){.navbar-auth-profile{max-width:122px!important;}.navbar-auth-profile>span:last-child{display:block!important;max-width:58px!important;font-size:.62rem!important;}.navbar-auth-avatar{width:30px!important;height:30px!important;}}
 
 /* ============================================
    UNLOCK-GATE "CHOOSE HOW TO UNLOCK" STEP
