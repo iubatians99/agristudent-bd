@@ -382,7 +382,7 @@ function renderPasswordSection(regId, reg) {
 // how many are left to spend right now.
 // ============================================
 function renderCreditWallet(wallet) {
-  const { creditsEarned, creditsUsed, creditsRemaining, breakdown } = wallet;
+  const { creditsEarned, creditsUsed, creditsRemaining, recentActivity = [] } = wallet;
 
   document.getElementById("stat-credits-earned")?.replaceChildren(document.createTextNode(String(creditsEarned)));
   document.getElementById("stat-credits-available")?.replaceChildren(document.createTextNode(String(creditsRemaining)));
@@ -401,19 +401,20 @@ function renderCreditWallet(wallet) {
     ring.style.setProperty("--wallet-pct", `${pct * 3.6}deg`);
   }
 
+  // Recent activity — the 5 most recent earn/spend events, newest first
+  // (see js/credits.js buildRecentActivity). Replaces the old category
+  // rollup, which repeated the same "earned/available" numbers already
+  // shown in the stats above it.
   const breakdownEl = document.getElementById("credit-wallet-breakdown");
   if (breakdownEl) {
-    breakdownEl.innerHTML = breakdown.map(row => `
-      <div class="wallet-breakdown-row">
-        <span class="wallet-breakdown-icon" aria-hidden="true">${row.icon}</span>
-        <span class="wallet-breakdown-label">${esc(row.label)}${row.detail ? `<small>${esc(row.detail)}</small>` : ""}</span>
-        <span class="wallet-breakdown-amount">+${row.amount}</span>
-      </div>`).join("") + (creditsUsed > 0 ? `
-      <div class="wallet-breakdown-row is-spend">
-        <span class="wallet-breakdown-icon" aria-hidden="true">🔓</span>
-        <span class="wallet-breakdown-label">Files unlocked<small>1 credit per file · ${creditsUsed} unlocked in total, all time</small></span>
-        <span class="wallet-breakdown-amount">−${creditsUsed}</span>
-      </div>` : "");
+    breakdownEl.innerHTML = recentActivity.length
+      ? recentActivity.map(row => `
+        <div class="wallet-breakdown-row${row.type === "use" ? " is-spend" : ""}">
+          <span class="wallet-breakdown-icon" aria-hidden="true">${row.icon}</span>
+          <span class="wallet-breakdown-label">${esc(row.label)}${row.dateMs ? `<small>${esc(formatDate(row.dateMs))}</small>` : ""}</span>
+          <span class="wallet-breakdown-amount">${row.type === "use" ? "−" : "+"}${row.amount}</span>
+        </div>`).join("")
+      : `<div class="wallet-breakdown-row"><span class="wallet-breakdown-label">No activity yet</span></div>`;
   }
 }
 
@@ -463,7 +464,9 @@ async function renderCredits(email, fullName, reg = {}) {
   const wallet = computeCreditWallet({
     resourceItems, classroomItems, manualItems, fileUnlockItems,
     registrationCredits: reg?.registrationCredits,
-    creditDebt: reg?.creditDebt
+    creditDebt: reg?.creditDebt,
+    creditsResetAt: reg?.creditsResetAt,
+    registrationDate: reg?.submittedAt
   });
   const { creditsEarned, creditsUsed, creditsRemaining } = wallet;
 
@@ -499,8 +502,6 @@ async function renderCredits(email, fullName, reg = {}) {
   if (access && session?.regId) {
     await syncAccessToRegistration(db, session, access);
   }
-
-  renderAccessTimeline(access);
 
   const accessDetail = document.getElementById("access-detail");
   const accessAlert = document.getElementById("resource-access-alert");
@@ -544,69 +545,6 @@ async function renderCredits(email, fullName, reg = {}) {
           <div class="upload-date">${date}</div>
         </div>
         <span class="status-tag ${esc(status)}">${status === "approved" ? "✅ Approved" : status === "rejected" ? "❌ Rejected" : "⏳ Pending"}</span>
-      </div>`;
-  }).join("");
-}
-
-/** DD/MM HH:MM — used only for the per-file access breakdown, where the
-    hour matters (unlike formatDate elsewhere which is date-only). */
-function formatDateTime(ms) {
-  const d = new Date(ms);
-  if (Number.isNaN(d.getTime())) return "—";
-  const day = String(d.getDate()).padStart(2, "0");
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mm = String(d.getMinutes()).padStart(2, "0");
-  return `${day}/${month} ${hh}:${mm}`;
-}
-
-// Shows exactly how much access time each individual upload (file or
-// classroom code) contributed, and the window it occupies within the
-// stacked total — so a student never has to guess "how much time did I
-// get for which file".
-function renderAccessTimeline(access) {
-  const wrap = document.getElementById("access-timeline-wrap");
-  const totalEl = document.getElementById("access-timeline-total");
-  const listEl = document.getElementById("access-timeline-list");
-  if (!wrap || !totalEl || !listEl) return;
-
-  const breakdown = access.breakdown || [];
-  if (breakdown.length === 0) {
-    wrap.classList.add("hidden");
-    return;
-  }
-  wrap.classList.remove("hidden");
-
-  const totalHoursGranted = Math.round((access.totalGrantedMs || 0) / (60 * 60 * 1000));
-  totalEl.innerHTML = `
-    <span>Total access earned: <strong>${totalHoursGranted} hour${totalHoursGranted === 1 ? "" : "s"}</strong> across ${breakdown.length} upload${breakdown.length === 1 ? "" : "s"}</span>
-    <span>${access.active ? `⏱ ${formatRemaining(access.msRemaining)} left right now` : "No time left right now"}</span>
-  `;
-
-  listEl.innerHTML = breakdown.slice().reverse().map(entry => {
-    const isClassroom = entry.kind === "classroom";
-    const isManual = entry.kind === "manual";
-    const item = entry.item || {};
-    const title = isClassroom
-      ? `🏫 Classroom Code — ${esc(item.classroomCode || "Unlock")}`
-      : isManual
-        ? `🔓 Admin Manual Unlock — ${esc(item.unlockType || "Access")}`
-        : `📄 ${esc(item.courseCode || "Unknown course")} — Slides/Notes`;
-    const hours = Math.round(entry.durationMs / (60 * 60 * 1000));
-    const startStr = formatDateTime(entry.startsAt);
-    const endStr = formatDateTime(entry.endsAt);
-    const statusCls = entry.active ? "is-active" : "is-expired";
-    const statusText = entry.active ? "Active" : "Used up";
-    return `
-      <div class="access-timeline-row">
-        <div>
-          <div class="atl-title">${title}</div>
-          <div class="atl-sub">+${hours}h · uploaded ${formatDate(entry.grantedAt)}</div>
-        </div>
-        <div class="atl-window">
-          ${startStr} → ${endStr}
-          <div><span class="atl-status ${statusCls}">${statusText}</span></div>
-        </div>
       </div>`;
   }).join("");
 }

@@ -39,11 +39,26 @@
 //     classroom code granting access) are tagged source:"notes_earn" /
 //     "classroom_earn" and never counted as spending — no credit was
 //     drawn from the wallet for those.
-//   • `creditDebt` is a one-off penalty an admin can apply (lifting an
-//     account restriction — js/admin.js) that wipes the wallet to zero
-//     at that moment without touching any underlying earned-credit
-//     record. It is stored as a running offset on the registration doc
-//     and subtracted from every future balance calculation.
+//   • `creditDebt` is a legacy one-off penalty that wiped the wallet to
+//     zero at that moment without touching any underlying earned-credit
+//     record. Superseded by `creditsResetAt` below for any account
+//     restricted after that field was introduced, but the math still
+//     honors an old `creditDebt` value on accounts that never got a
+//     `creditsResetAt` stamp, so nobody's balance jumps the day this
+//     shipped.
+//   • `creditsResetAt` is the current restriction penalty (js/admin.js
+//     restrictAccountById): being restricted even once makes the whole
+//     account "start over" exactly as if it were a brand-new account —
+//     the 5-credit welcome bonus is granted fresh, and every earn/spend
+//     item from before that moment (uploads, approved classroom codes,
+//     coffee grants, past unlocks) stops counting toward the balance AND
+//     drops out of the visible breakdown/recentActivity, so it truly
+//     looks and behaves like a new registration. Only earn/spend events
+//     timestamped strictly after `creditsResetAt` (plus the fresh
+//     welcome bonus) count. It's a permanent stamp, not cleared when the
+//     restriction period ends — restricting the same account again later
+//     just moves the stamp forward, resetting whatever was (re-)earned
+//     since the last reset too.
 // ============================================
 
 /** Every registered account is guaranteed at least this many credits. */
@@ -72,8 +87,26 @@ export const CLASSROOM_CODE_CREDITS = 10;
  * @param {number} [params.registrationCredits] Raw value stored on the
  *                                         registration doc (defaults applied
  *                                         internally — always floored at 5).
- * @param {number} [params.creditDebt]    Raw `creditDebt` value stored on the
- *                                         registration doc.
+ * @param {number} [params.creditDebt]    Raw legacy `creditDebt` value stored
+ *                                         on the registration doc. Ignored
+ *                                         whenever `creditsResetAt` is set —
+ *                                         the two penalties never stack.
+ * @param {*}      [params.creditsResetAt] Raw `creditsResetAt` value stored
+ *                                         on the registration doc (an admin
+ *                                         restriction penalty — see the
+ *                                         module doc comment above). When
+ *                                         set, every earn/spend item dated
+ *                                         at or before this moment is
+ *                                         excluded from the balance AND from
+ *                                         `breakdown`/`recentActivity` — the
+ *                                         welcome bonus is still granted, so
+ *                                         the account reads exactly like a
+ *                                         fresh registration.
+ * @param {*}      [params.registrationDate] The registration doc's
+ *                                         `submittedAt`, used only to date
+ *                                         the "Welcome bonus" row in
+ *                                         `recentActivity` — never affects
+ *                                         the balance math.
  */
 export function computeCreditWallet({
   resourceItems = [],
@@ -81,38 +114,60 @@ export function computeCreditWallet({
   manualItems = [],
   fileUnlockItems = [],
   registrationCredits = 0,
-  creditDebt = 0
+  creditDebt = 0,
+  creditsResetAt = null,
+  registrationDate = null
 } = {}) {
+  const resetAtMs = toMs(creditsResetAt);
+
+  // Restricted-then-reset accounts get a fresh welcome bonus just like a
+  // real new registration would — that's the point of the reset. Only
+  // the historical items below get filtered by date; the bonus itself
+  // always applies.
   const registrationBonus = Math.max(REGISTRATION_BONUS_CREDITS, Number(registrationCredits || 0));
 
-  const uploadCredits = resourceItems.reduce(
+  const countedResourceItems = resetAtMs
+    ? resourceItems.filter(i => toMs(i.submittedAt) > resetAtMs)
+    : resourceItems;
+  const uploadCredits = countedResourceItems.reduce(
     (n, i) => n + (Array.isArray(i.fileUrls) ? i.fileUrls.length : 1),
     0
   );
 
-  const approvedClassroomCodes = classroomItems.filter(i => i.status === "approved");
+  const countedClassroomItems = resetAtMs
+    ? classroomItems.filter(i => toMs(i.approvedAt || i.submittedAt) > resetAtMs)
+    : classroomItems;
+  const approvedClassroomCodes = countedClassroomItems.filter(i => i.status === "approved");
   const classroomCredits = approvedClassroomCodes.length * CLASSROOM_CODE_CREDITS;
 
-  const coffeeGrants = manualItems.filter(i => i.source === "coffee");
+  const countedManualItems = resetAtMs
+    ? manualItems.filter(i => toMs(i.grantedAt) > resetAtMs)
+    : manualItems;
+  const coffeeGrants = countedManualItems.filter(i => i.source === "coffee");
   const coffeeCredits = coffeeGrants.reduce((n, i) => n + Math.max(0, Number(i.creditsGranted || 0)), 0);
 
   // A fileUnlocks doc counts as "spent" unless it was written as a
   // *reward* for earning (an upload-triggered unlock or a classroom-code
   // grant) rather than a wallet withdrawal. Revoked unlocks still count —
   // see the module doc comment above.
-  const spentUnlocks = fileUnlockItems.filter(
+  const countedFileUnlockItems = resetAtMs
+    ? fileUnlockItems.filter(i => toMs(i.unlockedAt || i.submittedAt) > resetAtMs)
+    : fileUnlockItems;
+  const spentUnlocks = countedFileUnlockItems.filter(
     i => i.source !== "notes_earn" && i.source !== "classroom_earn"
   );
   const creditsUsed = spentUnlocks.length;
 
-  const debt = Math.max(0, Number(creditDebt || 0));
+  // The legacy debt offset and the reset stamp are two different
+  // generations of the same penalty — never apply both at once.
+  const debt = resetAtMs ? 0 : Math.max(0, Number(creditDebt || 0));
   const creditsEarned = registrationBonus + uploadCredits + classroomCredits + coffeeCredits;
   const creditsRemaining = Math.max(0, creditsEarned - creditsUsed - debt);
 
   return {
     registrationBonus,
     uploadCredits,
-    uploadFileCount: resourceItems.reduce((n, i) => n + (Array.isArray(i.fileUrls) ? i.fileUrls.length : 1), 0),
+    uploadFileCount: countedResourceItems.reduce((n, i) => n + (Array.isArray(i.fileUrls) ? i.fileUrls.length : 1), 0),
     classroomCredits,
     approvedClassroomCount: approvedClassroomCodes.length,
     coffeeCredits,
@@ -120,17 +175,88 @@ export function computeCreditWallet({
     creditsEarned,
     creditsUsed,
     creditDebt: debt,
+    creditsResetAt: resetAtMs || null,
     creditsRemaining,
     // Human-readable breakdown for UI rendering — kept here so every
     // surface (profile, admin) shows the exact same line items in the
     // exact same order.
     breakdown: [
       { label: "Welcome bonus", amount: registrationBonus, icon: "🎁" },
-      { label: "File uploads", amount: uploadCredits, icon: "⬆️", detail: `${resourceItems.length} contribution${resourceItems.length === 1 ? "" : "s"}` },
+      { label: "File uploads", amount: uploadCredits, icon: "⬆️", detail: `${countedResourceItems.length} contribution${countedResourceItems.length === 1 ? "" : "s"}` },
       { label: "Classroom codes", amount: classroomCredits, icon: "🏫", detail: approvedClassroomCodes.length ? `${approvedClassroomCodes.length} approved` : null },
       { label: "Coffee support", amount: coffeeCredits, icon: "☕", detail: coffeeGrants.length ? `${coffeeGrants.length} grant${coffeeGrants.length === 1 ? "" : "s"}` : null }
-    ].filter(row => row.amount > 0 || row.label === "Welcome bonus")
+    ].filter(row => row.amount > 0 || row.label === "Welcome bonus"),
+    // The 5 most recent earn/spend events, newest first — a real
+    // chronological feed rather than the category totals in `breakdown`
+    // above (which is still returned for anything that wants the old
+    // rollup view). Every event carries its own date, so mixing earns and
+    // uses in one list and slicing to 5 is safe. Pre-reset items are
+    // already excluded via the `counted*Items` lists above, and the
+    // Welcome bonus is re-dated to the reset moment so the feed reads
+    // exactly like a brand-new account's activity.
+    recentActivity: buildRecentActivity({
+      resourceItems: countedResourceItems,
+      classroomItems: countedClassroomItems,
+      manualItems: countedManualItems,
+      fileUnlockItems: countedFileUnlockItems,
+      registrationBonus, registrationDate: resetAtMs || registrationDate
+    })
   };
+}
+
+function toMs(val) {
+  if (!val) return 0;
+  if (typeof val === "number") return val;
+  if (typeof val?.toDate === "function") return val.toDate().getTime();
+  if (typeof val?.seconds === "number") return val.seconds * 1000;
+  const parsed = new Date(val).getTime();
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function buildRecentActivity({ resourceItems, classroomItems, manualItems, fileUnlockItems, registrationBonus, registrationDate }) {
+  const events = [];
+
+  events.push({
+    type: "earn", icon: "🎁", label: "Welcome bonus",
+    amount: registrationBonus, dateMs: toMs(registrationDate)
+  });
+
+  resourceItems.forEach(i => {
+    const n = Array.isArray(i.fileUrls) ? i.fileUrls.length : 1;
+    events.push({
+      type: "earn", icon: "⬆️",
+      label: i.courseCode ? `Uploaded to ${i.courseCode}` : "File upload",
+      amount: n, dateMs: toMs(i.submittedAt)
+    });
+  });
+
+  classroomItems.filter(i => i.status === "approved").forEach(i => {
+    events.push({
+      type: "earn", icon: "🏫",
+      label: i.classroomCode ? `Classroom code ${i.classroomCode} approved` : "Classroom code approved",
+      amount: CLASSROOM_CODE_CREDITS, dateMs: toMs(i.approvedAt || i.submittedAt)
+    });
+  });
+
+  manualItems.filter(i => i.source === "coffee").forEach(i => {
+    const amount = Math.max(0, Number(i.creditsGranted || 0));
+    if (amount <= 0) return;
+    events.push({
+      type: "earn", icon: "☕", label: "Coffee support grant",
+      amount, dateMs: toMs(i.grantedAt)
+    });
+  });
+
+  fileUnlockItems
+    .filter(i => i.source !== "notes_earn" && i.source !== "classroom_earn")
+    .forEach(i => {
+      events.push({
+        type: "use", icon: "🔓", label: "Unlocked a file",
+        amount: 1, dateMs: toMs(i.unlockedAt || i.submittedAt)
+      });
+    });
+
+  return events.sort((a, b) => b.dateMs - a.dateMs).slice(0, 5);
 }
 
 /**
@@ -167,6 +293,8 @@ export async function fetchCreditWallet(db, firestoreFns, email) {
     manualItems,
     fileUnlockItems,
     registrationCredits: regData.registrationCredits,
-    creditDebt: regData.creditDebt
+    creditDebt: regData.creditDebt,
+    creditsResetAt: regData.creditsResetAt,
+    registrationDate: regData.submittedAt
   });
 }

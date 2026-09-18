@@ -831,22 +831,27 @@ if (handNotesGate && handNotesContent) {
     try {
       const items = window.__hnAccessItems || [];
       let registrationCredits = 5;
-      // creditDebt is a one-off penalty an admin applies by lifting an
-      // account restriction (js/admin.js deductFullCreditBalance) — it
-      // wipes whatever balance existed at that moment without touching
-      // any of the underlying earned-credit documents, so it has to be
-      // subtracted here every time the balance is computed.
+      // creditDebt is the legacy one-off penalty (kept for accounts
+      // restricted before creditsResetAt existed); creditsResetAt is the
+      // current restriction penalty — being restricted even once resets
+      // the whole wallet, so every earn/spend item dated at or before
+      // that stamp gets excluded down in computeCreditWallet. Both are
+      // read from the registration doc every time the balance is
+      // computed; js/credits.js itself makes sure only one ever applies.
       let creditDebt = 0;
+      let creditsResetAt = null;
       try {
         const regSnap = await getDocs(query(collection(db, "registrations"), where("email", "==", email)));
         if (!regSnap.empty) {
           registrationCredits = Math.max(5, Number(regSnap.docs[0].data().registrationCredits || 0));
           creditDebt = Number(regSnap.docs[0].data().creditDebt || 0);
+          creditsResetAt = regSnap.docs[0].data().creditsResetAt || null;
         } else {
           const legacy = await getDocs(query(collection(db, "registrations"), where("emailNormalized", "==", email)));
           if (!legacy.empty) {
             registrationCredits = Math.max(5, Number(legacy.docs[0].data().registrationCredits || 0));
             creditDebt = Number(legacy.docs[0].data().creditDebt || 0);
+            creditsResetAt = legacy.docs[0].data().creditsResetAt || null;
           }
         }
       } catch (_) { /* retain the guaranteed 5-credit entitlement */ }
@@ -868,7 +873,7 @@ if (handNotesGate && handNotesContent) {
       const fileUnlockItems = items.filter(i => i.kind === "file_unlock");
       const wallet = computeCreditWallet({
         resourceItems, classroomItems, manualItems, fileUnlockItems,
-        registrationCredits, creditDebt
+        registrationCredits, creditDebt, creditsResetAt
       });
       return wallet.creditsRemaining;
     } catch (err) {
@@ -1961,15 +1966,28 @@ if (handnotesList || slidesList || imageGrid) {
   let imageCardLoadedOnce = false;
   const imageCardState = { courseCode: null };
 
-  // A single image tile's markup — one entry per image SUBMISSION (which
-  // may itself bundle several photos uploaded together as one "folder";
-  // only the first is used as the thumbnail, same as before). Shared by
-  // the compact card, its "View All" modal, and the search results in
-  // both, so lock/unlock behaviour never drifts between them.
-  function imageTileHtml(img) {
-    const file = img.fileUrls.find(f => (f.fileType || detectFileType({name:f.name || ""})) === "image") || img.fileUrls[0];
+  // Every file inside a single image SUBMISSION's fileUrls is its own
+  // photo — a student uploading 5 images at once is contributing 5
+  // separate pictures, not 1 picture with 4 hidden duplicates. This
+  // returns one entry per actual image file so every photo gets its own
+  // tile (and its own individual lock/unlock state, keyed by its index,
+  // same as before). Falls back to every file in the submission if none
+  // of them detected as an "image" type, so a submission is never
+  // silently dropped entirely.
+  function imageFilesOf(img) {
+    const files = Array.isArray(img.fileUrls) ? img.fileUrls : [];
+    const onlyImages = files
+      .map((f, i) => ({ f, i }))
+      .filter(({ f }) => (f.fileType || detectFileType({ name: f.name || "" })) === "image");
+    return onlyImages.length ? onlyImages : files.map((f, i) => ({ f, i }));
+  }
+
+  // A single image tile's markup — one entry per PHOTO (not per
+  // submission; see imageFilesOf above). Shared by the compact card, its
+  // "View All" modal, and the search results in both, so lock/unlock
+  // behaviour never drifts between them.
+  function imageTileHtml(img, file, imageIndex) {
     const viewHref = buildViewHref(file, img);
-    const imageIndex = img.fileUrls.indexOf(file);
     const imageFileId = `hand_notes::${img.courseCode}::${img.facultyName || ""}::${img.id}::${Math.max(0,imageIndex)}`;
     window.__hnFileOwners = window.__hnFileOwners || {};
     window.__hnFileOwners[imageFileId] = normalizeEmail(img.uploaderEmail || "");
@@ -1990,6 +2008,11 @@ if (handnotesList || slidesList || imageGrid) {
         ${file.title ? `<span class="image-item-title">${esc(file.title)}</span>` : ""}
       </div>
     </${tag}>`;
+  }
+
+  // Expands a list of image-submission docs into one tile per photo.
+  function imageTilesHtml(imgs) {
+    return imgs.flatMap(img => imageFilesOf(img).map(({ f, i }) => imageTileHtml(img, f, i))).join("");
   }
 
   function wireImageLockClicks(container) {
@@ -2054,7 +2077,7 @@ if (handnotesList || slidesList || imageGrid) {
         <span class="file-name">${esc(state.courseCode)}${courseName ? `: ${esc(courseName)}` : ""}</span>
       </div>` +
       (courseItems.length
-        ? courseItems.map(img => imageTileHtml(img)).join("")
+        ? imageTilesHtml(courseItems)
         : `<p style="color:var(--moss-600);font-size:.9rem;text-align:center;padding:1rem;grid-column:1/-1;">No images here.</p>`);
 
     container.querySelector("[data-back]").addEventListener("click", () => {
@@ -2106,7 +2129,7 @@ if (handnotesList || slidesList || imageGrid) {
           (img.courseCode || "").toLowerCase().includes(term)
         ).slice(0, 6);
                 imageGrid.innerHTML = filtered.length
-          ? filtered.map(img => imageTileHtml(img)).join("")
+          ? imageTilesHtml(filtered)
           : `<p style="color:var(--moss-600);font-size:.9rem;text-align:center;padding:1rem;grid-column:1/-1;">No matching images found.</p>`;
         wireImageLockClicks(imageGrid);
         if (viewAllLink) viewAllLink.style.display = "block";
@@ -2226,7 +2249,7 @@ if (handnotesList || slidesList || imageGrid) {
           (img.courseName || "").toLowerCase().includes(term)
         );
                 grid.innerHTML = filtered.length
-          ? filtered.map(img => imageTileHtml(img)).join("")
+          ? imageTilesHtml(filtered)
           : `<p style="color:var(--moss-600);font-size:.9rem;text-align:center;padding:1rem;grid-column:1/-1;">No matching images found.</p>`;
         wireImageLockClicks(grid);
       } else {
@@ -2298,8 +2321,8 @@ if (anotherUploadBtn && anotherUploadModal) {
     auStatus.textContent = "";
     auCourseNameHint.classList.add("hidden");
     auFacultySuggestions.innerHTML = "";
-    auImageTitlesWrap.classList.add("hidden");
-    auImageTitlesList.innerHTML = "";
+    if (auImageTitlesWrap) auImageTitlesWrap.classList.add("hidden");
+    if (auImageTitlesList) auImageTitlesList.innerHTML = "";
     auMatchedCourse = null;
     auFileType = "auto";
     auFiles.accept = ".pdf,.ppt,.pptx,image/*";

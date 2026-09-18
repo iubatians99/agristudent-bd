@@ -139,11 +139,15 @@ function wireFilterControls(ids, reload) {
 // already unlocked showing as unlocked, and leaving their credit
 // balance untouched. Now restriction also immediately revokes every
 // active unlock (file_unlock / classroom / manual / ad grants) so
-// locked files actually show locked, and zeroes the live credit
-// balance right away via the same creditDebt penalty previously only
-// applied when the restriction was later lifted (see
-// deductFullCreditBalance below) — so a restricted student can't keep
-// spending/holding credits during the restriction window.
+// locked files actually show locked, and immediately resets the whole
+// credit wallet via `creditsResetAt` (see deductFullCreditBalance
+// below) — being restricted even once means the account goes back to
+// looking exactly like a brand-new registration for credit purposes: a
+// fresh 5-credit welcome bonus, no leftover balance, and no visible
+// earn/spend history from before the reset. That reset is permanent
+// (it doesn't get undone when the restriction period ends), but the
+// student can freely earn and spend credits again from that point on,
+// same as any other account.
 // ============================================
 async function restrictAccountById(id, days, reason, email) {
   const until = Date.now() + days * 24 * 60 * 60 * 1000;
@@ -170,15 +174,25 @@ async function restrictAccountByEmail(email, days, reason) {
 }
 
 // ============================================
-// CREDIT PENALTY ON UNRESTRICT — lifting a restriction also wipes the
-// student's whole current wallet-credit balance as a penalty. Credits are
-// never stored as one number (js/resources.js hnGetRemainingCredits and
-// js/profile.js renderCredits both compute them live from the resources /
-// classroomCodes / manualUnlocks / fileUnlocks collections), so the
-// penalty is stored as a running "creditDebt" offset on the registration
-// doc instead — both places subtract it from the live total. The debt
-// only ever grows, so restricting the same account again later stacks
-// another full wipe on top instead of resetting anything.
+// CREDIT RESET ON RESTRICTION — restricting an account wipes the
+// student's whole credit wallet, past and future, back to a clean
+// slate. Credits are never stored as one number (js/resources.js
+// hnGetRemainingCredits and js/profile.js renderCredits both compute
+// them live from the resources / classroomCodes / manualUnlocks /
+// fileUnlocks collections), so the penalty is stored as a
+// `creditsResetAt` timestamp on the registration doc instead — every
+// page subtracts it the same way by simply ignoring any earn/spend
+// item dated at or before that stamp (see js/credits.js
+// computeCreditWallet). Restricting the same account again later just
+// moves the stamp forward, so nothing "re-earned" since the last reset
+// survives the next one either.
+//
+// This replaces the older `creditDebt` offset, which only zeroed the
+// balance at that moment but left the underlying earned-credit records
+// (and the student's visible activity history) untouched — so the
+// balance, and the history, could grow right back. `creditDebt` is
+// still read by js/credits.js for any account that was restricted
+// before this shipped, so nobody's balance jumps retroactively.
 // ============================================
 // Delegates to the single canonical formula in js/credits.js — this used
 // to be its own hand-copied implementation here (and a third, separately
@@ -205,20 +219,21 @@ async function computeCreditsBalance(email) {
     // revoked (e.g. by revokeAllUnlocksForEmail as a restriction
     // penalty). Revocation is about access, not about whether a credit
     // was ever used, so computeCreditWallet deliberately still counts
-    // revoked docs as spent here.
+    // revoked docs as spent here (unless it predates a reset, in which
+    // case it's excluded like everything else pre-reset).
     fileUnlockItems: fileUnlockSnap.docs.map(d => d.data()),
     registrationCredits: regData.registrationCredits,
-    creditDebt: 0 // existing debt is applied separately below, not double-counted here
+    creditsResetAt: regData.creditsResetAt
   });
-  return { earned: wallet.creditsEarned, used: wallet.creditsUsed };
+  return { earned: wallet.creditsEarned, used: wallet.creditsUsed, available: wallet.creditsRemaining };
 }
 
 async function deductFullCreditBalance(regId, email) {
-  const regRef = doc(db, "registrations", regId);
-  const [balance, regSnap] = await Promise.all([computeCreditsBalance(email), getDoc(regRef)]);
-  const existingDebt = Number(regSnap.data()?.creditDebt || 0);
-  const remaining = Math.max(0, balance.earned - balance.used - existingDebt);
-  await updateDoc(regRef, { creditDebt: existingDebt + remaining });
+  // Stamping "now" is the whole penalty: js/credits.js computeCreditWallet
+  // then excludes every earn/spend item dated at or before this moment
+  // from both the balance and the visible history, on every page, the
+  // next time it recomputes the wallet for this student.
+  await updateDoc(doc(db, "registrations", regId), { creditsResetAt: Date.now() });
 }
 
 // ============================================
@@ -1533,7 +1548,9 @@ async function loadRegistrations() {
           })()}
           ${item.accountRestrictedUntil ? `<span class="account-restriction-badge" style="display:inline-flex;align-items:center;gap:.35rem;padding:.35rem .65rem;border-radius:999px;background:rgba(196,90,63,.12);color:var(--terracotta-500);font-size:.78rem;font-weight:600;">⛔ Restricted until ${esc(fmtAdminDate(item.accountRestrictedUntil))}</span>` : ""}
           ${item.removed ? `<span class="user-removed-badge" style="display:inline-flex;align-items:center;gap:.35rem;padding:.35rem .65rem;border-radius:999px;background:rgba(196,90,63,.14);color:var(--terracotta-500);font-size:.78rem;font-weight:700;">🚫 Removed${item.removedAt ? ` · ${esc(fmtAdminDate(item.removedAt))}` : ""}</span>` : ""}
+          <div class="credits-info-row" data-credits-for="${esc(d.id)}" style="font-size:.76rem;color:var(--moss-600);"></div>
           <div style="display:flex;gap:.4rem;flex-wrap:wrap;justify-content:flex-end;">
+            <button type="button" class="credits-info-btn" data-id="${esc(d.id)}" data-email="${esc(item.email || "")}" style="background:none;border:1px solid var(--line);padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">💳 Credits</button>
             <button type="button" class="edit-btn" data-schema="registrations" data-id="${esc(d.id)}" style="background:none;border:1px solid var(--line);padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">✏️ Edit</button>
             ${item.idVerified
               ? `<button type="button" class="unverify-id-btn" data-id="${esc(d.id)}" style="background:none;border:1px solid var(--line);color:var(--moss-600);padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">↩️ Unverify</button>`
@@ -1557,6 +1574,31 @@ async function loadRegistrations() {
       regList.innerHTML = `<div class="admin-empty-state">No registered users match this filter. Try widening it above.</div>`;
       return;
     }
+
+    // Shows the earned/used/available credit balance for one student, for
+    // all users — computed via the same single canonical formula in
+    // js/credits.js used on their own profile page, so the number an
+    // admin sees here is always the same one the student sees. Fetched
+    // lazily per row (not for the whole list at once) since it's several
+    // extra queries per student.
+    regList.querySelectorAll(".credits-info-btn").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const { id, email } = btn.dataset;
+        const target = regList.querySelector(`.credits-info-row[data-credits-for="${CSS.escape(id)}"]`);
+        if (!target) return;
+        btn.disabled = true;
+        target.textContent = "Loading credits…";
+        try {
+          const { earned, used, available } = await computeCreditsBalance(email);
+          target.innerHTML = `💰 Earned <strong>${earned}</strong> − Used <strong>${used}</strong> = <strong style="color:var(--leaf-500);">${available} available</strong>`;
+        } catch (err) {
+          console.error("[AgriAdmin] failed to load credits:", err);
+          target.textContent = "Could not load credits.";
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    });
 
     regList.querySelectorAll(".remove-user-btn").forEach(btn => {
       btn.addEventListener("click", async () => {
