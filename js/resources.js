@@ -795,6 +795,15 @@ if (handNotesGate && handNotesContent) {
 
   function hnShowStep(step) {
     hnAllSteps.forEach(s => s?.classList.toggle("hidden", s !== step));
+    // Notes/Classroom/Coffee each carry their own inline "back to choice"
+    // button (#hn-notes-back etc.) inside the step itself. The top-right
+    // hnGateBackBtn is a DIFFERENT action — it exits the whole gate back to
+    // the blurred file preview — but visually they're both circular ✕
+    // buttons in the same corner, so showing both at once renders as a
+    // confusing double-✕ overlap. Hide the top-right one for exactly the
+    // steps that already have their own back control.
+    const stepHasOwnBackBtn = step === hnStepNotes || step === hnStepClassroom || step === hnStepCoffee;
+    hnGateBackBtn?.classList.toggle("hidden", stepHasOwnBackBtn);
   }
 
   // When the unlock form is showing, hide the preview entirely (show only

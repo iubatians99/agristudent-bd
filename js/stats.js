@@ -5,13 +5,24 @@
 // ============================================
 import { db } from "./firebase-config.js";
 import {
-  collection, query, where, getCountFromServer, getDocs
+  collection, query, where, getDocs
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 // Map of element id -> function that returns a Firestore count query
+//
+// NOTE: every stat here now uses a plain getDocs() count instead of
+// getCountFromServer(). The aggregation call (getCountFromServer) turned out
+// to be unreliable for this project — it would intermittently/silently fail
+// and leave a homepage stat stuck on its "—" placeholder even though the
+// exact same query works fine with getDocs() (as already proven by
+// js/knowledge-hub.js for terms, and by the pre-existing "stat-resources"
+// count below). Standardizing all four stats on getDocs() avoids that
+// failure mode across the board.
 const STAT_SOURCES = {
-  "stat-users": () =>
-    getCountFromServer(collection(db, "registrations")),
+  "stat-users": async () => {
+    const docsSnap = await getDocs(collection(db, "registrations"));
+    return { data: () => ({ count: docsSnap.size }) };
+  },
 
   "stat-resources": async () => {
     // Count actual approved files (not submission/folder documents).
@@ -34,13 +45,13 @@ const STAT_SOURCES = {
     return { data: () => ({ count: total }) };
   },
 
-  "stat-pending": () =>
-    getCountFromServer(query(collection(db, "resources"), where("status", "==", "pending"))),
+  "stat-pending": async () => {
+    const docsSnap = await getDocs(
+      query(collection(db, "resources"), where("status", "==", "pending"))
+    );
+    return { data: () => ({ count: docsSnap.size }) };
+  },
 
-  // NOTE: getCountFromServer() was unreliable here the same way it was for
-  // "resources" above (see that comment) — it would silently fail and leave
-  // the homepage stat stuck on "—". Switched to a plain getDocs() count,
-  // matching the working "stat-resources" pattern.
   "stat-terms": async () => {
     const docsSnap = await getDocs(
       query(collection(db, "terms"), where("status", "==", "approved"))
