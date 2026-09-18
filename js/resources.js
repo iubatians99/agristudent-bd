@@ -10,7 +10,7 @@ import { computeCreditWallet } from "./credits.js";
 
 initEmailNotifications();
 
-const MAX_FILES = 20;
+const MAX_FILES = 40;
 const MAX_SIZE = 50 * 1024 * 1024; // 50MB
 
 
@@ -38,7 +38,15 @@ function uploadFileToCloudinary(file, onProgress) {
         const json = JSON.parse(xhr.responseText);
         resolve({ url: json.secure_url, name: file.name });
       } else {
-        reject(new Error(`Upload failed for ${file.name} (${xhr.status})`));
+        // Surface Cloudinary's actual error message instead of just the
+        // status code — a bare "(400)" hides whether it's a rate limit,
+        // a preset restriction, or something file-specific.
+        let detail = "";
+        try {
+          const parsed = JSON.parse(xhr.responseText);
+          detail = parsed && parsed.error && parsed.error.message ? parsed.error.message : "";
+        } catch (_) { /* response wasn't JSON */ }
+        reject(new Error(`Upload failed for ${file.name} (${xhr.status})${detail ? ": " + detail : ""}`));
       }
     };
     xhr.onerror = () => reject(new Error("Network error uploading " + file.name + "."));
