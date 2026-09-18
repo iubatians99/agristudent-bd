@@ -835,23 +835,27 @@ if (handNotesGate && handNotesContent) {
       // restricted before creditsResetAt existed); creditsResetAt is the
       // current restriction penalty — being restricted even once resets
       // the whole wallet, so every earn/spend item dated at or before
-      // that stamp gets excluded down in computeCreditWallet. Both are
-      // read from the registration doc every time the balance is
-      // computed; js/credits.js itself makes sure only one ever applies.
+      // that stamp gets excluded down in computeCreditWallet.
+      // accountRestrictedAt is a further fallback for an
+      // already-restricted account that predates creditsResetAt
+      // entirely. js/credits.js decides which one actually applies.
       let creditDebt = 0;
       let creditsResetAt = null;
+      let accountRestrictedAt = null;
       try {
         const regSnap = await getDocs(query(collection(db, "registrations"), where("email", "==", email)));
         if (!regSnap.empty) {
           registrationCredits = Math.max(5, Number(regSnap.docs[0].data().registrationCredits || 0));
           creditDebt = Number(regSnap.docs[0].data().creditDebt || 0);
           creditsResetAt = regSnap.docs[0].data().creditsResetAt || null;
+          accountRestrictedAt = regSnap.docs[0].data().accountRestrictedAt || null;
         } else {
           const legacy = await getDocs(query(collection(db, "registrations"), where("emailNormalized", "==", email)));
           if (!legacy.empty) {
             registrationCredits = Math.max(5, Number(legacy.docs[0].data().registrationCredits || 0));
             creditDebt = Number(legacy.docs[0].data().creditDebt || 0);
             creditsResetAt = legacy.docs[0].data().creditsResetAt || null;
+            accountRestrictedAt = legacy.docs[0].data().accountRestrictedAt || null;
           }
         }
       } catch (_) { /* retain the guaranteed 5-credit entitlement */ }
@@ -873,7 +877,7 @@ if (handNotesGate && handNotesContent) {
       const fileUnlockItems = items.filter(i => i.kind === "file_unlock");
       const wallet = computeCreditWallet({
         resourceItems, classroomItems, manualItems, fileUnlockItems,
-        registrationCredits, creditDebt, creditsResetAt
+        registrationCredits, creditDebt, creditsResetAt, accountRestrictedAt
       });
       return wallet.creditsRemaining;
     } catch (err) {

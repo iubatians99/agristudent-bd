@@ -102,6 +102,17 @@ export const CLASSROOM_CODE_CREDITS = 10;
  *                                         welcome bonus is still granted, so
  *                                         the account reads exactly like a
  *                                         fresh registration.
+ * @param {*}      [params.accountRestrictedAt] Raw `accountRestrictedAt`
+ *                                         value stored on the registration
+ *                                         doc. Fallback ONLY: used as the
+ *                                         reset point when `creditsResetAt`
+ *                                         itself isn't set — i.e. an account
+ *                                         that was restricted before
+ *                                         `creditsResetAt` existed, or by
+ *                                         any path that only ever touched
+ *                                         `accountRestrictedAt`. Ignored
+ *                                         whenever `creditsResetAt` has a
+ *                                         value.
  * @param {*}      [params.registrationDate] The registration doc's
  *                                         `submittedAt`, used only to date
  *                                         the "Welcome bonus" row in
@@ -116,9 +127,15 @@ export function computeCreditWallet({
   registrationCredits = 0,
   creditDebt = 0,
   creditsResetAt = null,
+  accountRestrictedAt = null,
   registrationDate = null
 } = {}) {
-  const resetAtMs = toMs(creditsResetAt);
+  // accountRestrictedAt is a fallback ONLY — it covers an account that was
+  // restricted before creditsResetAt existed (or currently sits restricted
+  // under an older code path that never wrote creditsResetAt). Once such an
+  // account goes through restrict/unrestrict again under the current code,
+  // creditsResetAt gets written explicitly and takes over for good.
+  const resetAtMs = toMs(creditsResetAt) || toMs(accountRestrictedAt);
 
   // Restricted-then-reset accounts get a fresh welcome bonus just like a
   // real new registration would — that's the point of the reset. Only
@@ -295,6 +312,7 @@ export async function fetchCreditWallet(db, firestoreFns, email) {
     registrationCredits: regData.registrationCredits,
     creditDebt: regData.creditDebt,
     creditsResetAt: regData.creditsResetAt,
+    accountRestrictedAt: regData.accountRestrictedAt,
     registrationDate: regData.submittedAt
   });
 }

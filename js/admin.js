@@ -192,7 +192,11 @@ async function restrictAccountByEmail(email, days, reason) {
 // (and the student's visible activity history) untouched — so the
 // balance, and the history, could grow right back. `creditDebt` is
 // still read by js/credits.js for any account that was restricted
-// before this shipped, so nobody's balance jumps retroactively.
+// before this shipped, so nobody's balance jumps retroactively. For an
+// already-restricted account that predates `creditsResetAt` entirely,
+// js/credits.js falls back to that account's existing
+// `accountRestrictedAt` stamp instead, so it reads correctly right
+// away without needing to be restricted again.
 // ============================================
 // Delegates to the single canonical formula in js/credits.js — this used
 // to be its own hand-copied implementation here (and a third, separately
@@ -223,7 +227,8 @@ async function computeCreditsBalance(email) {
     // case it's excluded like everything else pre-reset).
     fileUnlockItems: fileUnlockSnap.docs.map(d => d.data()),
     registrationCredits: regData.registrationCredits,
-    creditsResetAt: regData.creditsResetAt
+    creditsResetAt: regData.creditsResetAt,
+    accountRestrictedAt: regData.accountRestrictedAt
   });
   return { earned: wallet.creditsEarned, used: wallet.creditsUsed, available: wallet.creditsRemaining };
 }

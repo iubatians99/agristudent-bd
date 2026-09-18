@@ -466,6 +466,7 @@ async function renderCredits(email, fullName, reg = {}) {
     registrationCredits: reg?.registrationCredits,
     creditDebt: reg?.creditDebt,
     creditsResetAt: reg?.creditsResetAt,
+    accountRestrictedAt: reg?.accountRestrictedAt,
     registrationDate: reg?.submittedAt
   });
   const { creditsEarned, creditsUsed, creditsRemaining } = wallet;
