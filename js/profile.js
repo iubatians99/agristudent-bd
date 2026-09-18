@@ -421,7 +421,10 @@ async function renderCredits(email, fullName, reg = {}) {
   const creditsEarned = registrationCredits + uploadCredits + classroomCredits + coffeeCredits;
   // Only wallet-credit unlocks consume credits. Notes/Classroom access grants
   // are access records, not credit deductions.
-  const creditsUsed = fileUnlockItems.filter(i => !i.revoked && i.source !== "notes_earn" && i.source !== "classroom_earn").length;
+  // A fileUnlocks doc means that credit was spent — stays true even if
+  // the unlock is later revoked as a restriction penalty. See
+  // js/admin.js computeCreditsBalance for why revoked must still count.
+  const creditsUsed = fileUnlockItems.filter(i => i.source !== "notes_earn" && i.source !== "classroom_earn").length;
   // One-off penalty applied when an admin lifts an account restriction
   // (js/admin.js deductFullCreditBalance) — wipes whatever balance existed
   // at that moment. Stored as a running offset since credits aren't a

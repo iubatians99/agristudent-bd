@@ -859,7 +859,13 @@ if (handNotesGate && handNotesContent) {
       const uploadCredits = items.filter(i => !i.kind && i.resourceType && normalizeEmail(i.uploaderEmail) === email).reduce((n, i) => n + fileCount(i), 0);
       const classroomCredits = items.filter(i => i.kind === "classroom" && i.status === "approved").reduce(n => n + 10, 0);
       const coffeeCredits = items.filter(i => i.kind === "manual" && i.source === "coffee").reduce((n, i) => n + Number(i.creditsGranted || 0), 0);
-      const used = items.filter(i => i.kind === "file_unlock" && !i.revoked && i.source !== "notes_earn" && i.source !== "classroom_earn").length;
+      // A fileUnlocks doc means that credit was already spent — that
+      // stays true even if the unlock is later revoked (a restriction
+      // penalty), so revoked docs still count as "used" here. Excluding
+      // them used to hand the credit right back to the balance the
+      // instant it was revoked. See js/admin.js computeCreditsBalance
+      // for the matching admin-side calculation.
+      const used = items.filter(i => i.kind === "file_unlock" && i.source !== "notes_earn" && i.source !== "classroom_earn").length;
       return Math.max(0, registrationCredits + uploadCredits + classroomCredits + coffeeCredits - used - creditDebt);
     } catch (err) {
       console.warn("[Resource Credit] balance check failed:", err);

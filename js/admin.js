@@ -199,9 +199,17 @@ async function computeCreditsBalance(email) {
     const data = d.data();
     return n + (data.source === "coffee" ? Number(data.creditsGranted || 0) : 0);
   }, 0);
+  // A fileUnlocks doc means the credit was spent at that moment — that
+  // stays true forever, whether or not the unlock itself is later
+  // revoked (e.g. by revokeAllUnlocksForEmail as a restriction penalty).
+  // Excluding revoked docs here used to "un-spend" the credit right back
+  // into the student's balance the instant it was revoked — fighting the
+  // very penalty this function exists to apply, and leaving a leftover
+  // balance behind after a restriction was lifted. Revocation is about
+  // access, not about whether a credit was ever used.
   const used = fileUnlockSnap.docs.reduce((n, d) => {
     const data = d.data();
-    return n + (!data.revoked && data.source !== "notes_earn" && data.source !== "classroom_earn" ? 1 : 0);
+    return n + (data.source !== "notes_earn" && data.source !== "classroom_earn" ? 1 : 0);
   }, 0);
   return { earned: registrationCredits + uploadCredits + classroomCredits + coffeeCredits, used };
 }
@@ -1664,10 +1672,18 @@ async function loadRegistrations() {
 
     regList.querySelectorAll(".unrestrict-btn").forEach(btn => {
       btn.addEventListener("click", async () => {
-        if (!confirm("Lift this account's restriction now? Their full credit balance will also be deducted as a penalty.")) return;
+        if (!confirm("Lift this account's restriction now? This is a fresh start, not a restore: their credit balance stays at zero and every file they had unlocked stays locked. They keep full access to the site again and can start earning/unlocking from scratch.")) return;
         btn.disabled = true;
         try {
-          await deductFullCreditBalance(btn.dataset.id, btn.dataset.email);
+          // Re-run both penalties on lift too (not just at restrict time)
+          // so this button is always the final word on "fresh start" —
+          // covers the account-wide restrict path already having done
+          // this, and also any classroom-codes/manual-unlocks admin.js
+          // granted straight through the restriction window.
+          await Promise.all([
+            deductFullCreditBalance(btn.dataset.id, btn.dataset.email),
+            revokeAllUnlocksForEmail(btn.dataset.email)
+          ]);
           await updateDoc(doc(db, "registrations", btn.dataset.id), {
             accountRestrictedUntil: null,
             accountRestrictedReason: "",

@@ -21,3 +21,10 @@ Previously, restricting an account (⛔ Restrict Account / Restrict 7d / Custom)
 ## 4. Upload reliability
 - `js/resources.js` and `js/admin.js`: raised the per-file upload timeout from 2 minutes to 5 minutes, since slower mobile connections were timing out on larger files before they could finish.
 - Confirmed multi-file upload, the live progress ring, "Processing on server…" / "Saving details…" status messages, and parallel (not sequential) file uploads were already in place in the Hand Notes upload form.
+
+## 5. The real bug behind "lift restriction doesn't leave a fresh start"
+Found it: the "credits used" calculation (in three places — `js/admin.js` computeCreditsBalance, `js/resources.js` hnGetRemainingCredits, `js/profile.js`) excluded any `revoked` fileUnlocks doc from the "used" count. But revoking a fileUnlocks doc is exactly what locking a file on restriction does — so the moment a student's unlocks were revoked, those spent credits silently got un-spent and added back into their live balance, fighting against the `creditDebt` penalty meant to zero it out. Depending on timing, this could leave a leftover balance after lifting a restriction instead of zero.
+
+Fix: a fileUnlocks doc now always counts as "used" once created, regardless of whether it's later revoked. Revocation is about access (locking the file), not about un-spending the credit that unlocked it. This makes the zero-balance penalty stable and permanent across restrict → lift, instead of drifting back up.
+
+Also: "Lift Restriction" now re-applies both the credit wipe and the unlock revocation at lift time too (not just at restrict time), so it's always the final word on "fresh start" — covers any unlocks/credits an admin might have granted manually during the restriction window.
