@@ -926,6 +926,11 @@ function wireInlineImageWrapper(wrapper) {
   deleteBtn?.addEventListener("click", (ev) => {
     ev.preventDefault();
     ev.stopPropagation();
+    // Release the local preview URL if the image is removed before (or
+    // instead of) its upload ever completing — otherwise it stays in
+    // memory for the rest of the tab's lifetime.
+    const imgEl = wrapper.querySelector("img");
+    if (imgEl?.src?.startsWith("blob:")) URL.revokeObjectURL(imgEl.src);
     wrapper.remove();
     updateImageModeUI();
   });
@@ -1003,7 +1008,13 @@ async function runInlineUpload(wrapper, img, spinner, file) {
   spinner.innerHTML = "Uploading…";
   try {
     const url = await uploadOneImage(file);
+    // The local blob: preview URL is only needed until the real Cloudinary
+    // URL takes over — revoke it now instead of leaking it for the rest of
+    // the tab's lifetime (each post can carry several images, so this adds
+    // up on longer sessions).
+    const previewUrl = img.src;
     img.src = url;
+    if (previewUrl.startsWith("blob:")) URL.revokeObjectURL(previewUrl);
     wrapper.classList.remove("is-uploading");
   } catch (err) {
     console.error("[Blog] inline image upload failed:", err);
@@ -1722,7 +1733,7 @@ function wirePostCard(article, id, item) {
       likeCountEl.textContent = `❤️ ${item.likesCount}`;
     } catch (err) {
       console.error("[Blog] like toggle failed:", err);
-      alert("Something went wrong. Please try again.");
+      alert("Something went wrong: " + (err && err.message ? err.message : "please try again."));
     } finally {
       likeBtn.disabled = false;
     }
@@ -1826,7 +1837,7 @@ function renderCommentComposer(container, postId, listEl, commentCountEl, item) 
       await loadComments(postId, listEl);
     } catch (err) {
       console.error("[Blog] comment submit failed:", err);
-      alert("Something went wrong posting your comment. Please try again.");
+      alert("Something went wrong posting your comment: " + (err && err.message ? err.message : "please try again."));
     } finally {
       sendBtn.disabled = false;
     }

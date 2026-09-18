@@ -141,7 +141,7 @@ idForm.addEventListener("submit", async (e) => {
     }
   } catch (err) {
     console.error("[Login] lookup failed:", err);
-    showIdStatus("Something went wrong. Please try again.", true);
+    showIdStatus("Something went wrong: " + (err && err.message ? err.message : "please try again."), true);
   } finally {
     idSubmit.disabled = false;
     idSubmit.textContent = "Continue";
@@ -224,7 +224,7 @@ passwordForm.addEventListener("submit", async (e) => {
     setTimeout(() => { window.location.href = destinationAfterLogin(); }, 400);
   } catch (err) {
     console.error("[Login] password check failed:", err);
-    showPasswordLoginStatus("Something went wrong. Please try again.", true);
+    showPasswordLoginStatus("Something went wrong: " + (err && err.message ? err.message : "please try again."), true);
   } finally {
     passwordSubmit.disabled = false;
     passwordSubmit.textContent = "Log In";

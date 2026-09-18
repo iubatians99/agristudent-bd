@@ -918,7 +918,7 @@ async function loadResources() {
           loadResources();
         } catch (err) {
           console.error("[AgriAdmin] resource delete failed:", err);
-          alert("Something went wrong deleting this resource. Please try again.");
+          alert("Something went wrong deleting this resource: " + (err && err.message ? err.message : "please try again."));
           btn.disabled = false;
         }
       });
@@ -951,7 +951,7 @@ async function loadResources() {
           loadResources();
         } catch (err) {
           console.error("[AgriAdmin] file delete failed:", err);
-          alert("Something went wrong deleting this file. Please try again.");
+          alert("Something went wrong deleting this file: " + (err && err.message ? err.message : "please try again."));
           btn.disabled = false;
         }
       });
@@ -989,7 +989,7 @@ async function loadResources() {
           loadResources();
         } catch (err) {
           console.error("[AgriAdmin] one-click publish failed:", err);
-          alert("Something went wrong publishing this resource. Please try again.");
+          alert("Something went wrong publishing this resource: " + (err && err.message ? err.message : "please try again."));
           btn.disabled = false;
           btn.textContent = "🚀 Publish";
         }
@@ -1052,7 +1052,7 @@ async function loadResources() {
         } catch (err) {
             await syncStudentAccessStatus(db, item.uploaderEmail);
           console.error("[AgriAdmin] resource status update failed:", err);
-          alert("Something went wrong updating the status. Please try again.");
+          alert("Something went wrong updating the status: " + (err && err.message ? err.message : "please try again."));
         }
         finally { e.target.disabled = false; }
       });
@@ -1183,7 +1183,7 @@ async function loadBlogPosts() {
             await syncStudentAccessStatus(db, item.uploaderEmail);
         } catch (err) {
           console.error("[AgriAdmin] blog status update failed:", err);
-          alert("Something went wrong updating the status. Please try again.");
+          alert("Something went wrong updating the status: " + (err && err.message ? err.message : "please try again."));
           e.target.disabled = false;
         }
       });
@@ -1208,7 +1208,7 @@ async function loadBlogPosts() {
           loadBlogPosts();
         } catch (err) {
           console.error("[AgriAdmin] blog delete failed:", err);
-          alert("Something went wrong deleting this post. Please try again.");
+          alert("Something went wrong deleting this post: " + (err && err.message ? err.message : "please try again."));
           btn.disabled = false;
         }
       });
@@ -1295,7 +1295,7 @@ async function loadTerms() {
           loadTerms();
         } catch (err) {
           console.error("[AgriAdmin] term delete failed:", err);
-          alert("Something went wrong deleting this term. Please try again.");
+          alert("Something went wrong deleting this term: " + (err && err.message ? err.message : "please try again."));
           btn.disabled = false;
         }
       });
@@ -1325,7 +1325,7 @@ async function loadTerms() {
         } catch (err) {
             await syncStudentAccessStatus(db, item.uploaderEmail);
           console.error("[AgriAdmin] term status update failed:", err);
-          alert("Something went wrong updating the status. Please try again.");
+          alert("Something went wrong updating the status: " + (err && err.message ? err.message : "please try again."));
         }
         finally { e.target.disabled = false; }
       });
@@ -1362,7 +1362,7 @@ document.getElementById("add-event-form").addEventListener("submit", async (e) =
     loadTimeline();
   } catch (err) {
     console.error("[AgriAdmin] add event failed:", err);
-    alert("Something went wrong adding this event. Please try again.");
+    alert("Something went wrong adding this event: " + (err && err.message ? err.message : "please try again."));
   }
 });
 
@@ -1410,7 +1410,7 @@ async function loadTimeline() {
         try { await deleteDoc(doc(db, "timeline", btn.dataset.id)); loadTimeline(); }
         catch (err) {
           console.error("[AgriAdmin] timeline delete failed:", err);
-          alert("Something went wrong deleting this event. Please try again.");
+          alert("Something went wrong deleting this event: " + (err && err.message ? err.message : "please try again."));
         }
       });
     });
@@ -1549,7 +1549,7 @@ async function loadRegistrations() {
           loadRegistrations();
         } catch (err) {
           console.error("[AgriAdmin] failed to remove user:", err);
-          alert("Something went wrong removing this user. Please try again.");
+          alert("Something went wrong removing this user: " + (err && err.message ? err.message : "please try again."));
           btn.disabled = false;
           btn.textContent = "🗑️ Remove User";
         }
@@ -1567,7 +1567,7 @@ async function loadRegistrations() {
           loadRegistrations();
         } catch (err) {
           console.error("[AgriAdmin] failed to restore user:", err);
-          alert("Something went wrong restoring this user. Please try again.");
+          alert("Something went wrong restoring this user: " + (err && err.message ? err.message : "please try again."));
           btn.disabled = false;
           btn.textContent = "↩️ Restore User";
         }
@@ -1591,7 +1591,7 @@ async function loadRegistrations() {
           loadRegistrations();
         } catch (err) {
           console.error("[AgriAdmin] failed to erase user:", err);
-          alert("Something went wrong erasing this user. Please try again.");
+          alert("Something went wrong erasing this user: " + (err && err.message ? err.message : "please try again."));
           btn.disabled = false;
           btn.textContent = "🗑️ Erase Permanently";
         }
@@ -1617,7 +1617,7 @@ async function loadRegistrations() {
           loadRegistrations();
         } catch (err) {
           console.error("[AgriAdmin] ID verify failed:", err);
-          alert("Something went wrong marking this profile verified. Please try again.");
+          alert("Something went wrong marking this profile verified: " + (err && err.message ? err.message : "please try again."));
           btn.disabled = false;
           btn.textContent = "🟢 Mark Verified";
         }
@@ -1636,7 +1636,7 @@ async function loadRegistrations() {
           loadRegistrations();
         } catch (err) {
           console.error("[AgriAdmin] ID unverify failed:", err);
-          alert("Something went wrong. Please try again.");
+          alert("Something went wrong: " + (err && err.message ? err.message : "please try again."));
           btn.disabled = false;
         }
       });
@@ -1648,7 +1648,7 @@ async function loadRegistrations() {
         loadRegistrations();
       } catch (err) {
         console.error("[AgriAdmin] account restriction failed:", err);
-        alert("Something went wrong applying the restriction. Please try again.");
+        alert("Something went wrong applying the restriction: " + (err && err.message ? err.message : "please try again."));
       }
     }
 
@@ -1692,7 +1692,7 @@ async function loadRegistrations() {
           loadRegistrations();
         } catch (err) {
           console.error("[AgriAdmin] lift restriction failed:", err);
-          alert("Something went wrong lifting the restriction. Please try again.");
+          alert("Something went wrong lifting the restriction: " + (err && err.message ? err.message : "please try again."));
           btn.disabled = false;
         }
       });
@@ -2126,7 +2126,7 @@ document.querySelectorAll(".danger-delete-btn").forEach(btn => {
       if (collectionName === "blogPosts") loadBlogPosts();
     } catch (err) {
       console.error("[AgriAdmin] bulk delete failed:", err);
-      dangerResult.textContent = `❌ Something went wrong deleting "${label}". Please try again.`;
+      dangerResult.textContent = `❌ Something went wrong deleting "${label}": ${err && err.message ? err.message : "please try again."}`;
       dangerResult.style.color = "var(--terracotta-500)";
       dangerResult.classList.remove("hidden");
     } finally {

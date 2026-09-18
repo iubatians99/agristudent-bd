@@ -83,10 +83,15 @@ function uploadFileToCloudinary(file, onProgress) {
 // ============================================
 async function autoRenameIfDuplicate(fileName, courseCode, facultyName) {
   // Check if this filename already exists for this course/faculty
+  // BUG FIX: this queried where("fac", "==", facultyName) — "fac" is not a
+  // real field on any resource document (it's written as "facultyName"
+  // everywhere else in this file). The typo meant this query always
+  // matched zero documents, so auto-rename silently never triggered even
+  // when a same-named file already existed for the course/faculty.
   const q = query(
     collection(db, "resources"),
     where("courseCode", "==", courseCode),
-    where("fac", "==", facultyName),
+    where("facultyName", "==", facultyName),
     where("status", "==", "approved")
   );
   
@@ -99,7 +104,7 @@ async function autoRenameIfDuplicate(fileName, courseCode, facultyName) {
   });
 
   if (!existingNames.includes(fileName)) {
-    return fileName; // No conflict
+    return { name: fileName, renamed: false }; // No conflict
   }
 
   // Rename with counter: "file.pdf" -> "file (1).pdf", "file (2).pdf", etc.
@@ -115,7 +120,10 @@ async function autoRenameIfDuplicate(fileName, courseCode, facultyName) {
     newName = `${base} (${counter})${ext}`;
   }
   
-  return newName;
+  // Renamed (not just deduped) — the caller shows the user a "file already
+  // exists" notice naming the original and the new name, instead of
+  // silently swapping the filename with no explanation.
+  return { name: newName, renamed: true, originalName: fileName };
 }
 
 // ============================================
@@ -492,13 +500,16 @@ if (uploadForm) {
         files.map((file, i) => uploadFileToCloudinary(file, (pct) => { progressByFile[i] = pct; updateOverall(); }))
       );
       fileUrls.forEach((f, i) => { f.fileType = detectedTypes[i]; });
-        fileUrls.forEach((f, i) => { f.fileType = detectedTypes[i]; });
-      fileUrls.forEach((f, i) => { f.fileType = detectedTypes[i]; });
 
-      // Auto-rename duplicates
+      // Auto-rename duplicates — and tell the user it happened, instead of
+      // silently swapping in a different filename than what they picked.
+      const duplicateNotices = [];
       for (let i = 0; i < fileUrls.length; i++) {
-        const renamedName = await autoRenameIfDuplicate(fileUrls[i].name, finalCourseCode, facultyName);
-        fileUrls[i].name = renamedName;
+        const renameResult = await autoRenameIfDuplicate(fileUrls[i].name, finalCourseCode, facultyName);
+        if (renameResult.renamed) {
+          duplicateNotices.push(`"${renameResult.originalName}" already exists for this course — saved as "${renameResult.name}".`);
+        }
+        fileUrls[i].name = renameResult.name;
       }
 
       if (detectedTypes.some(t => t === "image") && imageTitlesListEl) {
@@ -525,6 +536,15 @@ if (uploadForm) {
       uploadForm.reset();
       uploadForm.classList.add("hidden");
       statusBox.classList.add("hidden");
+      const dupNoticeEl = document.getElementById("upload-duplicate-notice");
+      if (dupNoticeEl) {
+        if (duplicateNotices.length) {
+          dupNoticeEl.textContent = "⚠️ " + duplicateNotices.join(" ");
+          dupNoticeEl.classList.remove("hidden");
+        } else {
+          dupNoticeEl.classList.add("hidden");
+        }
+      }
       successBox.classList.remove("hidden");
       matchedCourse = null;
       courseNameInput.readOnly = false;
@@ -532,13 +552,13 @@ if (uploadForm) {
       if (imageTitlesWrap) imageTitlesWrap.classList.add("hidden");
     } catch (err) {
       console.error("[Upload] failed:", err);
-      let userMessage = "Something went wrong. Please try again.";
+      let userMessage = "Something went wrong: " + (err && err.message ? err.message : "please try again.");
       if (err.code === "permission-denied") {
-        userMessage = "Upload was rejected. Please check the course code and file(s), then try again.";
+        userMessage = "Upload was rejected (" + (err.message || "permission denied") + "). Please check the course code and file(s), then try again.";
       } else if (/network/i.test(err.message || "")) {
-        userMessage = "Network error. Check your connection and try again.";
+        userMessage = "Network error: " + err.message + ". Check your connection and try again.";
       } else if (/timed out/i.test(err.message || "")) {
-        userMessage = "Upload took too long. Try again with a smaller file.";
+        userMessage = err.message + " Try again with a smaller file.";
       }
       showStatus(userMessage, true);
       submitBtn.disabled = false;
@@ -1537,11 +1557,16 @@ if (handNotesGate && handNotesContent) {
           files.map((file, i) => uploadFileToCloudinary(file, (pct) => { progressByFile[i] = pct; updateOverall(); }))
         );
 
-        // Auto-rename duplicates
+        // Auto-rename duplicates — and tell the user it happened.
+        const hnDuplicateNotices = [];
         for (let i = 0; i < fileUrls.length; i++) {
-          const renamedName = await autoRenameIfDuplicate(fileUrls[i].name, courseCode, facultyName);
-          fileUrls[i].name = renamedName;
+          const renameResult = await autoRenameIfDuplicate(fileUrls[i].name, courseCode, facultyName);
+          if (renameResult.renamed) {
+            hnDuplicateNotices.push(`"${renameResult.originalName}" already exists for this course — saved as "${renameResult.name}".`);
+          }
+          fileUrls[i].name = renameResult.name;
         }
+        fileUrls.forEach((f, i) => { f.fileType = detectedTypes[i]; });
 
         // Attach the per-image title captured at upload time (if any),
         // so the gallery and viewer can display it under the image.
@@ -1596,6 +1621,15 @@ if (handNotesGate && handNotesContent) {
           if (detailEl) detailEl.textContent = hnNoteType === "hand_notes"
             ? (files.length > 1 ? `The selected file is available for 6 hours. Your ${files.length} uploaded file${files.length === 1 ? "" : "s"} also added ${files.length} credit${files.length === 1 ? "" : "s"} to your wallet.` : "The selected file is available for 6 hours. Each uploaded file also adds 1 credit to your wallet.")
             : `Each uploaded file added 1 credit. Your own uploaded files are permanently available to you.`;
+          const hnDupNoticeEl = document.getElementById("hn-duplicate-notice");
+          if (hnDupNoticeEl) {
+            if (hnDuplicateNotices.length) {
+              hnDupNoticeEl.textContent = "⚠️ " + hnDuplicateNotices.join(" ");
+              hnDupNoticeEl.classList.remove("hidden");
+            } else {
+              hnDupNoticeEl.classList.add("hidden");
+            }
+          }
           if (successBoxEl && hnNoteType === "hand_notes" && files.length > 1) {
             let credits = successBoxEl.querySelector("#hn-extra-credit-list");
             if (!credits) { credits = document.createElement("div"); credits.id="hn-extra-credit-list"; credits.style.cssText="margin-top:1rem;display:grid;gap:.5rem;"; successBoxEl.appendChild(credits); }
@@ -1605,13 +1639,13 @@ if (handNotesGate && handNotesContent) {
         }, 700);
       } catch (err) {
         console.error("[Hand Notes Unlock] failed:", err);
-        let userMessage = "Something went wrong. Please try again.";
+        let userMessage = "Something went wrong: " + (err && err.message ? err.message : "please try again.");
         if (err.code === "permission-denied") {
-          userMessage = "Upload was rejected. Please check the details and try again.";
+          userMessage = "Upload was rejected (" + (err.message || "permission denied") + "). Please check the details and try again.";
         } else if (/network/i.test(err.message || "")) {
-          userMessage = "Network error. Check your connection and try again.";
+          userMessage = "Network error: " + err.message + ". Check your connection and try again.";
         } else if (/timed out/i.test(err.message || "")) {
-          userMessage = "Upload took too long. Try again with a smaller file.";
+          userMessage = err.message + " Try again with a smaller file.";
         }
         hnShowStatus(userMessage, true);
         hnSubmit.disabled = false;
@@ -2413,11 +2447,16 @@ if (anotherUploadBtn && anotherUploadModal) {
         files.map((file, i) => uploadFileToCloudinary(file, (pct) => { progressByFile[i] = pct; updateOverall(); }))
       );
 
-      // Auto-rename duplicates
+      // Auto-rename duplicates — and tell the user it happened.
+      const auDuplicateNotices = [];
       for (let i = 0; i < fileUrls.length; i++) {
-        const renamedName = await autoRenameIfDuplicate(fileUrls[i].name, courseCode, facultyName);
-        fileUrls[i].name = renamedName;
+        const renameResult = await autoRenameIfDuplicate(fileUrls[i].name, courseCode, facultyName);
+        if (renameResult.renamed) {
+          auDuplicateNotices.push(`"${renameResult.originalName}" already exists for this course — saved as "${renameResult.name}".`);
+        }
+        fileUrls[i].name = renameResult.name;
       }
+      fileUrls.forEach((f, i) => { f.fileType = detectedTypes[i]; });
 
       if (detectedTypes.some(t => t === "image")) {
         const titleInputs = auImageTitlesList.querySelectorAll(".au-image-title-input");
@@ -2447,6 +2486,15 @@ if (anotherUploadBtn && anotherUploadModal) {
 
       auForm.classList.add("hidden");
       auProgressWrap.classList.add("hidden");
+      const auDupNoticeEl = document.getElementById("au-duplicate-notice");
+      if (auDupNoticeEl) {
+        if (auDuplicateNotices.length) {
+          auDupNoticeEl.textContent = "⚠️ " + auDuplicateNotices.join(" ");
+          auDupNoticeEl.classList.remove("hidden");
+        } else {
+          auDupNoticeEl.classList.add("hidden");
+        }
+      }
       auSuccess.classList.remove("hidden");
       auMatchedCourse = null;
 
@@ -2454,10 +2502,10 @@ if (anotherUploadBtn && anotherUploadModal) {
       (window.__onResourceAccessGranted || []).forEach(fn => fn());
     } catch (err) {
       console.error("[Another Upload] failed:", err);
-      let userMessage = "Something went wrong. Please try again.";
-      if (err.code === "permission-denied") userMessage = "Upload was rejected. Please check the details and try again.";
-      else if (/network/i.test(err.message || "")) userMessage = "Network error. Check your connection and try again.";
-      else if (/timed out/i.test(err.message || "")) userMessage = "Upload took too long. Try again with a smaller file.";
+      let userMessage = "Something went wrong: " + (err && err.message ? err.message : "please try again.");
+      if (err.code === "permission-denied") userMessage = "Upload was rejected (" + (err.message || "permission denied") + "). Please check the details and try again.";
+      else if (/network/i.test(err.message || "")) userMessage = "Network error: " + err.message + ". Check your connection and try again.";
+      else if (/timed out/i.test(err.message || "")) userMessage = err.message + " Try again with a smaller file.";
       auShowStatus(userMessage, true);
       auSubmit.disabled = false;
       auSubmit.textContent = "Submit for Review";

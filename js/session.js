@@ -354,7 +354,7 @@ function maybeShowPasswordSetupPopup(regId, reg) {
       setTimeout(() => { overlay.remove(); window.__agriPasswordPopupOpen = false; }, 900);
     } catch (err) {
       console.error("[Session] password setup failed:", err);
-      showStatus("Something went wrong saving your password. Please try again.", true);
+      showStatus("Something went wrong saving your password: " + (err && err.message ? err.message : "please try again."), true);
       submitBtn.disabled = false;
       submitBtn.textContent = "Set Password";
     }
