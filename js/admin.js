@@ -25,9 +25,9 @@ async function syncStudentAccessStatus(db, uploaderEmail) {
 
   try {
     const regSnap = await getDocs(
-      query(collection(db, "registrations"), where("emailNormalized", "==", normalizedEmail))
+      query(collection(db, "registrations"), where("email", "==", normalizedEmail))
     );
-    
+
     if (regSnap.empty) return;
 
     const regDoc = regSnap.docs[0];
@@ -497,8 +497,8 @@ async function grantManualUnlock(email, days, unlockType, reason) {
 
     // Students live in "registrations" (see js/login.js, js/resources.js) —
     // there is no separate "users" collection in this app.
-    let regSnap = await getDocs(query(collection(db, "registrations"), where("emailNormalized", "==", normalizedEmail)));
-    if (regSnap.empty) regSnap = await getDocs(query(collection(db, "registrations"), where("email", "==", normalizedEmail)));
+    let regSnap = await getDocs(query(collection(db, "registrations"), where("email", "==", normalizedEmail)));
+    if (regSnap.empty) regSnap = await getDocs(query(collection(db, "registrations"), where("emailNormalized", "==", normalizedEmail)));
 
     if (regSnap.empty) {
       alert("❌ User not found. Make sure email is registered.");
@@ -627,7 +627,7 @@ async function loadCoffeeRequests() {
       try {
         const ref = doc(db, "coffeeRequests", btn.dataset.id); const snap = await getDocs(query(collection(db,"coffeeRequests"), where("__name__", "==", btn.dataset.id)));
         if (snap.empty) throw new Error("Request not found."); const d=snap.docs[0].data();
-        const regSnap = await getDocs(query(collection(db,"registrations"), where("emailNormalized", "==", normalizeEmail(d.fromEmail || ""))));
+        const regSnap = await getDocs(query(collection(db,"registrations"), where("email", "==", normalizeEmail(d.fromEmail || ""))));
         if (regSnap.empty) throw new Error("Registered student not found."); const regId=regSnap.docs[0].id;
         await addDoc(collection(db,"manualUnlocks"), { kind:"manual", source:"coffee", fromEmail:normalizeEmail(d.fromEmail), userEmail:normalizeEmail(d.fromEmail), studentName:d.fromName||"", unlockType:d.targetFileId ? (d.category || "hand_notes") : "all_resources", targetFileId:d.targetFileId || "", category:d.targetFileId ? (d.category || "hand_notes") : null, days:n, durationMs:n*24*60*60*1000, reason:"Buy Me a Coffee", creditsGranted, grantedAt:serverTimestamp(), grantedBy:currentAdminEmail || getCurrentUserEmail() });
         await syncStudentAccessStatus(db, normalizeEmail(d.fromEmail));
@@ -1841,7 +1841,7 @@ async function loadClassroomCodes() {
         <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
           ${isApproved && !isMaterialsRequest ? `<button type="button" class="lock-classroom-code-btn" data-id="${d.id}" style="background:var(--terracotta-500);color:#fff;border:none;padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">🔒 Lock Again</button>` : ""}
           ${isLocked && !isMaterialsRequest ? `<button type="button" class="unlock-classroom-code-btn" data-id="${d.id}" style="background:var(--leaf-500);color:#fff;border:none;padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">🔓 Unlock Again</button>` : ""}
-          ${isApproved || isLocked ? "" : `<button type="button" class="confirm-classroom-code-btn" data-id="${d.id}" style="background:var(--leaf-500);color:#fff;border:none;padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">${isMaterialsRequest ? "✅ Mark Reviewed" : "✅ Confirm &amp; Unlock"}</button>`}
+          ${isApproved || isLocked ? "" : `<button type="button" class="confirm-classroom-code-btn" data-id="${d.id}" data-materials="${isMaterialsRequest ? "1" : "0"}" style="background:var(--leaf-500);color:#fff;border:none;padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">${isMaterialsRequest ? "✅ Mark Reviewed" : "✅ Confirm &amp; Unlock"}</button>`}
           ${isApproved || isContacted ? "" : `<button type="button" class="mark-contacted-btn" data-id="${d.id}" style="background:none;border:1px solid var(--line);padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">Mark Contacted</button>`}
           <button type="button" class="btn-danger delete-classroom-code-btn" data-id="${d.id}" style="padding:.35rem .7rem;font-size:.78rem;">🗑 Delete</button>
         </div>`;
@@ -1853,12 +1853,14 @@ async function loadClassroomCodes() {
     // classroom-code submission access once status is "approved".
     classroomCodesList.querySelectorAll(".confirm-classroom-code-btn").forEach(btn => {
       btn.addEventListener("click", async () => {
+        const isMaterialsRequest = btn.dataset.materials === "1";
         btn.disabled = true;
         try {
           await updateDoc(doc(db, "classroomCodes", btn.dataset.id), { status: "approved", approvedAt: serverTimestamp(), approvedBy:getCurrentUserEmail(), ...(isMaterialsRequest ? {} : { creditsGranted: 10 }) });
           loadClassroomCodes();
         } catch (err) {
           console.error("[AgriAdmin] Failed to confirm classroom code:", err);
+          alert("Could not update this classroom code: " + err.message);
           btn.disabled = false;
         }
       });
@@ -1867,13 +1869,13 @@ async function loadClassroomCodes() {
       btn.addEventListener("click", async () => {
         if (!confirm("Lock this classroom-code access again? The selected file access will become locked for this student.")) return;
         btn.disabled = true;
-        try { await updateDoc(doc(db,"classroomCodes",btn.dataset.id),{status:"locked",lockedAt:serverTimestamp(),lockedBy:getCurrentUserEmail()}); loadClassroomCodes(); } catch(err){ console.error(err); btn.disabled=false; }
+        try { await updateDoc(doc(db,"classroomCodes",btn.dataset.id),{status:"locked",lockedAt:serverTimestamp(),lockedBy:getCurrentUserEmail()}); loadClassroomCodes(); } catch(err){ console.error(err); alert("Could not lock this code: " + err.message); btn.disabled=false; }
       });
     });
     classroomCodesList.querySelectorAll(".unlock-classroom-code-btn").forEach(btn => {
       btn.addEventListener("click", async () => {
         btn.disabled = true;
-        try { await updateDoc(doc(db,"classroomCodes",btn.dataset.id),{status:"approved",approvedAt:serverTimestamp(),approvedBy:getCurrentUserEmail(),creditsGranted:10}); loadClassroomCodes(); } catch(err){ console.error(err); btn.disabled=false; }
+        try { await updateDoc(doc(db,"classroomCodes",btn.dataset.id),{status:"approved",approvedAt:serverTimestamp(),approvedBy:getCurrentUserEmail(),creditsGranted:10}); loadClassroomCodes(); } catch(err){ console.error(err); alert("Could not unlock this code: " + err.message); btn.disabled=false; }
       });
     });
     classroomCodesList.querySelectorAll(".mark-contacted-btn").forEach(btn => {
@@ -1884,6 +1886,7 @@ async function loadClassroomCodes() {
           loadClassroomCodes();
         } catch (err) {
           console.error("[AgriAdmin] Failed to update classroom code:", err);
+          alert("Could not mark this contacted: " + err.message);
           btn.disabled = false;
         }
       });
@@ -1897,6 +1900,7 @@ async function loadClassroomCodes() {
           loadClassroomCodes();
         } catch (err) {
           console.error("[AgriAdmin] Failed to delete classroom code:", err);
+          alert("Could not delete this submission: " + err.message);
           btn.disabled = false;
         }
       });

@@ -256,7 +256,19 @@ service cloud.firestore {
         request.resource.data.kind == "file_unlock" &&
         request.resource.data.fromEmail is string && request.resource.data.fromEmail.size() > 0 &&
         request.resource.data.targetFileId is string && request.resource.data.targetFileId.size() > 0 &&
-        request.resource.data.sourceResourceId is string && request.resource.data.sourceResourceId.size() > 0;
+        request.resource.data.sourceResourceId is string && request.resource.data.sourceResourceId.size() > 0 &&
+        // Every legitimate file-unlock grant used by js/resources.js is
+        // 6h (upload-gate unlock) or 36h (spending a wallet credit) — cap
+        // at 48h so a doc written directly against the SDK (there is no
+        // Firebase Auth session gating this create, by design — see the
+        // top-of-file trust-model note) can't hand out an arbitrarily
+        // long or effectively-infinite access window. Previously this
+        // field was not validated here at all, even though js/access.js
+        // trusts whatever number it finds in it.
+        (!('durationMs' in request.resource.data) ||
+          (request.resource.data.durationMs is number &&
+           request.resource.data.durationMs > 0 &&
+           request.resource.data.durationMs <= 172800000));
       allow list, get: if true;
       allow update, delete: if request.auth != null;
     }

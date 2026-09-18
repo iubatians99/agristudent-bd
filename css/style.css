@@ -2136,7 +2136,13 @@ body.viewer-layout {
 }
 .navbar-auth-logout:hover{ background:rgba(196,90,63,.08); }
 @media (max-width:700px){
-  .navbar-auth-slot span{ display:none; }
+  /* Only hide the plain login/register link label text on very small
+     screens — never the profile avatar/notification-dot wrapper, which
+     is also a <span> and was being caught (and hidden) by this same
+     selector, which is why the mobile navbar showed the name but not
+     the profile picture. */
+  .navbar-auth-login span,
+  .navbar-auth-register span{ display:none; }
 }
 @media (max-width:700px){
   .viewer-bar .title{ display:none; }

@@ -666,6 +666,7 @@ async function renderMyBlogPosts(email) {
 // when it was seen. See js/inbox.js for the shared read/write helpers.
 // ============================================
 let inboxCache = [];
+let inboxShowAll = false;
 
 function inboxUnreadCount() {
   return inboxCache.filter(m => !m.read).length;
@@ -686,6 +687,7 @@ function renderInboxBadge() {
 async function renderInbox(regId) {
   const listEl = document.getElementById("inbox-list");
   const emptyEl = document.getElementById("inbox-empty");
+  const showAllBtn = document.getElementById("inbox-show-all");
   if (!listEl) return;
 
   inboxCache = await fetchMessagesForUser(regId);
@@ -703,12 +705,22 @@ async function renderInbox(regId) {
   if (inboxCache.length === 0) {
     listEl.innerHTML = "";
     emptyEl?.classList.remove("hidden");
+    showAllBtn?.classList.add("hidden");
     renderInboxBadge();
     return;
   }
   emptyEl?.classList.add("hidden");
 
-  listEl.innerHTML = inboxCache.map(item => {
+  // Profile inbox preview only shows the 3 most recent messages by
+  // default (inboxCache is already newest-first) — a "Show all messages"
+  // button reveals the rest without navigating away.
+  const visibleItems = inboxShowAll ? inboxCache : inboxCache.slice(0, 3);
+  if (showAllBtn) {
+    showAllBtn.classList.toggle("hidden", inboxCache.length <= 3);
+    showAllBtn.textContent = inboxShowAll ? "Show only recent messages" : `Show all messages (${inboxCache.length})`;
+  }
+
+  listEl.innerHTML = visibleItems.map(item => {
     const isUnread = !item.read;
     const preview = (item.body || "").trim().replace(/\s+/g, " ");
     const previewText = preview.length > 60 ? preview.slice(0, 60) + "…" : preview;
@@ -756,6 +768,14 @@ async function renderInbox(regId) {
       }
     });
   });
+
+  if (showAllBtn && !showAllBtn.dataset.wired) {
+    showAllBtn.dataset.wired = "1";
+    showAllBtn.addEventListener("click", () => {
+      inboxShowAll = !inboxShowAll;
+      renderInbox(regId);
+    });
+  }
 }
 
 const logoutBtn = document.getElementById("profile-logout-btn");

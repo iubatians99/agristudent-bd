@@ -830,14 +830,22 @@ if (handNotesGate && handNotesContent) {
       const items = window.__hnAccessItems || [];
       let registrationCredits = 5;
       try {
-        const regSnap = await getDocs(query(collection(db, "registrations"), where("emailNormalized", "==", email)));
+        const regSnap = await getDocs(query(collection(db, "registrations"), where("email", "==", email)));
         if (!regSnap.empty) registrationCredits = Math.max(5, Number(regSnap.docs[0].data().registrationCredits || 0));
         else {
-          const legacy = await getDocs(query(collection(db, "registrations"), where("email", "==", email)));
+          const legacy = await getDocs(query(collection(db, "registrations"), where("emailNormalized", "==", email)));
           if (!legacy.empty) registrationCredits = Math.max(5, Number(legacy.docs[0].data().registrationCredits || 0));
         }
       } catch (_) { /* retain the guaranteed 5-credit entitlement */ }
-      const uploadCredits = items.filter(i => i.kind === "resource" && normalizeEmail(i.uploaderEmail) === email).reduce((n, i) => n + fileCount(i), 0);
+      // Resource docs (Hand Notes / Class Slides / Images uploads) are never
+      // tagged kind:"resource" in this in-memory list (see
+      // getResourceAccessState() below — they come straight off the
+      // "resources" collection), so filtering on i.kind === "resource" here
+      // matched nothing and silently zeroed out every upload-earned credit,
+      // even though the profile page (which DOES tag kind:"resource") showed
+      // the correct, larger total. A real resource doc is identified by its
+      // resourceType field instead.
+      const uploadCredits = items.filter(i => !i.kind && i.resourceType && normalizeEmail(i.uploaderEmail) === email).reduce((n, i) => n + fileCount(i), 0);
       const classroomCredits = items.filter(i => i.kind === "classroom" && i.status === "approved").reduce(n => n + 10, 0);
       const coffeeCredits = items.filter(i => i.kind === "manual" && i.source === "coffee").reduce((n, i) => n + Number(i.creditsGranted || 0), 0);
       const used = items.filter(i => i.kind === "file_unlock" && !i.revoked && i.source !== "notes_earn" && i.source !== "classroom_earn").length;
@@ -939,6 +947,9 @@ if (handNotesGate && handNotesContent) {
   document.getElementById("hn-choose-coffee")?.addEventListener("click", () => {
     const session = getSession();
     if (!session) { hnShowStep(hnStepLogin); return; }
+    hnCoffeeForm?.classList.remove("hidden");
+    hnCoffeeSuccess?.classList.add("hidden");
+    hnCoffeeForm?.reset();
     hnShowStep(hnStepCoffee);
   });
   document.getElementById("hn-coffee-back")?.addEventListener("click", () => hnShowStep(hnStepChoice));
@@ -970,6 +981,8 @@ if (handNotesGate && handNotesContent) {
   });
 
   const hnCoffeeForm = document.getElementById("hn-coffee-form");
+  const hnCoffeeSuccess = document.getElementById("hn-coffee-success");
+  const hnCoffeeSuccessClose = document.getElementById("hn-coffee-success-close");
   hnCoffeeForm?.addEventListener("submit", async (e) => {
     e.preventDefault();
     const session = getSession(); if (!session) { hnShowStep(hnStepLogin); return; }
@@ -981,10 +994,15 @@ if (handNotesGate && handNotesContent) {
     btn.disabled=true; btn.textContent="Submitting…"; errEl.classList.add("hidden");
     try {
       await addDoc(collection(db,"coffeeRequests"), { fromEmail:normalizeEmail(session.email), fromName:session.fullName || "", senderNumber, transactionId, amount, targetFileId:window.__hnGateFolderKey || hnGateTargetId || "", category:window.__hnGateCategory || "hand_notes", status:"pending", submittedAt:serverTimestamp() });
-      hnShowStatus("☕ Coffee support submitted — waiting for admin review.");
-      btn.textContent="Submitted ✓";
+      // Show a real confirmation screen (matching the Classroom/Ad flows)
+      // instead of just flipping the submit button's own label, which was
+      // easy to miss and looked like nothing had happened.
+      hnCoffeeForm.classList.add("hidden");
+      hnCoffeeSuccess?.classList.remove("hidden");
+      btn.disabled=false; btn.textContent="☕ Submit Coffee Support";
     } catch(err) { errEl.textContent="Could not submit your request. Please try again."; errEl.classList.remove("hidden"); btn.disabled=false; btn.textContent="☕ Submit Coffee Support"; }
   });
+  hnCoffeeSuccessClose?.addEventListener("click", () => { window.location.href = "blog.html"; });
 
   // ============================================
   // UNLOCK WITH GOOGLE CLASSROOM — same duplicate-code rule as the
