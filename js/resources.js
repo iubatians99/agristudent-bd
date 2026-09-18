@@ -829,12 +829,23 @@ if (handNotesGate && handNotesContent) {
     try {
       const items = window.__hnAccessItems || [];
       let registrationCredits = 5;
+      // creditDebt is a one-off penalty an admin applies by lifting an
+      // account restriction (js/admin.js deductFullCreditBalance) — it
+      // wipes whatever balance existed at that moment without touching
+      // any of the underlying earned-credit documents, so it has to be
+      // subtracted here every time the balance is computed.
+      let creditDebt = 0;
       try {
         const regSnap = await getDocs(query(collection(db, "registrations"), where("email", "==", email)));
-        if (!regSnap.empty) registrationCredits = Math.max(5, Number(regSnap.docs[0].data().registrationCredits || 0));
-        else {
+        if (!regSnap.empty) {
+          registrationCredits = Math.max(5, Number(regSnap.docs[0].data().registrationCredits || 0));
+          creditDebt = Number(regSnap.docs[0].data().creditDebt || 0);
+        } else {
           const legacy = await getDocs(query(collection(db, "registrations"), where("emailNormalized", "==", email)));
-          if (!legacy.empty) registrationCredits = Math.max(5, Number(legacy.docs[0].data().registrationCredits || 0));
+          if (!legacy.empty) {
+            registrationCredits = Math.max(5, Number(legacy.docs[0].data().registrationCredits || 0));
+            creditDebt = Number(legacy.docs[0].data().creditDebt || 0);
+          }
         }
       } catch (_) { /* retain the guaranteed 5-credit entitlement */ }
       // Resource docs (Hand Notes / Class Slides / Images uploads) are never
@@ -849,7 +860,7 @@ if (handNotesGate && handNotesContent) {
       const classroomCredits = items.filter(i => i.kind === "classroom" && i.status === "approved").reduce(n => n + 10, 0);
       const coffeeCredits = items.filter(i => i.kind === "manual" && i.source === "coffee").reduce((n, i) => n + Number(i.creditsGranted || 0), 0);
       const used = items.filter(i => i.kind === "file_unlock" && !i.revoked && i.source !== "notes_earn" && i.source !== "classroom_earn").length;
-      return Math.max(0, registrationCredits + uploadCredits + classroomCredits + coffeeCredits - used);
+      return Math.max(0, registrationCredits + uploadCredits + classroomCredits + coffeeCredits - used - creditDebt);
     } catch (err) {
       console.warn("[Resource Credit] balance check failed:", err);
       return 0;

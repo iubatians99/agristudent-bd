@@ -2172,11 +2172,6 @@ body.viewer-layout {
   width:9px; height:9px; border-radius:50%;
   background:var(--terracotta-500); border:2px solid #fff;
 }
-.navbar-auth-logout{
-  background:none; border:1px solid var(--line); border-radius:8px;
-  padding:.35rem .7rem; font-size:.78rem; font-weight:600; cursor:pointer; color:var(--terracotta-500);
-}
-.navbar-auth-logout:hover{ background:rgba(196,90,63,.08); }
 @media (max-width:700px){
   /* Only hide the plain login/register link label text on very small
      screens — never the profile avatar/notification-dot wrapper, which
@@ -3102,14 +3097,11 @@ body.viewer-layout {
 @media (max-width:700px){
   .navbar-auth-slot{gap:.35rem;}
   .navbar-auth-profile{max-width:150px;padding:.15rem .25rem;gap:.42rem;}
-  .navbar-auth-profile > span:last-child{display:block;max-width:78px;font-size:.72rem;}
+  .navbar-auth-profile > span:last-child{display:block;max-width:100px;font-size:.72rem;}
   .navbar-auth-avatar{width:32px;height:32px;}
-  .navbar-auth-logout{padding:.3rem .5rem;font-size:.7rem;}
 }
 @media (max-width:430px){
-  .navbar-auth-profile > span:last-child{max-width:62px;}
-  .navbar-auth-logout{font-size:0;width:32px;height:32px;padding:0;position:relative;}
-  .navbar-auth-logout:after{content:"↪";font-size:1rem;position:absolute;inset:0;display:grid;place-items:center;}
+  .navbar-auth-profile > span:last-child{max-width:82px;}
 }
 
 .profile-dashboard{min-width:0;}

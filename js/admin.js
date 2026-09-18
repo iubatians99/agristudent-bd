@@ -1,6 +1,6 @@
 import { db, auth, CLOUDINARY_UPLOAD_URL, CLOUDINARY_UPLOAD_PRESET } from "./firebase-config.js";
 import {
-  collection, getDocs, doc, updateDoc, deleteDoc, addDoc, setDoc, orderBy, query, where, limit, Timestamp, writeBatch, serverTimestamp
+  collection, getDocs, getDoc, doc, updateDoc, deleteDoc, addDoc, setDoc, orderBy, query, where, limit, Timestamp, writeBatch, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
   signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail
@@ -148,6 +148,52 @@ async function restrictAccountByEmail(email, days, reason) {
   const snap = await getDocs(query(collection(db, "registrations"), where("email", "==", normalized)));
   if (snap.empty) throw new Error(`No registered account found for ${email}.`);
   await restrictAccountById(snap.docs[0].id, days, reason);
+}
+
+// ============================================
+// CREDIT PENALTY ON UNRESTRICT — lifting a restriction also wipes the
+// student's whole current wallet-credit balance as a penalty. Credits are
+// never stored as one number (js/resources.js hnGetRemainingCredits and
+// js/profile.js renderCredits both compute them live from the resources /
+// classroomCodes / manualUnlocks / fileUnlocks collections), so the
+// penalty is stored as a running "creditDebt" offset on the registration
+// doc instead — both places subtract it from the live total. The debt
+// only ever grows, so restricting the same account again later stacks
+// another full wipe on top instead of resetting anything.
+// ============================================
+async function computeCreditsBalance(email) {
+  const normalized = normalizeEmail(email || "");
+  if (!normalized) return { earned: 0, used: 0 };
+  const [resourcesSnap, classroomSnap, manualSnap, fileUnlockSnap, regSnap] = await Promise.all([
+    getDocs(query(collection(db, "resources"), where("uploaderEmail", "==", normalized))),
+    getDocs(query(collection(db, "classroomCodes"), where("fromEmail", "==", normalized))),
+    getDocs(query(collection(db, "manualUnlocks"), where("fromEmail", "==", normalized))),
+    getDocs(query(collection(db, "fileUnlocks"), where("fromEmail", "==", normalized))),
+    getDocs(query(collection(db, "registrations"), where("email", "==", normalized)))
+  ]);
+  const registrationCredits = regSnap.empty ? 5 : Math.max(5, Number(regSnap.docs[0].data().registrationCredits || 0));
+  const uploadCredits = resourcesSnap.docs.reduce((n, d) => {
+    const fileUrls = d.data().fileUrls;
+    return n + (Array.isArray(fileUrls) ? fileUrls.length : 1);
+  }, 0);
+  const classroomCredits = classroomSnap.docs.reduce((n, d) => n + (d.data().status === "approved" ? 10 : 0), 0);
+  const coffeeCredits = manualSnap.docs.reduce((n, d) => {
+    const data = d.data();
+    return n + (data.source === "coffee" ? Number(data.creditsGranted || 0) : 0);
+  }, 0);
+  const used = fileUnlockSnap.docs.reduce((n, d) => {
+    const data = d.data();
+    return n + (!data.revoked && data.source !== "notes_earn" && data.source !== "classroom_earn" ? 1 : 0);
+  }, 0);
+  return { earned: registrationCredits + uploadCredits + classroomCredits + coffeeCredits, used };
+}
+
+async function deductFullCreditBalance(regId, email) {
+  const regRef = doc(db, "registrations", regId);
+  const [balance, regSnap] = await Promise.all([computeCreditsBalance(email), getDoc(regRef)]);
+  const existingDebt = Number(regSnap.data()?.creditDebt || 0);
+  const remaining = Math.max(0, balance.earned - balance.used - existingDebt);
+  await updateDoc(regRef, { creditDebt: existingDebt + remaining });
 }
 
 // ============================================
@@ -1414,7 +1460,7 @@ async function loadRegistrations() {
               ? `<button type="button" class="unverify-id-btn" data-id="${esc(d.id)}" style="background:none;border:1px solid var(--line);color:var(--moss-600);padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">↩️ Unverify</button>`
               : `<button type="button" class="verify-id-btn" data-id="${esc(d.id)}" style="background:var(--leaf-500);border:none;color:#fff;padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">🟢 Mark Verified</button>`}
             ${item.accountRestrictedUntil
-              ? `<button type="button" class="unrestrict-btn" data-id="${esc(d.id)}" style="background:none;border:1px solid var(--leaf-500);color:var(--leaf-500);padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">✅ Lift Restriction</button>`
+              ? `<button type="button" class="unrestrict-btn" data-id="${esc(d.id)}" data-email="${esc(item.email || "")}" style="background:none;border:1px solid var(--leaf-500);color:var(--leaf-500);padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">✅ Lift Restriction</button>`
               : `<button type="button" class="restrict-week-btn" data-id="${esc(d.id)}" style="background:none;border:1px solid var(--terracotta-500);color:var(--terracotta-500);padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">⛔ Restrict 7d</button>
                  <button type="button" class="restrict-custom-btn" data-id="${esc(d.id)}" style="background:none;border:1px solid var(--terracotta-500);color:var(--terracotta-500);padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">⛔ Custom…</button>`}
             ${item.removed
@@ -1572,8 +1618,10 @@ async function loadRegistrations() {
 
     regList.querySelectorAll(".unrestrict-btn").forEach(btn => {
       btn.addEventListener("click", async () => {
-        if (!confirm("Lift this account's restriction now?")) return;
+        if (!confirm("Lift this account's restriction now? Their full credit balance will also be deducted as a penalty.")) return;
+        btn.disabled = true;
         try {
+          await deductFullCreditBalance(btn.dataset.id, btn.dataset.email);
           await updateDoc(doc(db, "registrations", btn.dataset.id), {
             accountRestrictedUntil: null,
             accountRestrictedReason: "",
@@ -1583,6 +1631,7 @@ async function loadRegistrations() {
         } catch (err) {
           console.error("[AgriAdmin] lift restriction failed:", err);
           alert("Something went wrong lifting the restriction. Please try again.");
+          btn.disabled = false;
         }
       });
     });

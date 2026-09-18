@@ -111,6 +111,10 @@ function renderAuthSlot() {
 
   const displayName = (session.fullName || session.email).split(" ")[0];
   if (slot) {
+    // No Logout button here by design — the top bar only has room to
+    // squeeze the avatar/name link on mobile (it used to shrink Logout
+    // down to an icon-only "↪" sign). Logout lives in the mobile drawer
+    // (nav-drawer-logout below) and on the Profile page instead.
     slot.innerHTML = `
       <a href="profile.html#inbox" class="navbar-auth-profile" title="${esc(session.fullName || session.email)}">
         <span class="navbar-auth-avatar-wrap">
@@ -119,7 +123,6 @@ function renderAuthSlot() {
         </span>
         <span>${esc(displayName)}</span>
       </a>
-      <button type="button" class="navbar-auth-logout" id="navbar-logout-btn">Logout</button>
     `;
   }
 
@@ -132,7 +135,7 @@ function renderAuthSlot() {
         <img src="${esc(session.avatarUrl)}" alt="" class="nav-drawer-avatar">
         <span class="nav-drawer-account-name">${esc(session.fullName || session.email)}</span>
       </div>
-      <button type="button" class="nav-drawer-logout" id="nav-drawer-logout-btn">↪ Logout</button>
+      <button type="button" class="nav-drawer-logout" id="nav-drawer-logout-btn">Logout</button>
     `;
   }
 
@@ -145,7 +148,6 @@ function renderAuthSlot() {
       });
     }
   }
-  wireLogout("navbar-logout-btn");
   wireLogout("nav-drawer-logout-btn");
 
   // Best-effort — a failed/slow inbox check should never block the navbar.
@@ -230,7 +232,13 @@ function showAccountRemovedScreen(reason) {
 
 async function checkAccountRestriction() {
   // Admins reviewing/managing the site must never be locked out by this.
-  if (/\/?admin\.html/.test(window.location.pathname)) return;
+  // help.html is exempt too: the freeze screen below sends restricted/
+  // removed students there ("Contact Admin / Help") as their one usable
+  // way out, so this check re-running on help.html itself must NOT cover
+  // that page with a second freeze screen — that was the bug (clicking
+  // the freeze screen's Help button just landed on another freeze
+  // screen, with no way to actually reach the help form underneath).
+  if (/\/?(admin|help)\.html/.test(window.location.pathname)) return;
   const session = getSession();
   if (!session || !session.regId) return;
   try {

@@ -422,7 +422,13 @@ async function renderCredits(email, fullName, reg = {}) {
   // Only wallet-credit unlocks consume credits. Notes/Classroom access grants
   // are access records, not credit deductions.
   const creditsUsed = fileUnlockItems.filter(i => !i.revoked && i.source !== "notes_earn" && i.source !== "classroom_earn").length;
-  const creditsRemaining = Math.max(0, creditsEarned - creditsUsed);
+  // One-off penalty applied when an admin lifts an account restriction
+  // (js/admin.js deductFullCreditBalance) — wipes whatever balance existed
+  // at that moment. Stored as a running offset since credits aren't a
+  // single stored number; see js/resources.js hnGetRemainingCredits for
+  // the same subtraction on the student-facing unlock flow.
+  const creditDebt = Number(reg?.creditDebt || 0);
+  const creditsRemaining = Math.max(0, creditsEarned - creditsUsed - creditDebt);
   document.getElementById("handnote-credit-earned-top")?.replaceChildren(document.createTextNode(String(creditsEarned)));
   document.getElementById("handnote-credit-remaining-top")?.replaceChildren(document.createTextNode(String(creditsRemaining)));
   const creditPanel = document.getElementById("handnote-credit-panel");
