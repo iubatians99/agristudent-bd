@@ -29,6 +29,12 @@
 //    unlocking one file never unlocks another. Submissions with no
 //    targetFileId (made before this existed) count toward every file, so
 //    nobody who already had access loses it.
+//  • REJECTION IS SCOPED THE SAME WAY: a rejected upload only re-locks the
+//    one file it targeted (its targetFileId) — never every file the
+//    student has unlocked. An upload made with no specific file in mind
+//    (e.g. a plain course contribution, not made from an "Unlock" click)
+//    contributes no per-file lock at all if rejected, though it still
+//    triggers the account-wide 30-day upload restriction.
 // ============================================
 import { sendReviewEmail } from "./email-config.js";
 
@@ -274,7 +280,27 @@ export function computeResourceAccessStatus(items, now = Date.now()) {
 export function computeFileAccessStatus(items, fileId, now = Date.now(), fileCategory = null, globalLockAt = 0) {
   const list = Array.isArray(items) ? items : [];
   const relevant = list.filter(i => {
-    const requiresExactTarget = ["file_unlock", "classroom", "ad", "folder_lifetime"].includes(i?.kind) || i?.source === "notes_earn" || (i?.kind === "manual" && !!i?.targetFileId);
+    // BUG FIX: a raw "resources" submission doc (i.e. the upload record
+    // itself — resourceType set, kind left undefined) was falling through
+    // to targetOk = true unconditionally, because it matched none of the
+    // kinds below. That's harmless while the submission is pending/
+    // approved (computeResourceAccessStatus() never turns those into a
+    // grant), but a REJECTED submission also carries a restrictedUntil
+    // that computeResourceAccessStatus() applies to whatever list it's
+    // given. Since that rejected doc was "relevant" to every fileId, not
+    // just the one it targeted, rejecting ONE upload zeroed out `active`
+    // for EVERY file the student had unlocked, not just the file tied to
+    // that specific upload. Requiring an exact target match here scopes
+    // a rejection's restriction to the one file it was submitted to
+    // unlock (its targetFileId) — and to no file at all if it never
+    // targeted one, since it never granted per-file access in the first
+    // place. The separate, unfiltered call to computeResourceAccessStatus()
+    // in getResourceAccessState() still applies the real account-wide
+    // 30-day upload restriction; only the per-file lock scope changes here.
+    const requiresExactTarget = ["file_unlock", "classroom", "ad", "folder_lifetime"].includes(i?.kind)
+      || i?.source === "notes_earn"
+      || (i?.kind === "manual" && !!i?.targetFileId)
+      || !!i?.resourceType;
     const targetOk = requiresExactTarget
       ? (typeof i?.targetFileId === "string" && i.targetFileId === fileId)
       : true;
