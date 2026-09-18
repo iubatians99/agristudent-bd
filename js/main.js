@@ -99,6 +99,75 @@
   }
 })();
 
+// ------------------------------------------------------------------
+// "Section updated" bookkeeping (drives the slow blink on homepage cards —
+// see js/section-updates.js).
+//
+// Each browser remembers, per section, WHEN the visitor last looked at it.
+// The homepage compares that against the newest content timestamp in the
+// section and blinks the card if there is something newer. Opening a
+// section page (from the card, the navbar, a bookmark — anything) marks
+// it as seen, so the blink stops.
+//
+// Lives here (not in section-updates.js) because main.js is loaded on every
+// page, while section-updates.js only runs on the homepage.
+// ------------------------------------------------------------------
+(function () {
+  const KEY = 'agri_section_seen_v1';
+
+  // page file name (without .html) -> homepage card key
+  const PAGE_TO_SECTION = {
+    'knowledge-hub': 'knowledge',
+    'timeline': 'timeline',
+    'resources': 'resources',
+    'slides-notes': 'resources',
+    'previous-questions': 'resources',
+    'calculators': 'calculators',
+    'blog': 'blog',
+    'help': 'help'
+  };
+
+  function read() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(KEY) || '{}');
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (err) {
+      return {};
+    }
+  }
+  function write(obj) {
+    try { localStorage.setItem(KEY, JSON.stringify(obj)); } catch (err) { /* private mode / storage full — blink just won't persist */ }
+  }
+
+  window.AgriSectionSeen = {
+    get: read,
+    // Mark a section as seen. `upTo` lets the homepage pass the newest
+    // update time it knows about, so a slightly-fast server/admin clock
+    // can't leave the card blinking after the visitor has opened it.
+    mark(section, upTo) {
+      const seen = read();
+      seen[section] = Math.max(Date.now(), Number(upTo) || 0);
+      write(seen);
+    },
+    // First-ever visit (or a section that has no record yet): start the
+    // baseline at "now" so old content doesn't blink — only NEW updates do.
+    ensureBaseline(sections) {
+      const seen = read();
+      let changed = false;
+      const now = Date.now();
+      sections.forEach((key) => {
+        if (typeof seen[key] !== 'number') { seen[key] = now; changed = true; }
+      });
+      if (changed) write(seen);
+      return seen;
+    }
+  };
+
+  const page = (location.pathname.split('/').pop() || 'index').replace(/\.html$/i, '');
+  const section = PAGE_TO_SECTION[page];
+  if (section) window.AgriSectionSeen.mark(section);
+})();
+
 document.addEventListener('DOMContentLoaded', () => {
 
   // Animated stat counters (runs once, respects reduced motion)

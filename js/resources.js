@@ -10,14 +10,10 @@ import { computeCreditWallet } from "./credits.js";
 
 initEmailNotifications();
 
-const MAX_FILES = 40;
-const MAX_SIZE = 1024 * 1024 * 1024; // 1GB — kept in sync with the Cloudinary
-// preset's own "Max file size" setting; raising this number alone does NOT
-// raise what Cloudinary will actually accept (see js/firebase-config.js and
-// the Cloudinary dashboard's "Agriculture" upload preset).
-const MAX_SIZE_LABEL = MAX_SIZE >= 1024 * 1024 * 1024
-  ? `${(MAX_SIZE / (1024 * 1024 * 1024)).toFixed(MAX_SIZE % (1024 * 1024 * 1024) ? 1 : 0)}GB`
-  : `${Math.round(MAX_SIZE / (1024 * 1024))}MB`;
+const MAX_FILES = 20;
+// NOTE: "Max 10MB at once" is only a message shown on the upload forms —
+// there is deliberately NO client-side file-size check, so uploads of any size
+// are sent as-is.
 
 
 function detectFileType(file) {
@@ -44,19 +40,7 @@ function uploadFileToCloudinary(file, onProgress) {
         const json = JSON.parse(xhr.responseText);
         resolve({ url: json.secure_url, name: file.name });
       } else {
-        // Surface Cloudinary's actual error message instead of just the
-        // status code — a bare "(400)" hides whether it's a rate limit,
-        // a preset restriction, or something file-specific.
-        let detail = "";
-        try {
-          const parsed = JSON.parse(xhr.responseText);
-          detail = parsed && parsed.error && parsed.error.message ? parsed.error.message : "";
-          // Cloudinary's file-size error reports raw byte counts ("Got
-          // 14135576. Maximum is 10485760."), meaningless to a student —
-          // rewrite the two numbers it contains as MB.
-          detail = detail.replace(/\b(\d{5,})\b/g, (_, bytes) => `${(Number(bytes) / (1024 * 1024)).toFixed(1)}MB`);
-        } catch (_) { /* response wasn't JSON */ }
-        reject(new Error(`Upload failed for ${file.name} (${xhr.status})${detail ? ": " + detail : ""}`));
+        reject(new Error(`Upload failed for ${file.name} (${xhr.status})`));
       }
     };
     xhr.onerror = () => reject(new Error("Network error uploading " + file.name + "."));
@@ -71,12 +55,8 @@ function uploadFileToCloudinary(file, onProgress) {
 // ============================================
 // AUTO-RENAME DUPLICATE FILENAMES
 // ============================================
-// Fetches the existing names ONCE per submission (courseCode+facultyName
-// don't change across files in a batch) instead of once PER FILE — the old
-// code ran this exact query again for every file, so a full batch of
-// MAX_FILES did MAX_FILES sequential Firestore reads for data that never
-// changed between them.
-async function fetchExistingApprovedNames(courseCode, facultyName) {
+async function autoRenameIfDuplicate(fileName, courseCode, facultyName) {
+  // Check if this filename already exists for this course/faculty
   // BUG FIX: this queried where("fac", "==", facultyName) — "fac" is not a
   // real field on any resource document (it's written as "facultyName"
   // everywhere else in this file). The typo meant this query always
@@ -88,7 +68,7 @@ async function fetchExistingApprovedNames(courseCode, facultyName) {
     where("facultyName", "==", facultyName),
     where("status", "==", "approved")
   );
-
+  
   const docs = await getDocs(q);
   const existingNames = [];
   docs.forEach(d => {
@@ -96,19 +76,8 @@ async function fetchExistingApprovedNames(courseCode, facultyName) {
       existingNames.push(f.name);
     });
   });
-  return existingNames;
-}
 
-// Pure, synchronous — checks fileName against existingNames and, if it
-// picks a new name, pushes that name into existingNames before returning.
-// That push matters: it's what catches two files with the SAME name
-// picked in the same submission (e.g. two different folders each holding
-// a "note.pdf"). Without it, only the Firestore-approved names were
-// checked, so identically-named files within one batch both kept the
-// original name and silently overwrote each other's slot in the UI.
-function renameIfDuplicate(fileName, existingNames) {
   if (!existingNames.includes(fileName)) {
-    existingNames.push(fileName);
     return { name: fileName, renamed: false }; // No conflict
   }
 
@@ -116,16 +85,15 @@ function renameIfDuplicate(fileName, existingNames) {
   const parts = fileName.split(".");
   const ext = parts.length > 1 ? "." + parts[parts.length - 1] : "";
   const base = parts.slice(0, -1).join(".");
-
+  
   let counter = 1;
   let newName = `${base} (${counter})${ext}`;
-
+  
   while (existingNames.includes(newName)) {
     counter++;
     newName = `${base} (${counter})${ext}`;
   }
-
-  existingNames.push(newName);
+  
   // Renamed (not just deduped) — the caller shows the user a "file already
   // exists" notice naming the original and the new name, instead of
   // silently swapping the filename with no explanation.
@@ -160,17 +128,6 @@ function esc(val) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#x27;");
-}
-
-// ============================================
-// NATURAL SORT (for filenames like "lecture1", "lecture2", "lecture10")
-// Plain string sort would put "lecture10" before "lecture2" since "1" < "2"
-// character-by-character. The numeric option compares embedded number runs
-// by their numeric value instead, so files list in the order a person
-// would expect regardless of upload order.
-// ============================================
-function naturalCompare(a, b) {
-  return String(a || "").localeCompare(String(b || ""), undefined, { numeric: true, sensitivity: "base" });
 }
 
 // ============================================
@@ -496,8 +453,6 @@ if (uploadForm) {
     if (new Set(detectedTypes).size > 1) { showError("Please select files of a single type only — all PDF, all images, or all presentations, not a mix."); return; }
     currentFileType = detectedTypes[0];
 
-    const oversized = files.find(f => f.size > MAX_SIZE);
-    if (oversized) { showError(`"${oversized.name}" is over ${MAX_SIZE_LABEL}.`); return; }
 
     const finalCourseCode = matchedCourse ? matchedCourse.courseCode : rawCourseCode;
     const finalCourseName = matchedCourse ? matchedCourse.courseName : rawCourseName;
@@ -522,9 +477,8 @@ if (uploadForm) {
       // Auto-rename duplicates — and tell the user it happened, instead of
       // silently swapping in a different filename than what they picked.
       const duplicateNotices = [];
-      const existingNames = await fetchExistingApprovedNames(finalCourseCode, facultyName);
       for (let i = 0; i < fileUrls.length; i++) {
-        const renameResult = renameIfDuplicate(fileUrls[i].name, existingNames);
+        const renameResult = await autoRenameIfDuplicate(fileUrls[i].name, finalCourseCode, facultyName);
         if (renameResult.renamed) {
           duplicateNotices.push(`"${renameResult.originalName}" already exists for this course — saved as "${renameResult.name}".`);
         }
@@ -647,7 +601,7 @@ if (courseButtonsWrap) {
             <div style="font-size:.8rem;color:var(--moss-600);">${item.fileUrls.length} file(s)</div>
           </div>
           <div class="resource-row-files">
-            ${[...item.fileUrls].sort((a, b) => naturalCompare(a.name, b.name)).map(f => `<a href="${buildViewHref(f, item)}" class="view-link">View: ${esc(f.name)}</a>`).join("")}
+            ${item.fileUrls.map(f => `<a href="${buildViewHref(f, item)}" class="view-link">View: ${esc(f.name)}</a>`).join("")}
           </div>
         </div>`).join("");
   }
@@ -1560,11 +1514,6 @@ if (handNotesGate && handNotesContent) {
       }
       currentFileType = detectedTypes[0];
 
-      const oversized = files.find(f => f.size > MAX_SIZE);
-      if (oversized) { 
-        hnShowStatus(`"${oversized.name}" is over ${MAX_SIZE_LABEL}.`, true); 
-        return; 
-      }
 
       hnSubmit.disabled = true;
       hnSubmit.textContent = "Uploading…";
@@ -1585,9 +1534,8 @@ if (handNotesGate && handNotesContent) {
 
         // Auto-rename duplicates — and tell the user it happened.
         const hnDuplicateNotices = [];
-        const hnExistingNames = await fetchExistingApprovedNames(courseCode, facultyName);
         for (let i = 0; i < fileUrls.length; i++) {
-          const renameResult = renameIfDuplicate(fileUrls[i].name, hnExistingNames);
+          const renameResult = await autoRenameIfDuplicate(fileUrls[i].name, courseCode, facultyName);
           if (renameResult.renamed) {
             hnDuplicateNotices.push(`"${renameResult.originalName}" already exists for this course — saved as "${renameResult.name}".`);
           }
@@ -1871,22 +1819,12 @@ if (handnotesList || slidesList || imageGrid) {
     const fileRows = [];
     const lockScope = "file";
     window.__hnFileOwners = window.__hnFileOwners || {};
-    // Flatten to one entry per file first, so files can be sorted by name
-    // across the whole folder (not just within each submission) while each
-    // file keeps the original idx it was uploaded at — that idx is baked
-    // into its unlock id, so re-sorting here must never change it.
-    const flatFiles = [];
     facultyItems.forEach(item => {
       (item.fileUrls || []).forEach((file, idx) => {
         const detected = file.fileType || item.fileType || detectFileType({name:file.name || ""});
         if (opts.category === "hand_notes" || opts.category === "class_slides") {
           if (detected === "image") return;
         }
-        flatFiles.push({ item, file, idx });
-      });
-    });
-    flatFiles.sort((a, b) => naturalCompare(fileDisplayName(a.file), fileDisplayName(b.file)));
-    flatFiles.forEach(({ item, file, idx }) => {
         // Each file normally gets its OWN id (a submission doc can bundle
         // several files, so the doc id alone isn't unique per file) and is
         // unlocked independently of every other file — see hnOpenGate.
@@ -1904,6 +1842,7 @@ if (handnotesList || slidesList || imageGrid) {
               ? `<span class="file-action file-lock-badge">🔒 Unlock</span>`
               : `<a href="${buildViewHref(file, item)}" class="file-action" title="${esc(file.name)}">View</a>`}
           </div>`);
+      });
     });
 
     container.innerHTML =
@@ -2475,8 +2414,6 @@ if (anotherUploadBtn && anotherUploadModal) {
     if (detectedTypes.some(t => t === "unknown")) { auShowStatus("One or more files have an unsupported type. Please use PDF, PPT/PPTX, JPG, PNG, GIF, or WebP.", true); return; }
     if (new Set(detectedTypes).size > 1) { auShowStatus("Please select files of a single type only — all PDF, all images, or all presentations, not a mix.", true); return; }
     auFileType = detectedTypes[0];
-    const oversized = files.find(f => f.size > MAX_SIZE);
-    if (oversized) { auShowStatus(`"${oversized.name}" is over ${MAX_SIZE_LABEL}.`, true); return; }
 
     auSubmit.disabled = true;
     auSubmit.textContent = "Uploading…";
@@ -2496,9 +2433,8 @@ if (anotherUploadBtn && anotherUploadModal) {
 
       // Auto-rename duplicates — and tell the user it happened.
       const auDuplicateNotices = [];
-      const auExistingNames = await fetchExistingApprovedNames(courseCode, facultyName);
       for (let i = 0; i < fileUrls.length; i++) {
-        const renameResult = renameIfDuplicate(fileUrls[i].name, auExistingNames);
+        const renameResult = await autoRenameIfDuplicate(fileUrls[i].name, courseCode, facultyName);
         if (renameResult.renamed) {
           auDuplicateNotices.push(`"${renameResult.originalName}" already exists for this course — saved as "${renameResult.name}".`);
         }

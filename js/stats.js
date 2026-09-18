@@ -8,6 +8,30 @@ import {
   collection, query, where, getDocs
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
+// Shared, memoised snapshots of the two big collections. js/section-updates.js
+// (the homepage "this section has new content" blink) needs the same docs, so
+// both files share ONE read instead of each paying for its own.
+let approvedTermsSnapPromise = null;
+let approvedResourcesSnapPromise = null;
+
+export function getApprovedTermsSnap() {
+  if (!approvedTermsSnapPromise) {
+    approvedTermsSnapPromise = getDocs(
+      query(collection(db, "terms"), where("status", "==", "approved"))
+    );
+  }
+  return approvedTermsSnapPromise;
+}
+
+export function getApprovedResourcesSnap() {
+  if (!approvedResourcesSnapPromise) {
+    approvedResourcesSnapPromise = getDocs(
+      query(collection(db, "resources"), where("status", "==", "approved"))
+    );
+  }
+  return approvedResourcesSnapPromise;
+}
+
 // Map of element id -> function that returns a Firestore count query
 //
 // NOTE: every stat here now uses a plain getDocs() count instead of
@@ -27,9 +51,7 @@ const STAT_SOURCES = {
   "stat-resources": async () => {
     // Count actual approved files (not submission/folder documents).
     // PDFs, PPT/PPTX and uploaded images all contribute one count per file.
-    const docsSnap = await getDocs(
-      query(collection(db, "resources"), where("status", "==", "approved"))
-    );
+    const docsSnap = await getApprovedResourcesSnap();
     const imageExts = /\.(jpg|jpeg|png|gif|webp|bmp|svg|avif)$/i;
     const docExts = /\.(pdf|ppt|pptx)$/i;
     let total = 0;
@@ -53,9 +75,7 @@ const STAT_SOURCES = {
   },
 
   "stat-terms": async () => {
-    const docsSnap = await getDocs(
-      query(collection(db, "terms"), where("status", "==", "approved"))
-    );
+    const docsSnap = await getApprovedTermsSnap();
     return { data: () => ({ count: docsSnap.size }) };
   }
 };

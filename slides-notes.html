@@ -130,8 +130,9 @@
               <div class="file-drop">
                 <div class="file-drop-icon">📎</div>
                 <div class="file-drop-text">Tap to choose files, or drag them here</div>
-                <input type="file" id="hn-files" multiple required accept=".pdf,application/pdf,.ppt,.pptx,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,image/*,.jpg,.jpeg,.png,.gif,.webp,.bmp,.svg">
+                <input type="file" id="hn-files" multiple required accept=".pdf,application/pdf">
               </div>
+              <small class="upload-limit-note">📦 Max 10MB at once.</small>
               <div id="hn-files-selected-preview" class="selected-files-preview hidden"></div>
             </div>
             <div class="form-field hidden" id="hn-image-wrapper">
@@ -141,7 +142,7 @@
                 <div class="file-drop-text">Tap to choose images, or drag them here (JPEG, PNG, WebP supported)</div>
                 <input type="file" id="hn-images" multiple accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp">
               </div>
-              <small style="display:block;margin-top:.4rem;color:var(--moss-600);font-size:.85rem;">Multiple images will be uploaded as a folder. Supports high-quality images up to 10MB each.</small>
+              <small style="display:block;margin-top:.4rem;color:var(--moss-600);font-size:.85rem;">Multiple images will be uploaded as a folder. Max 10MB at once.</small>
               <div id="hn-images-selected-preview" class="selected-files-preview hidden"></div>
             </div>
             <button type="submit" id="hn-unlock-submit" class="btn-primary" style="width:100%;padding:.8rem;margin-top:.6rem;">Upload &amp; Unlock</button>
@@ -399,8 +400,9 @@
               <div class="file-drop">
                 <div class="file-drop-icon">📎</div>
                 <div class="file-drop-text">Tap to choose files, or drag them here</div>
-                <input type="file" id="au-files" multiple required accept=".pdf,application/pdf,.ppt,.pptx,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,image/*,.jpg,.jpeg,.png,.gif,.webp,.bmp,.svg">
+                <input type="file" id="au-files" multiple required accept=".pdf,application/pdf">
               </div>
+              <small class="upload-limit-note">📦 Max 10MB at once.</small>
               <div id="au-files-selected-preview" class="selected-files-preview hidden"></div>
             </div>
             <div class="form-field hidden" id="au-images-wrapper">
@@ -410,7 +412,7 @@
                 <div class="file-drop-text">Tap to choose images, or drag them here (JPEG, PNG, WebP supported)</div>
                 <input type="file" id="au-images" multiple accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp">
               </div>
-              <small style="display:block;margin-top:.4rem;color:var(--moss-600);font-size:.85rem;">Multiple images will be uploaded as a folder. Supports high-quality images up to 10MB each.</small>
+              <small style="display:block;margin-top:.4rem;color:var(--moss-600);font-size:.85rem;">Multiple images will be uploaded as a folder. Max 10MB at once.</small>
               <div id="au-images-selected-preview" class="selected-files-preview hidden"></div>
             </div>
             <button type="submit" id="au-submit" class="btn-primary" style="width:100%;padding:.8rem;margin-top:.6rem;">Submit for Review</button>

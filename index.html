@@ -105,7 +105,7 @@
     <p class="sub reveal">Pick a section below — each one is being built one at a time.</p>
     <div class="card-grid">
 
-      <a href="knowledge-hub.html" class="seed-card reveal">
+      <a href="knowledge-hub.html" class="seed-card reveal" data-section="knowledge">
         <div class="tag-strip"><span class="tag-dot"></span><span class="tag">SECTION 01</span></div>
         <div class="card-body">
           <div class="icon">📖</div>
@@ -114,7 +114,7 @@
         </div>
       </a>
 
-      <a href="timeline.html" class="seed-card reveal">
+      <a href="timeline.html" class="seed-card reveal" data-section="timeline">
         <div class="tag-strip"><span class="tag-dot"></span><span class="tag">SECTION 02</span></div>
         <div class="card-body">
           <div class="icon">📅</div>
@@ -123,7 +123,7 @@
         </div>
       </a>
 
-      <a href="resources.html" class="seed-card reveal">
+      <a href="resources.html" class="seed-card reveal" data-section="resources">
         <div class="tag-strip"><span class="tag-dot"></span><span class="tag">SECTION 03</span></div>
         <div class="card-body">
           <div class="icon">📚</div>
@@ -132,7 +132,7 @@
         </div>
       </a>
 
-      <a href="calculators.html" class="seed-card reveal">
+      <a href="calculators.html" class="seed-card reveal" data-section="calculators">
         <div class="tag-strip"><span class="tag-dot"></span><span class="tag">SECTION 04</span></div>
         <div class="card-body">
           <div class="icon">🧮</div>
@@ -142,7 +142,7 @@
         </div>
       </a>
 
-      <a href="blog.html" class="seed-card reveal">
+      <a href="blog.html" class="seed-card reveal" data-section="blog">
         <div class="tag-strip"><span class="tag-dot"></span><span class="tag">SECTION 05</span></div>
         <div class="card-body">
           <div class="icon">✍️</div>
@@ -151,7 +151,7 @@
         </div>
       </a>
 
-      <a href="help.html" class="seed-card reveal">
+      <a href="help.html" class="seed-card reveal" data-section="help">
         <div class="tag-strip"><span class="tag-dot"></span><span class="tag">SECTION 06</span></div>
         <div class="card-body">
           <div class="icon">💬</div>
@@ -197,6 +197,7 @@
 <script type="module" src="js/stats.js"></script>
 <script type="module" src="js/search.js"></script>
 <script type="module" src="js/session.js"></script>
+<script type="module" src="js/section-updates.js"></script>
 <script type="module">
   import { getSession } from "./js/session.js";
   if (getSession()) document.getElementById("hero-register-cta")?.classList.add("hidden");
