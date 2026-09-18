@@ -516,6 +516,27 @@
   const initialPanelId = TAB_PANEL_MAP[requestedTab] || "panel-handnotes";
   select.value = initialPanelId;
   activate(initialPanelId);
+
+  // BUG FIX — "browsing Class Slides, tap a file, hit Back, and the page
+  // shows Image Notes content while the dropdown still reads Class
+  // Slides": browsers silently restore a <select>'s displayed value on
+  // back/forward navigation (bfcache restore, or plain history
+  // navigation) as part of their own native form-state restoration —
+  // and they do this WITHOUT firing a "change" event and, on some
+  // engines (notably iOS/Android WebViews), slightly AFTER this script
+  // already ran and called activate(initialPanelId). The visible panel
+  // was left matching the URL's ?tab= value from the moment the page
+  // first loaded, while the browser then quietly snapped the dropdown's
+  // displayed option back to whatever the user had last picked by hand
+  // before they navigated away — the two drift apart with no event ever
+  // firing to tell this script it happened.
+  //
+  // "pageshow" reliably fires both on a normal load AND every time the
+  // page is restored from back/forward (bfcache or not) — always AFTER
+  // any native form-state restoration has already happened — so
+  // re-running activate() there re-syncs the visible panel to whatever
+  // the <select> actually ends up showing, however it got that value.
+  window.addEventListener("pageshow", () => activate(select.value));
 })();
 </script>
 </body>

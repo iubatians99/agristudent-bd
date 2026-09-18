@@ -411,7 +411,7 @@ function renderCreditWallet(wallet) {
       </div>`).join("") + (creditsUsed > 0 ? `
       <div class="wallet-breakdown-row is-spend">
         <span class="wallet-breakdown-icon" aria-hidden="true">🔓</span>
-        <span class="wallet-breakdown-label">Files unlocked<small>1 credit per file</small></span>
+        <span class="wallet-breakdown-label">Files unlocked<small>1 credit per file · ${creditsUsed} unlocked in total, all time</small></span>
         <span class="wallet-breakdown-amount">−${creditsUsed}</span>
       </div>` : "");
   }
