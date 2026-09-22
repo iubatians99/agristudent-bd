@@ -168,7 +168,7 @@ function normalizeFacultyPhotoUrl(raw) {
       const pathMatch = url.pathname.match(/\/(?:file\/d|d)\/([a-zA-Z0-9_-]+)/);
       if (pathMatch) fileId = pathMatch[1];
       if (!fileId) fileId = url.searchParams.get("id") || "";
-      if (fileId) return `https://drive.google.com/thumbnail?id=${encodeURIComponent(fileId)}&sz=w1600`;
+      if (fileId) return `https://lh3.googleusercontent.com/d/${encodeURIComponent(fileId)}=w1600`;
     }
     return value;
   } catch {

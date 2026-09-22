@@ -2207,20 +2207,11 @@ async function bulkUploadFacultyRows() {
       try {
         r.photoUrl = await uploadRemoteUrlToCloudinary(r.photoUrl);
       } catch (fetchErr) {
-        // Cloudinary couldn't pull it in (dead link, hotlink protection, a
-        // Drive file that isn't actually shared publicly, etc). We used to
-        // keep the original pasted link here, but that's worse than no
-        // photo at all: teacher-recommendation.html's CSP only allows
-        // <img> from res.cloudinary.com and lh3.googleusercontent.com, so
-        // an un-rehosted link (a raw Drive URL, a random website, etc.) is
-        // silently blocked by the browser — the faculty card just shows no
-        // photo, with no visible error. Drop it instead so the initials
-        // placeholder renders, and tell the admin by name which photos
-        // need fixing.
-        console.warn("[AgriAdmin] faculty bulk photo fetch failed, dropping link:", r.name, fetchErr);
-        r.photoUrl = "";
-        photoFailures++;
-        failedPhotoNames.push(r.name);
+        // Keep the normalized public URL if Cloudinary cannot re-host it.
+        // This preserves the image instead of silently replacing it with the
+        // initials avatar.
+        console.warn("[AgriAdmin] faculty bulk photo re-host failed; keeping source URL:", r.name, fetchErr);
+        r.photoUrl = normalizeImageUrl(r.photoUrl);
       }
     }
 
@@ -2337,7 +2328,7 @@ async function loadFaculty() {
       row.className = "resource-row";
       row.innerHTML = `
         <div style="display:flex;align-items:center;gap:.8rem;min-width:0;">
-          ${f.photoUrl ? `<img src="${esc(f.photoUrl)}" alt="" style="width:44px;height:44px;border-radius:50%;object-fit:cover;flex-shrink:0;">` : `<div style="width:44px;height:44px;border-radius:50%;background:var(--leaf-400);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;">${esc((f.name||"?").slice(0,1).toUpperCase())}</div>`}
+          ${f.photoUrl ? `<img src="${esc(normalizeImageUrl(f.photoUrl))}" alt="" style="width:44px;height:44px;border-radius:50%;object-fit:cover;flex-shrink:0;">` : `<div style="width:44px;height:44px;border-radius:50%;background:var(--leaf-400);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;">${esc((f.name||"?").slice(0,1).toUpperCase())}</div>`}
           <div style="min-width:0;">
             <strong>${esc(f.name)}</strong> ${isPending ? `<span style="display:inline-block;margin-left:.35rem;padding:.15rem .45rem;border-radius:999px;background:rgba(212,162,76,.16);color:var(--wheat-500,var(--wheat-400));font-size:.68rem;font-weight:700;">PENDING</span>` : ""}
             <div style="font-size:.8rem;color:var(--moss-600);">${esc(f.department||"")}${f.designation ? " · " + esc(f.designation) : ""}</div>
@@ -3117,10 +3108,15 @@ async function uploadRemoteUrlToCloudinary(url) {
   data.append("file", sourceUrl);
   data.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
   const res = await fetch(CLOUDINARY_UPLOAD_URL, { method: "POST", body: data });
-  if (!res.ok) throw new Error(`Couldn't fetch that image link (${res.status})`);
-  const json = await res.json();
-  if (!json.secure_url) throw new Error("Image link returned no usable image.");
-  return json.secure_url;
+  if (!res.ok) {
+    // Do not discard a perfectly usable remote image just because Cloudinary
+    // could not re-host it (some providers block server-side fetching).
+    // The faculty page permits HTTPS image sources, so keep the normalized
+    // public URL as a reliable fallback.
+    return sourceUrl;
+  }
+  const json = await res.json().catch(() => ({}));
+  return json.secure_url || sourceUrl;
 }
 
 // ------------------------------------------------------------------
@@ -3228,10 +3224,10 @@ function googleDriveFileId(url) {
 function normalizeImageUrl(url) {
   const raw = String(url || "").trim();
   const id = googleDriveFileId(raw);
-  // `uc?export=view` is the most broadly compatible public Drive image URL;
-  // the thumbnail endpoint remains the preview fallback when Drive returns a
-  // thumbnail instead of the original image bytes.
-  return id ? `https://drive.google.com/uc?export=view&id=${encodeURIComponent(id)}` : raw;
+  // Use Google's image-serving host for Drive files. It is directly usable
+  // by <img> and is also easier for Cloudinary to fetch than Drive's HTML
+  // viewer/redirect endpoints.
+  return id ? `https://lh3.googleusercontent.com/d/${encodeURIComponent(id)}=w1600` : raw;
 }
 
 function googleDriveThumbnailUrl(url) {
