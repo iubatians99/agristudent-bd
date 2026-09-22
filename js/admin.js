@@ -1,6 +1,6 @@
 import { db, auth, CLOUDINARY_UPLOAD_URL, CLOUDINARY_UPLOAD_PRESET } from "./firebase-config.js";
 import {
-  collection, getDocs, getDoc, doc, updateDoc, deleteDoc, addDoc, setDoc, orderBy, query, where, limit, Timestamp, writeBatch, serverTimestamp
+  collection, getDocs, getDoc, doc, updateDoc, deleteDoc, addDoc, setDoc, orderBy, query, where, limit, Timestamp, writeBatch, serverTimestamp, increment
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
   signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail
@@ -510,6 +510,8 @@ const adUnlocksList = document.getElementById("admin-ad-unlocks-list");
 const coffeeRequestsList = document.getElementById("admin-coffee-requests-list");
 const folderAccessList = document.getElementById("admin-folder-access-list");
 const blogList = document.getElementById("admin-blog-list");
+const facultyList = document.getElementById("admin-faculty-list");
+const facultyReviewsList = document.getElementById("admin-faculty-reviews-list");
 
 // Caches of last-loaded docs, keyed by id — used to populate the "Edit any content" modal
 // without a second round-trip to Firestore.
@@ -531,6 +533,8 @@ const tabs = {
   classroomCodes: { btn: document.getElementById("tab-classroom-codes"), panel: document.getElementById("classroom-codes-panel"), load: loadClassroomCodes },
   coffeeRequests: { btn: document.getElementById("tab-coffee-requests"), panel: document.getElementById("coffee-requests-panel"), load: loadCoffeeRequests },
   folderAccess: { btn: document.getElementById("tab-folder-access"), panel: document.getElementById("folder-access-panel"), load: loadFolderAccess },
+  faculty: { btn: document.getElementById("tab-faculty"), panel: document.getElementById("faculty-panel"), load: loadFaculty },
+  facultyReviews: { btn: document.getElementById("tab-faculty-reviews"), panel: document.getElementById("faculty-reviews-panel"), load: loadFacultyReviews },
   danger: { btn: document.getElementById("tab-danger"), panel: document.getElementById("danger-panel"), load: () => {} }
 };
 
@@ -542,6 +546,7 @@ wireFilterControls(["resource-status-filter", "resource-section-filter"], () => 
 wireFilterControls(["blog-status-filter"], () => loadBlogPosts());
 wireFilterControls(["term-status-filter"], () => loadTerms());
 wireFilterControls(["registration-status-filter", "registration-search"], () => loadRegistrations());
+wireFilterControls(["faculty-review-status-filter"], () => loadFacultyReviews());
 
 Object.entries(tabs).forEach(([key, tab]) => {
   tab.btn.addEventListener("click", () => {
@@ -1977,6 +1982,244 @@ initNotifyUser();
 // ============================================
 // CLASSROOM CODES ("Send Us Classroom Code" submissions, resources.html)
 // ============================================
+// ============================================
+// FACULTY — Teacher Recommendation directory
+// ============================================
+const TAG_LABELS = {
+  clear_explanations: "💡 Clear Explanations",
+  fair_grading: "⚖️ Fair Grading",
+  approachable: "🙂 Approachable",
+  encourages_questions: "🙋 Encourages Questions",
+  well_organized: "🗂️ Well Organized",
+  inspiring: "✨ Inspiring",
+  punctual: "⏰ Punctual & Reliable",
+  helpful_feedback: "📝 Helpful Feedback"
+};
+
+let facultyFormWired = false;
+let facultyCache = {};
+
+function parseCourseCodes(raw) {
+  return String(raw || "")
+    .split(",")
+    .map(s => s.trim().toUpperCase())
+    .filter(Boolean);
+}
+
+async function loadFaculty() {
+  if (!facultyList) return;
+  wireFacultyForm();
+  facultyList.innerHTML = `<p style="color:var(--moss-600);">Loading…</p>`;
+  try {
+    const snap = await getDocs(query(collection(db, "faculty"), orderBy("name")));
+    if (snap.empty) { facultyList.innerHTML = `<p style="color:var(--moss-600);">No faculty added yet — use the form above.</p>`; return; }
+
+    facultyCache = {};
+    facultyList.innerHTML = "";
+    snap.forEach(d => {
+      const f = d.data();
+      facultyCache[d.id] = f;
+      const stats = f.stats || {};
+      const ratingCount = stats.ratingCount || 0;
+      const avgRating = ratingCount > 0 ? (stats.ratingSum / ratingCount).toFixed(1) : "—";
+      const row = document.createElement("div");
+      row.className = "resource-row";
+      row.innerHTML = `
+        <div style="display:flex;align-items:center;gap:.8rem;">
+          ${f.photoUrl ? `<img src="${esc(f.photoUrl)}" alt="" style="width:44px;height:44px;border-radius:50%;object-fit:cover;">` : `<div style="width:44px;height:44px;border-radius:50%;background:var(--leaf-400);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;">${esc((f.name||"?").slice(0,1).toUpperCase())}</div>`}
+          <div>
+            <strong>${esc(f.name)}</strong>
+            <div style="font-size:.8rem;color:var(--moss-600);">${esc(f.department||"")}${f.designation ? " · " + esc(f.designation) : ""}</div>
+            <div style="font-size:.76rem;color:var(--moss-500);margin-top:.15rem;">${(f.courseCodes||[]).map(esc).join(", ") || "No courses linked"} · ⭐ ${avgRating} (${stats.reviewCount||0} reviews) · 👍 ${stats.recommendCount||0} recommend</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
+          <button type="button" class="faculty-edit-btn" data-id="${d.id}" style="background:none;border:1px solid var(--line);padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">✏️ Edit</button>
+          <button type="button" class="btn-danger faculty-delete-btn" data-id="${d.id}" style="padding:.35rem .7rem;font-size:.78rem;">🗑 Delete</button>
+        </div>`;
+      facultyList.appendChild(row);
+    });
+
+    facultyList.querySelectorAll(".faculty-edit-btn").forEach(btn => {
+      btn.addEventListener("click", () => startEditFaculty(btn.dataset.id));
+    });
+    facultyList.querySelectorAll(".faculty-delete-btn").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        if (!confirm("Delete this faculty profile? Their existing reviews will remain but will no longer show on a profile page.")) return;
+        btn.disabled = true;
+        try { await deleteDoc(doc(db, "faculty", btn.dataset.id)); loadFaculty(); }
+        catch (err) { console.error(err); alert("Could not delete: " + err.message); btn.disabled = false; }
+      });
+    });
+  } catch (err) {
+    console.error("[AgriAdmin] loadFaculty failed:", err);
+    facultyList.innerHTML = `<p style="color:var(--terracotta-500);">Could not load faculty: ${esc(err.message)}</p>`;
+  }
+}
+
+function startEditFaculty(id) {
+  const f = facultyCache[id];
+  if (!f) return;
+  document.getElementById("faculty-form-editing-id").value = id;
+  document.getElementById("faculty-name").value = f.name || "";
+  document.getElementById("faculty-department").value = f.department || "";
+  document.getElementById("faculty-designation").value = f.designation || "";
+  document.getElementById("faculty-courses").value = (f.courseCodes || []).join(", ");
+  document.getElementById("faculty-form-submit").textContent = "💾 Save Changes";
+  document.getElementById("faculty-form-cancel").classList.remove("hidden");
+  document.getElementById("faculty-panel").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function resetFacultyForm() {
+  document.getElementById("faculty-form").reset();
+  document.getElementById("faculty-form-editing-id").value = "";
+  document.getElementById("faculty-form-submit").textContent = "➕ Add Faculty";
+  document.getElementById("faculty-form-cancel").classList.add("hidden");
+}
+
+function wireFacultyForm() {
+  if (facultyFormWired) return;
+  facultyFormWired = true;
+  const form = document.getElementById("faculty-form");
+  const statusEl = document.getElementById("faculty-form-status");
+  document.getElementById("faculty-form-cancel").addEventListener("click", resetFacultyForm);
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const editingId = document.getElementById("faculty-form-editing-id").value.trim();
+    const name = document.getElementById("faculty-name").value.trim();
+    const department = document.getElementById("faculty-department").value.trim();
+    const designation = document.getElementById("faculty-designation").value.trim();
+    const courseCodes = parseCourseCodes(document.getElementById("faculty-courses").value);
+    const photoFile = document.getElementById("faculty-photo").files[0];
+
+    if (!name || !department || courseCodes.length === 0) {
+      statusEl.textContent = "Please fill in name, department, and at least one course code.";
+      statusEl.style.color = "var(--terracotta-500)";
+      return;
+    }
+
+    const submitBtn = document.getElementById("faculty-form-submit");
+    submitBtn.disabled = true;
+    statusEl.style.color = "var(--moss-600)";
+    statusEl.textContent = photoFile ? "Uploading photo…" : "Saving…";
+
+    try {
+      let photoUrl = editingId ? (facultyCache[editingId] && facultyCache[editingId].photoUrl) || "" : "";
+      if (photoFile) {
+        photoUrl = await uploadFileToCloudinary(photoFile, pct => { statusEl.textContent = `Uploading photo ${pct}%…`; });
+      }
+      statusEl.textContent = "Saving…";
+
+      if (editingId) {
+        await updateDoc(doc(db, "faculty", editingId), { name, department, designation, courseCodes, photoUrl });
+      } else {
+        await addDoc(collection(db, "faculty"), {
+          name, department, designation, courseCodes, photoUrl,
+          stats: { reviewCount: 0, recommendCount: 0, ratingSum: 0, ratingCount: 0, tagCounts: {} },
+          createdAt: serverTimestamp()
+        });
+      }
+      statusEl.textContent = "✅ Saved.";
+      resetFacultyForm();
+      loadFaculty();
+    } catch (err) {
+      console.error("[AgriAdmin] faculty save failed:", err);
+      statusEl.style.color = "var(--terracotta-500)";
+      statusEl.textContent = "Could not save: " + err.message;
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+}
+
+// ============================================
+// FACULTY REVIEWS — moderation queue
+// ============================================
+async function loadFacultyReviews() {
+  if (!facultyReviewsList) return;
+  const statusFilter = document.getElementById("faculty-review-status-filter")?.value || "pending";
+  facultyReviewsList.innerHTML = `<p style="color:var(--moss-600);">Loading…</p>`;
+  try {
+    const clauses = [orderBy("submittedAt", "desc")];
+    if (statusFilter) clauses.unshift(where("status", "==", statusFilter));
+    const snap = await getDocs(query(collection(db, "facultyReviews"), ...clauses));
+    if (snap.empty) { facultyReviewsList.innerHTML = `<p style="color:var(--moss-600);">Nothing here right now.</p>`; return; }
+
+    facultyReviewsList.innerHTML = "";
+    snap.forEach(d => {
+      const r = d.data();
+      const isPending = r.status === "pending";
+      const tagsHtml = (r.tags || []).map(t => `<span style="display:inline-block;background:var(--paper-100,#f2eee2);border-radius:999px;padding:.15rem .55rem;font-size:.72rem;margin:.1rem .25rem .1rem 0;">${esc(TAG_LABELS[t] || t)}</span>`).join("");
+      const row = document.createElement("div");
+      row.className = "resource-row";
+      row.innerHTML = `
+        <div>
+          <strong>${esc(r.facultyName || r.facultyId)}</strong>
+          <span style="margin-left:.5rem;font-size:.75rem;font-weight:700;padding:.15rem .5rem;border-radius:999px;${isPending ? "background:#FDF3D9;color:#8A6A1A;" : "background:#E4F2E7;color:var(--leaf-600,#2D4A35);"}">${isPending ? "Pending review" : "Approved"}</span>
+          ${r.isAnonymous ? `<span style="margin-left:.4rem;font-size:.75rem;color:var(--moss-600);">🙈 Anonymous</span>` : ""}
+          <div style="font-size:.83rem;color:var(--moss-700);margin-top:.35rem;">
+            ${"⭐".repeat(r.rating || 0)}${"☆".repeat(5 - (r.rating || 0))} · ${r.recommended ? "👍 Recommended" : "🙅 Not recommended"}${r.courseCode ? " · " + esc(r.courseCode) : ""}
+          </div>
+          <div style="margin-top:.35rem;">${tagsHtml}</div>
+          ${r.comment ? `<p style="font-size:.84rem;color:var(--moss-700);margin:.5rem 0 0;background:var(--paper-100,#f2eee2);padding:.5rem .7rem;border-radius:8px;">${esc(r.comment)}</p>` : ""}
+          <div style="font-size:.74rem;color:var(--moss-500);margin-top:.4rem;">By ${esc(r.reviewerName || "unknown")} (reg: ${esc(r.reviewerRegId || "—")}) · 🕒 ${esc(formatMessageDateTime(r.submittedAt))}</div>
+        </div>
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
+          ${isPending ? `<button type="button" class="faculty-review-approve-btn" data-id="${d.id}" style="background:var(--leaf-500);color:#fff;border:none;padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">✅ Approve</button>` : ""}
+          <button type="button" class="btn-danger faculty-review-delete-btn" data-id="${d.id}" data-pending="${isPending ? "1" : "0"}" style="padding:.35rem .7rem;font-size:.78rem;">🗑 ${isPending ? "Reject" : "Delete"}</button>
+        </div>`;
+      facultyReviewsList.appendChild(row);
+    });
+
+    // Approving a pending (anonymous) review is the moment its rating,
+    // recommendation and tags actually start counting toward the
+    // faculty's PUBLIC numbers — see js/faculty.js, which does this same
+    // increment immediately for signed reviews instead.
+    facultyReviewsList.querySelectorAll(".faculty-review-approve-btn").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        const reviewRef = doc(db, "facultyReviews", btn.dataset.id);
+        try {
+          const snap = await getDoc(reviewRef);
+          if (!snap.exists()) return;
+          const r = snap.data();
+          await updateDoc(reviewRef, { status: "approved", approvedAt: serverTimestamp(), approvedBy: getCurrentUserEmail() });
+          const statsUpdate = {
+            "stats.reviewCount": increment(1),
+            "stats.recommendCount": increment(r.recommended ? 1 : 0),
+            "stats.ratingSum": increment(r.rating || 0),
+            "stats.ratingCount": increment(1)
+          };
+          (r.tags || []).forEach(t => { statsUpdate[`stats.tagCounts.${t}`] = increment(1); });
+          await updateDoc(doc(db, "faculty", r.facultyId), statsUpdate);
+          loadFacultyReviews();
+        } catch (err) {
+          console.error("[AgriAdmin] approve review failed:", err);
+          alert("Could not approve: " + err.message);
+          btn.disabled = false;
+        }
+      });
+    });
+    // Rejecting a still-pending review just deletes it — it never
+    // touched the public stats, so nothing to undo there. Deleting an
+    // already-approved review (spam cleanup) also does NOT roll back
+    // the counters it already contributed; re-run loadFaculty's numbers
+    // manually if that ever matters for a specific faculty.
+    facultyReviewsList.querySelectorAll(".faculty-review-delete-btn").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        if (!confirm(btn.dataset.pending === "1" ? "Reject and delete this pending review?" : "Delete this approved review? Its counted stats won't be subtracted automatically.")) return;
+        btn.disabled = true;
+        try { await deleteDoc(doc(db, "facultyReviews", btn.dataset.id)); loadFacultyReviews(); }
+        catch (err) { console.error(err); alert("Could not delete: " + err.message); btn.disabled = false; }
+      });
+    });
+  } catch (err) {
+    console.error("[AgriAdmin] loadFacultyReviews failed:", err);
+    facultyReviewsList.innerHTML = `<p style="color:var(--terracotta-500);">Could not load reviews: ${esc(err.message)}</p>`;
+  }
+}
+
 async function loadClassroomCodes() {
   classroomCodesList.innerHTML = `<p style="color:var(--moss-600);">Loading…</p>`;
   try {

@@ -1,25 +1,30 @@
 /* ============================================
    ACADEMIC TIMELINE — homepage embed
-   Same design as timeline.html / css/timeline.css, scoped under
-   .timeline-embed so it renders identically without overriding the
-   homepage's own body background, font, or any other page's styles.
+   Retheme note: this section previously carried its own cool blue /
+   Playfair Display palette left over from the old standalone
+   timeline.html page. It's now mapped onto the site's own design
+   tokens (moss / leaf / wheat / terracotta, Fraunces + Work Sans) so
+   it reads as one continuous, premium page instead of a bolted-on
+   widget with a different brand. Scoped under .timeline-embed so it
+   never leaks into the rest of the homepage.
    ============================================ */
 .timeline-embed {
-  --te-bg-base: #F0F4F8;
+  --te-bg-base: var(--paper-100);
   --te-panel-bg: #FFFFFF;
-  --te-border-light: #D1DCE5;
-  --te-border-hover: #9FB3C8;
-  --te-text-main: #0B1C2E;
-  --te-text-muted: #486581;
-  --te-accent-midterm: #1976D2;
-  --te-accent-ct: #00796B;
-  --te-accent-final: #C2185B;
-  --te-accent-ongoing: #D32F2F;
-  --te-accent-path: #E3F2FD;
+  --te-border-light: var(--line);
+  --te-border-hover: var(--leaf-500);
+  --te-text-main: var(--moss-900);
+  --te-text-muted: var(--moss-600);
+  --te-accent-midterm: var(--leaf-500);
+  --te-accent-ct: var(--wheat-400);
+  --te-accent-final: var(--terracotta-500);
+  --te-accent-ongoing: #C0392B;
+  --te-accent-path: rgba(107, 155, 94, .16);
 
   background-color: var(--te-bg-base);
-  font-family: 'Plus Jakarta Sans', sans-serif;
-  padding: 60px 0 70px;
+  font-family: var(--font-body);
+  padding: 4.5rem 0 4.5rem;
+  overflow: hidden; /* keep the ambient glow fully inside the section */
 }
 
 .timeline-embed .timeline-container {
@@ -36,17 +41,17 @@
   border-radius: 50%;
   filter: blur(130px);
   z-index: 0;
-  opacity: 0.5;
+  opacity: 0.45;
   pointer-events: none;
 }
-.timeline-embed .glow-1 { top: -40px; left: -100px; background: #D9E2EC; }
-.timeline-embed .glow-2 { bottom: 60px; right: -100px; background: #E4EBF1; }
+.timeline-embed .glow-1 { top: -40px; left: -100px; background: rgba(107, 155, 94, .35); }
+.timeline-embed .glow-2 { bottom: 60px; right: -100px; background: rgba(212, 162, 76, .3); }
 .timeline-embed .timeline-container > * { position: relative; z-index: 1; }
 
 .timeline-embed .timeline-header { text-align: center; margin-bottom: 44px; }
 .timeline-embed .timeline-main-title {
-  font-family: 'Playfair Display', serif;
-  font-size: 3.25rem;
+  font-family: var(--font-display);
+  font-size: 3rem;
   font-weight: 600;
   letter-spacing: -0.02em;
   margin-bottom: 6px;
@@ -63,18 +68,18 @@
 .timeline-embed .card-panel {
   background: var(--te-panel-bg);
   border: 1px solid var(--te-border-light);
-  border-radius: 28px;
-  box-shadow: 0 15px 45px rgba(16, 42, 67, 0.05);
+  border-radius: 24px;
+  box-shadow: 0 15px 45px rgba(31, 46, 34, .06);
   transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.4s ease, box-shadow 0.4s ease;
 }
 .timeline-embed .card-panel:hover {
   border-color: var(--te-border-hover);
-  box-shadow: 0 20px 55px rgba(16, 42, 67, 0.09);
+  box-shadow: 0 20px 55px rgba(31, 46, 34, .1);
 }
 
 .timeline-embed .calendar-banner { padding: 40px 30px; margin-bottom: 40px; }
-.timeline-embed .calendar-widget-title { font-family: 'Playfair Display', serif; font-size: 1.65rem; text-align: center; margin: 0 0 4px 0; color: var(--te-text-main); }
-.timeline-embed .calendar-month-header { font-size: 1.1rem; color: var(--te-accent-midterm); text-align: center; font-weight: 700; margin-bottom: 32px; letter-spacing: 0.02em; }
+.timeline-embed .calendar-widget-title { font-family: var(--font-display); font-size: 1.6rem; text-align: center; margin: 0 0 4px 0; color: var(--te-text-main); }
+.timeline-embed .calendar-month-header { font-size: 1.05rem; color: var(--te-accent-final); text-align: center; font-weight: 700; margin-bottom: 32px; letter-spacing: 0.02em; }
 
 .timeline-embed .calendar-weekdays {
   max-width: 340px;
@@ -99,13 +104,13 @@
   background: var(--te-text-main);
   color: var(--te-panel-bg);
   font-weight: 800;
-  box-shadow: 0 6px 15px rgba(11, 28, 46, 0.25);
+  box-shadow: 0 6px 15px rgba(31, 46, 34, .3);
 }
 .timeline-embed .day-node.node-track-path {
   background: var(--te-accent-path);
   color: var(--te-text-main);
   font-weight: 700;
-  box-shadow: inset 0 0 0 1px rgba(25, 118, 210, 0.2);
+  box-shadow: inset 0 0 0 1px rgba(107, 155, 94, .3);
 }
 
 .timeline-embed .calendar-legend { display: flex; justify-content: center; gap: 24px; margin-top: 32px; font-size: 0.85rem; font-weight: 600; }
@@ -117,13 +122,13 @@
 .timeline-embed .exam-trackers-stack { display: flex; flex-direction: column; gap: 28px; width: 100%; align-items: center; }
 .timeline-embed .exam-countdown-card { width: 100%; max-width: 460px; padding: 36px; display: flex; flex-direction: column; align-items: center; box-sizing: border-box; }
 .timeline-embed .exam-countdown-card:hover { transform: translateY(-5px); }
-.timeline-embed .exam-card-title { font-family: 'Playfair Display', serif; font-size: 1.6rem; font-weight: 600; margin-bottom: 12px; color: var(--te-text-main); }
+.timeline-embed .exam-card-title { font-family: var(--font-display); font-size: 1.55rem; font-weight: 600; margin-bottom: 12px; color: var(--te-text-main); }
 
 .timeline-embed .exam-date-tag { font-size: 0.85rem; font-weight: 700; padding: 6px 18px; border-radius: 30px; margin-bottom: 28px; background: #FFF; border: 1px solid var(--te-border-light); color: var(--te-text-main); }
 
 .timeline-embed .progress-ring-box { position: relative; width: 140px; height: 140px; }
 .timeline-embed .ring-svg { transform: rotate(-90deg); }
-.timeline-embed .ring-track-bg { fill: none; stroke: rgba(11, 28, 46, 0.05); stroke-width: 8; }
+.timeline-embed .ring-track-bg { fill: none; stroke: rgba(31, 46, 34, .07); stroke-width: 8; }
 .timeline-embed .ring-track-fill { fill: none; stroke-width: 8; stroke-linecap: round; stroke-dasharray: 364.42; stroke-dashoffset: 364.42; transition: stroke-dashoffset 1.2s cubic-bezier(0.16, 1, 0.3, 1), stroke 0.4s ease; }
 
 .timeline-embed .fill-midterm { stroke: var(--te-accent-midterm); }
@@ -132,26 +137,26 @@
 
 .timeline-embed .exam-countdown-card.ongoing-mode {
   border-color: var(--te-accent-ongoing);
-  background: linear-gradient(145deg, #FFFFFF, #FFF5F5);
-  box-shadow: 0 20px 50px rgba(211, 47, 47, 0.1);
+  background: linear-gradient(145deg, #FFFFFF, #FFF6F4);
+  box-shadow: 0 20px 50px rgba(192, 57, 43, .12);
 }
 .timeline-embed .exam-countdown-card.ongoing-mode .ring-track-fill { stroke: var(--te-accent-ongoing) !important; }
 .timeline-embed .exam-countdown-card.ongoing-mode .days-value { color: var(--te-accent-ongoing) !important; font-size: 1.65rem; animation: tePulseGlow 2.5s infinite ease-in-out; }
 
 .timeline-embed .ring-inner-label { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-.timeline-embed .days-value { font-family: 'JetBrains Mono', monospace; font-size: 2.3rem; font-weight: 700; color: var(--te-text-main); transition: all 0.3s ease; }
+.timeline-embed .days-value { font-family: var(--font-mono); font-size: 2.3rem; font-weight: 700; color: var(--te-text-main); transition: all 0.3s ease; }
 .timeline-embed .days-sub { font-size: 0.65rem; text-transform: uppercase; color: var(--te-text-muted); letter-spacing: 0.1em; margin-top: 4px; font-weight: 700; }
 
 /* "Other Important Dates" list */
 .timeline-embed .timeline-other-dates { max-width: 560px; margin: 3rem auto 0; position: relative; z-index: 1; }
-.timeline-embed .timeline-other-dates h2 { font-family: 'Playfair Display', serif; font-size: 1.3rem; text-align: center; color: var(--te-text-main); margin-bottom: 1rem; }
+.timeline-embed .timeline-other-dates h2 { font-family: var(--font-display); font-size: 1.3rem; text-align: center; color: var(--te-text-main); margin-bottom: 1rem; }
 .timeline-embed .timeline-list { list-style: none; margin: 0 auto; padding: 0; display: flex; flex-direction: column; gap: .7rem; }
 .timeline-embed .timeline-list li { display: flex; align-items: flex-start; gap: .6rem; background: var(--te-panel-bg); border: 1px solid var(--te-border-light); border-radius: 14px; padding: .8rem 1rem; }
 .timeline-embed .timeline-list li strong { display: block; color: var(--te-text-main); font-size: .92rem; }
 .timeline-embed .timeline-list .t-date { color: var(--te-text-muted); font-size: .78rem; }
 .timeline-embed .timeline-list .legend-dot { margin-top: .35rem; flex-shrink: 0; }
 
-/* "View Full Timeline" link + Teacher Recommendation teaser */
+/* Teacher Recommendation teaser */
 .timeline-embed .timeline-embed-footer {
   max-width: 650px;
   margin: 2.6rem auto 0;
@@ -163,10 +168,10 @@
   z-index: 1;
 }
 .timeline-embed .timeline-embed-link {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: .82rem;
   font-weight: 600;
-  color: var(--te-accent-midterm);
+  color: var(--te-accent-final);
   text-decoration: none;
   border: 1px solid var(--te-border-light);
   background: var(--te-panel-bg);
@@ -193,7 +198,7 @@
 .timeline-embed .teacher-rec-teaser:hover {
   border-color: var(--te-border-hover);
   transform: translateY(-2px);
-  box-shadow: 0 10px 25px rgba(16,42,67,.08);
+  box-shadow: 0 10px 25px rgba(31,46,34,.1);
 }
 .timeline-embed .teacher-rec-teaser .trt-icon {
   width: 34px; height: 34px; border-radius: 50%;
@@ -202,12 +207,12 @@
   font-size: 1rem; flex-shrink: 0;
 }
 .timeline-embed .teacher-rec-teaser .trt-badge {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: .65rem;
   text-transform: uppercase;
   letter-spacing: .06em;
-  background: #FFF3E0;
-  color: #B5651D;
+  background: rgba(212, 162, 76, .18);
+  color: var(--terracotta-500);
   padding: .2rem .55rem;
   border-radius: 999px;
   margin-left: .3rem;
@@ -219,6 +224,38 @@
 @keyframes teFd { to { opacity: 1; transform: translateY(0); } }
 @keyframes teFu { to { opacity: 1; transform: translateY(0); } }
 
-@media (max-width: 600px) {
-  .timeline-embed .timeline-main-title { font-size: 2.3rem; }
+/* Reduced motion / animation-blocking safety net — the site disables
+   *all* CSS animations globally for prefers-reduced-motion. Because
+   .animate-fade-down / .animate-fade-up start from opacity:0 and only
+   ever reach opacity:1 *through* that (now-disabled) animation, any
+   visitor with "reduce motion" on — or a browser/screenshot tool that
+   requests it — was left with the whole header and the calendar card
+   permanently invisible (but still taking up their full height), which
+   is exactly the tall blank block reported on the homepage. This
+   restores the end state directly, independent of the animation. */
+@media (prefers-reduced-motion: reduce) {
+  .timeline-embed .animate-fade-down,
+  .timeline-embed .animate-fade-up {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (max-width: 700px) {
+  .timeline-embed { padding: 3.2rem 0; }
+  .timeline-embed .timeline-main-title { font-size: 2.15rem; }
+  .timeline-embed .calendar-banner { padding: 30px 18px; margin-bottom: 28px; }
+  .timeline-embed .exam-countdown-card { padding: 26px 20px; }
+  .timeline-embed .timeline-header { margin-bottom: 32px; }
+}
+
+@media (max-width: 420px) {
+  .timeline-embed .timeline-main-title { font-size: 1.8rem; }
+  .timeline-embed .semester-subtitle { font-size: .82rem; letter-spacing: .06em; }
+  .timeline-embed .calendar-widget-title { font-size: 1.35rem; }
+  .timeline-embed .calendar-weekdays,
+  .timeline-embed .calendar-days-grid { gap: 6px; }
+  .timeline-embed .day-node { font-size: .82rem; }
+  .timeline-embed .progress-ring-box { width: 120px; height: 120px; }
+  .timeline-embed .days-value { font-size: 1.9rem; }
 }

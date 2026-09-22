@@ -818,7 +818,9 @@ img{ max-width:100%; display:block; }
    NAVBAR
    ============================================ */
 .navbar{
-  background:var(--paper-50);
+  background:rgba(250,248,242,.92);
+  backdrop-filter:blur(10px) saturate(1.4);
+  -webkit-backdrop-filter:blur(10px) saturate(1.4);
   border-bottom:1px solid var(--line);
   position:sticky;
   top:0;
@@ -826,8 +828,16 @@ img{ max-width:100%; display:block; }
   transition:box-shadow .25s ease, border-color .25s ease;
   padding-top:env(safe-area-inset-top, 0px);
 }
+.navbar::before{
+  /* thin brand-gradient seam along the very top edge — a small
+     premium signature that reads even before anything else loads */
+  content:"";
+  display:block;
+  height:3px;
+  background:linear-gradient(90deg, var(--leaf-500), var(--wheat-400), var(--terracotta-400));
+}
 .navbar.is-scrolled{
-  box-shadow:0 4px 16px rgba(31,46,34,.08);
+  box-shadow:0 4px 20px rgba(31,46,34,.1);
   border-bottom-color:transparent;
 }
 .navbar .inner{
@@ -851,12 +861,18 @@ img{ max-width:100%; display:block; }
   overflow:hidden;
   white-space:nowrap;
   text-overflow:ellipsis;
+  border-radius:999px;
+  padding:.2rem .3rem;
+  transition:background .18s ease;
 }
+.brand:hover{ background:var(--paper-100); }
 .brand-mark{
   width:26px;
   height:26px;
   flex-shrink:0;
+  transition:transform .3s cubic-bezier(.22,1,.36,1);
 }
+.brand:hover .brand-mark{ transform:rotate(-8deg) scale(1.08); }
 .nav-links ul{
   display:flex;
   gap:.3rem;
@@ -866,6 +882,7 @@ img{ max-width:100%; display:block; }
 .nav-links-head{ display:none; }
 .nav-links-foot{ display:none; }
 .nav-links a{
+  position:relative;
   display:flex;
   align-items:center;
   gap:.4rem;
@@ -874,11 +891,12 @@ img{ max-width:100%; display:block; }
   color:var(--moss-700);
   padding:.5rem .85rem;
   border-radius:999px;
-  transition:background .18s ease, color .18s ease;
+  transition:background .18s ease, color .18s ease, transform .18s ease;
 }
 .nav-link-icon{ display:none; }
-.nav-links a:hover{ background:var(--paper-100); color:var(--moss-900); }
-.nav-links a.active{ background:var(--moss-900); color:#fff; }
+.nav-links a:hover{ background:var(--paper-100); color:var(--moss-900); transform:translateY(-1px); }
+.nav-links a:active{ transform:translateY(0); }
+.nav-links a.active{ background:var(--moss-900); color:#fff; box-shadow:0 4px 12px rgba(31,46,34,.22); }
 .nav-actions{ display:flex; align-items:center; gap:.5rem; flex-shrink:0; }
 .icon-btn{
   background:none; border:none; cursor:pointer;
@@ -886,9 +904,10 @@ img{ max-width:100%; display:block; }
   width:38px; height:38px;
   display:flex; align-items:center; justify-content:center;
   border-radius:50%;
-  transition:background .18s ease;
+  transition:background .18s ease, transform .18s ease;
 }
-.icon-btn:hover{ background:var(--paper-100); }
+.icon-btn:hover{ background:var(--paper-100); transform:translateY(-1px) scale(1.05); }
+.icon-btn:active{ transform:translateY(0) scale(.96); }
 
 /* Hamburger — animates into an "X" when the drawer is open.
    Sized to a full 44px tap target for comfortable mobile use, with the
@@ -896,20 +915,21 @@ img{ max-width:100%; display:block; }
    is never accidentally swallowed by an overlapping element. */
 .nav-toggle{
   display:none;
-  background:none; border:none; cursor:pointer;
+  background:none; border:1.5px solid transparent; cursor:pointer;
   width:44px; height:44px;
   border-radius:50%;
   align-items:center; justify-content:center;
   flex-direction:column;
   flex-shrink:0;
   gap:4px;
-  transition:background .18s ease;
+  transition:background .18s ease, border-color .18s ease;
   position:relative;
   z-index:501;
   pointer-events:auto;
   -webkit-tap-highlight-color:transparent;
 }
-.nav-toggle:hover, .nav-toggle:active{ background:var(--paper-100); }
+.nav-toggle:hover{ background:var(--paper-100); border-color:var(--line); }
+.nav-toggle:active{ background:var(--paper-100); }
 .nav-toggle-bar{
   display:block;
   width:20px; height:2px;
@@ -1112,11 +1132,51 @@ img{ max-width:100%; display:block; }
 .hero-cta-row{
   display:flex; justify-content:center; margin-top:1.4rem;
 }
+.hero-chip-row{
+  display:flex; flex-wrap:wrap; justify-content:center;
+  gap:.55rem;
+  list-style:none;
+  margin:1.6rem 0 0; padding:0;
+}
+.hero-chip-row li{
+  font-family:var(--font-mono);
+  font-size:.74rem; font-weight:600;
+  color:var(--moss-700);
+  background:#fff;
+  border:1px solid var(--line);
+  padding:.4rem .8rem;
+  border-radius:999px;
+  transition:transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+}
+.hero-chip-row li:hover{
+  transform:translateY(-2px);
+  border-color:var(--leaf-500);
+  box-shadow:0 6px 14px rgba(31,46,34,.08);
+}
+@media (max-width:480px){
+  .hero-chip-row{ gap:.4rem; margin-top:1.3rem; }
+  .hero-chip-row li{ font-size:.68rem; padding:.35rem .65rem; }
+}
 .hero-register-btn{
+  display:inline-block;
   font-size:1rem; font-weight:700;
   padding:.9rem 1.8rem; border-radius:999px;
   box-shadow:0 10px 24px rgba(107,155,94,.35);
   text-decoration:none;
+  transition:transform .2s ease, box-shadow .2s ease, background .2s ease;
+}
+.hero-register-btn:hover{
+  transform:translateY(-2px);
+  box-shadow:0 14px 30px rgba(107,155,94,.45);
+}
+.hero-register-btn:active{ transform:translateY(0); }
+@media (max-width:480px){
+  .hero{ padding:2.6rem 0 2.2rem; }
+  .hero p.sub{ font-size:.95rem; margin-bottom:1.5rem; }
+  .search-bar{ flex-wrap:wrap; padding:.5rem; gap:.5rem; border-radius:22px; }
+  .search-bar input{ flex-basis:100%; padding:.3rem .5rem; }
+  .search-bar button{ flex:1; }
+  .hero-register-btn{ width:100%; text-align:center; padding:.85rem 1.4rem; }
 }
 
 .search-results{
@@ -1202,11 +1262,25 @@ img{ max-width:100%; display:block; }
 @media (max-width:700px){
   .stats-grid{ grid-template-columns:repeat(2,1fr); }
 }
+@media (max-width:480px){
+  .stats-strip{ padding:1.8rem 0; }
+  .stats-grid{ gap:.9rem; }
+  .stat-card{ padding:.75rem .4rem; }
+}
 
 /* ============================================
    DASHBOARD
    ============================================ */
 .dashboard{ padding:3.5rem 0; }
+.dashboard-eyebrow{
+  text-align:center;
+  font-family:var(--font-mono);
+  font-size:.75rem;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  color:var(--terracotta-500);
+  margin-bottom:.6rem;
+}
 .dashboard h2{
   text-align:center;
   font-size:1.7rem;
@@ -1356,6 +1430,31 @@ img{ max-width:100%; display:block; }
 }
 @media (max-width:600px){
   .card-grid{ grid-template-columns:1fr; }
+}
+@media (max-width:480px){
+  .dashboard{ padding:2.6rem 0; }
+  .dashboard h2{ font-size:1.4rem; }
+  .seed-card .card-body{ padding:1.25rem 1.15rem 1.35rem; }
+}
+
+/* ============================================
+   SECTION DIVIDER — a thin decorative seam between homepage
+   sections (e.g. dashboard → academic timeline) so the join always
+   reads as an intentional pause, never as empty/broken space.
+   ============================================ */
+.section-divider{
+  display:flex; align-items:center; justify-content:center; gap:.9rem;
+  max-width:var(--container); margin:0 auto; padding:0 1.25rem;
+}
+.section-divider::before, .section-divider::after{
+  content:""; flex:1; height:1px;
+  background:linear-gradient(90deg, transparent, var(--line) 50%, transparent);
+}
+.section-divider .divider-mark{
+  width:8px; height:8px; border-radius:50%;
+  background:var(--leaf-500);
+  box-shadow:0 0 0 5px rgba(107,155,94,.14);
+  flex-shrink:0;
 }
 @media (prefers-reduced-motion: reduce){
   .seed-card, .seed-card .icon, .seed-card .tag-strip::before{ transition:none; }
@@ -2148,23 +2247,32 @@ body.viewer-layout {
 /* ============================================
    NAVBAR AUTH SLOT (login / profile+logout)
    ============================================ */
-.navbar-auth-slot{ display:flex; align-items:center; gap:.6rem; }
+.navbar-auth-slot{ display:flex; align-items:center; gap:.55rem; }
 .navbar-auth-login{
   font-weight:600; font-size:.85rem; color:var(--moss-700);
-  padding:.4rem .8rem; border:1px solid var(--line); border-radius:8px;
+  padding:.45rem .95rem; border:1.5px solid var(--line); border-radius:999px;
+  transition:background .18s ease, border-color .18s ease, transform .18s ease;
 }
-.navbar-auth-login:hover{ background:var(--paper-100); }
+.navbar-auth-login:hover{ background:var(--paper-100); border-color:var(--leaf-500); transform:translateY(-1px); }
+.navbar-auth-login:active{ transform:translateY(0); }
 .navbar-auth-register{
   font-weight:700; font-size:.85rem; color:#fff;
   background:var(--leaf-500);
-  padding:.4rem .9rem; border-radius:8px;
-  transition:background .15s ease;
+  padding:.45rem 1.05rem; border-radius:999px;
+  box-shadow:0 6px 16px rgba(107,155,94,.35);
+  transition:background .18s ease, transform .18s ease, box-shadow .18s ease;
 }
-.navbar-auth-register:hover{ background:var(--moss-700); }
+.navbar-auth-register:hover{ background:var(--moss-700); transform:translateY(-1px); box-shadow:0 8px 20px rgba(107,155,94,.4); }
+.navbar-auth-register:active{ transform:translateY(0); }
 .navbar-auth-profile{
   display:flex; align-items:center; gap:.4rem; font-weight:600; font-size:.85rem;
   color:var(--moss-700);
+  padding:.25rem .7rem .25rem .25rem;
+  border-radius:999px;
+  border:1.5px solid transparent;
+  transition:background .18s ease, border-color .18s ease;
 }
+.navbar-auth-profile:hover{ background:var(--paper-100); border-color:var(--line); }
 .navbar-auth-avatar{ width:26px; height:26px; border-radius:50%; object-fit:cover; }
 .navbar-auth-avatar-wrap{ position:relative; display:inline-flex; line-height:0; }
 .navbar-inbox-dot{

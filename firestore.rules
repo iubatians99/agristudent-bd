@@ -173,6 +173,80 @@ service cloud.firestore {
     }
 
     // ============================================
+    // FACULTY: Teacher Recommendation directory (admin-managed)
+    // ============================================
+    // Admin creates/edits faculty profiles (name, dept, photo, courses
+    // taught) from the "Faculty" admin tab. The one thing a public
+    // review submission is allowed to touch is the aggregate "stats"
+    // map, so a student's browser can bump the counters the moment
+    // their own review posts — same trade-off the rest of this file
+    // makes everywhere students never hold a Firebase Auth session (see
+    // blogPosts.likesCount above). Full per-field arithmetic validation
+    // isn't practical for a dynamic tagCounts map, so the real anti-spam
+    // backstop is the facultyReviews doc-id trick below (one write per
+    // student per faculty) plus admin's ability to edit/delete any
+    // faculty doc or review at any time.
+    match /faculty/{id} {
+      allow read: if true;
+      allow create: if isAdmin() &&
+        request.resource.data.keys().hasAll(['name', 'department', 'courseCodes']) &&
+        request.resource.data.name is string && request.resource.data.name.size() > 0 &&
+        request.resource.data.courseCodes is list;
+      allow update: if isAdmin() || (
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stats']) &&
+        request.resource.data.name == resource.data.name &&
+        request.resource.data.department == resource.data.department
+      );
+      allow delete: if isAdmin();
+    }
+
+    // ============================================
+    // FACULTY REVIEWS: Teacher Recommendation ratings
+    // ============================================
+    // Doc id = `${facultyId}_${reviewerRegId}` — same one-doc-per-pair
+    // trick as blogLikes above. "create" only ever fires on a path with
+    // no existing document, so a second submission from the same
+    // student for the same faculty lands on this SAME id and is
+    // evaluated as an "update" instead — which nothing below allows for
+    // a non-admin — so it's rejected outright. That's the real
+    // one-review-per-student-per-faculty enforcement, not just a
+    // client-side check (js/faculty.js reads a "permission-denied" here
+    // as "you've already reviewed this faculty").
+    //
+    // Non-anonymous reviews are accountable to a real registration, so
+    // they post as "approved" immediately and js/faculty.js increments
+    // the faculty's public stats right away. An anonymous review hides
+    // its author on the public page (reviewerName is never rendered
+    // when isAnonymous is true) but still carries reviewerRegId here for
+    // admin moderation — it can only be created as "pending" and only
+    // counts toward public stats once admin approves it in the "Faculty
+    // Reviews" admin tab (js/admin.js loadFacultyReviews).
+    match /facultyReviews/{id} {
+      allow create: if
+        request.resource.data.keys().hasAll(['facultyId', 'reviewerRegId', 'rating', 'recommended', 'tags', 'isAnonymous', 'status', 'submittedAt']) &&
+        id == (request.resource.data.facultyId + '_' + request.resource.data.reviewerRegId) &&
+        request.resource.data.facultyId is string && request.resource.data.facultyId.size() > 0 &&
+        request.resource.data.reviewerRegId is string && request.resource.data.reviewerRegId.size() > 0 &&
+        request.resource.data.rating is int && request.resource.data.rating >= 1 && request.resource.data.rating <= 5 &&
+        request.resource.data.recommended is bool &&
+        request.resource.data.tags is list &&
+        request.resource.data.tags.size() >= 1 && request.resource.data.tags.size() <= 6 &&
+        request.resource.data.isAnonymous is bool &&
+        (!('comment' in request.resource.data) || (request.resource.data.comment is string && request.resource.data.comment.size() <= 400)) &&
+        (
+          (request.resource.data.isAnonymous == true && request.resource.data.status == "pending") ||
+          (request.resource.data.isAnonymous == false && request.resource.data.status == "approved")
+        );
+
+      // Public read — js/faculty.js filters to status == "approved" for
+      // the public page; admin's moderation queue reads every status.
+      allow read: if true;
+
+      // Approve / reject / delete: admin only (js/admin.js).
+      allow update, delete: if isAdmin();
+    }
+
+    // ============================================
     // TIMELINE: Academic calendar (admin-only, unchanged)
     // ============================================
     match /timeline/{id} {

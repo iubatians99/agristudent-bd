@@ -1,0 +1,485 @@
+// ============================================
+// TEACHER RECOMMENDATION — teacher-recommendation.html
+//
+// Positive-only faculty review system. Design intent (see product
+// discussion in the admin README / commit history): students should be
+// able to say what's GOOD about a teacher, never what's bad. There is
+// no free-text negative rating anywhere in this file — only a 1–5 star
+// rating, a Recommended/Not-recommended toggle, a fixed set of positive
+// tags, and an optional comment that is auto-filtered to strip out
+// negative language before it ever reaches Firestore.
+//
+// Two review paths:
+//   - Signed (default): posted under the student's own profile name,
+//     goes live immediately (status "approved").
+//   - Anonymous: name is hidden from the public page, but the review
+//     still goes to an admin moderation queue first (status "pending")
+//     before it counts toward any public stat or shows in the comment
+//     list — see js/admin.js loadFacultyReviews().
+//
+// One review per student per faculty is enforced by Firestore rules via
+// a deterministic doc id (`${facultyId}_${reviewerRegId}`) — see the
+// long comment on facultyReviews in firestore.rules.
+// ============================================
+import { db } from "./firebase-config.js";
+import {
+  collection, getDocs, getDoc, doc, setDoc, updateDoc, query, where, orderBy, increment, serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getSession } from "./session.js";
+
+function esc(val) {
+  return String(val ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#x27;");
+}
+
+function requireSession() {
+  const s = getSession();
+  if (!s) {
+    alert("Please log in first so we can attach your recommendation to your profile.");
+    window.location.href = "login.html?return=teacher-recommendation.html";
+  }
+  return s;
+}
+
+// ============================================
+// POSITIVE TAGS — the only kind of tag that exists in this feature.
+// ============================================
+const POSITIVE_TAGS = [
+  { key: "clear_explanations",   label: "Clear Explanations",   emoji: "💡" },
+  { key: "fair_grading",         label: "Fair Grading",         emoji: "⚖️" },
+  { key: "approachable",         label: "Approachable",         emoji: "🙂" },
+  { key: "encourages_questions", label: "Encourages Questions", emoji: "🙋" },
+  { key: "well_organized",       label: "Well Organized",       emoji: "🗂️" },
+  { key: "inspiring",            label: "Inspiring",            emoji: "✨" },
+  { key: "punctual",             label: "Punctual & Reliable",  emoji: "⏰" },
+  { key: "helpful_feedback",     label: "Helpful Feedback",     emoji: "📝" }
+];
+const TAG_MAP = Object.fromEntries(POSITIVE_TAGS.map(t => [t.key, t]));
+
+// ============================================
+// COMMENT FILTER — "we only want to hear the good things." Strips any
+// sentence that contains negative language instead of rejecting the
+// whole comment outright, so a mostly-positive note still gets through
+// with just the negative clause removed. This is a client-side courtesy
+// filter, not the real defense — the real defense is that every comment
+// (anonymous or not) can be deleted by admin at any time, and anonymous
+// ones never go public without admin sign-off in the first place.
+// ============================================
+const NEGATIVE_PATTERNS = [
+  /\bbad\b/i, /\bworst\b/i, /\bhate[sd]?\b/i, /\bterrible\b/i, /\bawful\b/i, /\bhorrible\b/i,
+  /\buseless\b/i, /\bwaste(d)? of time\b/i, /\brude\b/i, /\bunfair\b/i, /\bnightmare\b/i,
+  /\bavoid (him|her|them|this)\b/i, /\bdon'?t take\b/i, /\bharsh\b/i, /\bboring\b/i,
+  /\bstupid\b/i, /\bidiot\b/i, /\bpoor(ly)? (teach|explain)/i, /\bdislike[sd]?\b/i,
+  /\bnot good\b/i, /\bnever attend\b/i, /\bfail(s|ed)? (us|students|everyone)\b/i
+];
+
+function sanitizeComment(raw) {
+  const text = String(raw || "").trim();
+  if (!text) return "";
+  const sentences = text.split(/(?<=[.!?\n])\s+/).map(s => s.trim()).filter(Boolean);
+  const kept = sentences.filter(s => !NEGATIVE_PATTERNS.some(re => re.test(s)));
+  return kept.join(" ").slice(0, 400).trim();
+}
+
+// ============================================
+// SHARED DATA HELPERS
+// ============================================
+async function fetchAllFaculty() {
+  const snap = await getDocs(collection(db, "faculty"));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+async function fetchApprovedReviewsForFaculty(facultyId) {
+  const q = query(
+    collection(db, "facultyReviews"),
+    where("facultyId", "==", facultyId),
+    where("status", "==", "approved")
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+function facultyScore(f) {
+  const s = f.stats || {};
+  const ratingCount = s.ratingCount || 0;
+  const avgRating = ratingCount > 0 ? (s.ratingSum || 0) / ratingCount : 0;
+  const reviewCount = s.reviewCount || 0;
+  const recommendPct = reviewCount > 0 ? Math.round(((s.recommendCount || 0) / reviewCount) * 100) : null;
+  return { avgRating, ratingCount, reviewCount, recommendPct };
+}
+
+function starString(avg) {
+  const rounded = Math.round(avg);
+  return "★★★★★".slice(0, rounded) + "☆☆☆☆☆".slice(0, 5 - rounded);
+}
+
+function initials(name) {
+  return String(name || "?").trim().split(/\s+/).slice(0, 2).map(w => w[0]).join("").toUpperCase();
+}
+
+function avatarHtml(f) {
+  if (f.photoUrl) return `<img src="${esc(f.photoUrl)}" alt="" class="fc-avatar-img">`;
+  return `<div class="fc-avatar-fallback">${esc(initials(f.name))}</div>`;
+}
+
+// ============================================
+// PAGE BOOTSTRAP
+// ============================================
+document.addEventListener("DOMContentLoaded", init);
+
+async function init() {
+  const grid = document.getElementById("faculty-grid");
+  const gridStatus = document.getElementById("faculty-grid-status");
+  const searchInput = document.getElementById("faculty-search-input");
+  const searchForm = document.getElementById("faculty-search-form");
+  const searchResultLabel = document.getElementById("faculty-search-result-label");
+
+  if (!grid) return; // page not present
+
+  let allFaculty = [];
+  let allCourses = new Map(); // courseCode -> courseName
+
+  try {
+    const [facultyList, courseSnap] = await Promise.all([
+      fetchAllFaculty(),
+      getDocs(collection(db, "courses"))
+    ]);
+    allFaculty = facultyList;
+    courseSnap.forEach(d => allCourses.set(d.id, d.data().courseName || d.id));
+  } catch (err) {
+    console.error("[Faculty] load failed:", err);
+    gridStatus.textContent = "Couldn't load faculty right now. Please refresh.";
+    gridStatus.classList.remove("hidden");
+    return;
+  }
+
+  function renderGrid(list, emptyMsg) {
+    if (!list.length) {
+      grid.innerHTML = "";
+      gridStatus.textContent = emptyMsg || "No faculty found yet.";
+      gridStatus.classList.remove("hidden");
+      return;
+    }
+    gridStatus.classList.add("hidden");
+    grid.innerHTML = list.map(f => {
+      const { avgRating, ratingCount, recommendPct } = facultyScore(f);
+      return `
+      <button type="button" class="fc-card" data-id="${esc(f.id)}">
+        <div class="fc-avatar">${avatarHtml(f)}</div>
+        <div class="fc-name">${esc(f.name)}</div>
+        <div class="fc-dept">${esc(f.department || "")}${f.designation ? " · " + esc(f.designation) : ""}</div>
+        <div class="fc-stats">
+          <span class="fc-stars" title="${ratingCount} rating(s)">${ratingCount ? starString(avgRating) : "Not yet rated"}</span>
+          ${recommendPct !== null ? `<span class="fc-recommend">👍 ${recommendPct}% recommend</span>` : ""}
+        </div>
+      </button>`;
+    }).join("");
+    grid.querySelectorAll(".fc-card").forEach(card => {
+      card.addEventListener("click", () => openFacultyProfile(card.dataset.id, allFaculty, allCourses));
+    });
+  }
+
+  function sortedByScore(list) {
+    return [...list].sort((a, b) => {
+      const sa = facultyScore(a), sb = facultyScore(b);
+      if (sb.reviewCount !== sa.reviewCount) return sb.reviewCount - sa.reviewCount;
+      return sb.avgRating - sa.avgRating;
+    });
+  }
+
+  renderGrid(sortedByScore(allFaculty));
+
+  searchForm?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const raw = searchInput.value.trim();
+    if (!raw) {
+      searchResultLabel.classList.add("hidden");
+      renderGrid(sortedByScore(allFaculty));
+      return;
+    }
+    const codeGuess = raw.toUpperCase().replace(/\s+/g, "");
+    // Course-code mode: matches a real course code (with or without the
+    // space students often type, e.g. "AGR 101" -> "AGR101").
+    if (allCourses.has(codeGuess)) {
+      const list = allFaculty.filter(f => (f.courseCodes || []).includes(codeGuess));
+      searchResultLabel.textContent = `Faculty teaching ${codeGuess} — ${esc(allCourses.get(codeGuess))}`;
+      searchResultLabel.classList.remove("hidden");
+      renderGrid(sortedByScore(list), `No faculty linked to ${codeGuess} yet.`);
+      return;
+    }
+    // Faculty-name mode: simple case-insensitive contains match.
+    const needle = raw.toLowerCase();
+    const list = allFaculty.filter(f => (f.name || "").toLowerCase().includes(needle));
+    searchResultLabel.textContent = `Results for "${raw}"`;
+    searchResultLabel.classList.remove("hidden");
+    renderGrid(sortedByScore(list), `No faculty matched "${raw}". Try a course code like AGR101, or a faculty name.`);
+  });
+}
+
+// ============================================
+// FACULTY PROFILE MODAL
+// ============================================
+async function openFacultyProfile(facultyId, allFaculty, allCourses) {
+  const faculty = allFaculty.find(f => f.id === facultyId);
+  if (!faculty) return;
+
+  const overlay = document.getElementById("faculty-profile-overlay");
+  const body = document.getElementById("faculty-profile-body");
+  overlay.classList.remove("hidden");
+  document.body.style.overflow = "hidden";
+  body.innerHTML = `<p style="text-align:center;color:var(--moss-600);padding:2rem 0;">Loading profile…</p>`;
+
+  let reviews = [];
+  try {
+    reviews = await fetchApprovedReviewsForFaculty(facultyId);
+  } catch (err) {
+    console.error("[Faculty] profile load failed:", err);
+  }
+
+  const { avgRating, ratingCount, recommendPct, reviewCount } = facultyScore(faculty);
+  const tagCounts = (faculty.stats && faculty.stats.tagCounts) || {};
+  const topTags = Object.entries(tagCounts)
+    .filter(([, n]) => n > 0)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6);
+
+  const courseChips = (faculty.courseCodes || [])
+    .map(code => `<span class="fp-chip">${esc(code)}${allCourses.has(code) ? " — " + esc(allCourses.get(code)) : ""}</span>`)
+    .join("") || `<span class="fp-chip fp-chip-muted">No courses linked yet</span>`;
+
+  const commentsHtml = reviews
+    .filter(r => r.comment)
+    .slice(0, 20)
+    .map(r => `
+      <div class="fp-comment">
+        <div class="fp-comment-head">
+          <span class="fp-comment-author">${r.isAnonymous ? "🙈 Anonymous student" : "🎓 " + esc(r.reviewerName || "A student")}</span>
+          <span class="fp-comment-stars">${starString(r.rating || 0)}</span>
+        </div>
+        <p class="fp-comment-text">${esc(r.comment)}</p>
+      </div>
+    `).join("") || `<p style="color:var(--moss-600);font-size:.88rem;">No written recommendations yet — be the first!</p>`;
+
+  body.innerHTML = `
+    <div class="fp-header">
+      <div class="fp-avatar">${avatarHtml(faculty)}</div>
+      <div>
+        <h3 class="fp-name">${esc(faculty.name)}</h3>
+        <div class="fp-dept">${esc(faculty.department || "")}${faculty.designation ? " · " + esc(faculty.designation) : ""}</div>
+      </div>
+    </div>
+
+    <div class="fp-stat-row">
+      <div class="fp-stat"><div class="fp-stat-num">${ratingCount ? avgRating.toFixed(1) : "—"}</div><div class="fp-stat-label">${ratingCount ? starString(avgRating) : "Not yet rated"}</div></div>
+      <div class="fp-stat"><div class="fp-stat-num">${recommendPct !== null ? recommendPct + "%" : "—"}</div><div class="fp-stat-label">Recommend</div></div>
+      <div class="fp-stat"><div class="fp-stat-num">${reviewCount}</div><div class="fp-stat-label">Review${reviewCount === 1 ? "" : "s"}</div></div>
+    </div>
+
+    <h4 class="fp-subhead">Courses</h4>
+    <div class="fp-chip-row">${courseChips}</div>
+
+    ${topTags.length ? `
+      <h4 class="fp-subhead">Most mentioned</h4>
+      <div class="fp-chip-row">${topTags.map(([key, n]) => `<span class="fp-chip fp-chip-tag">${esc((TAG_MAP[key] && TAG_MAP[key].emoji) || "✅")} ${esc((TAG_MAP[key] && TAG_MAP[key].label) || key)} · ${n}</span>`).join("")}</div>
+    ` : ""}
+
+    <h4 class="fp-subhead">What students say</h4>
+    <div class="fp-comments">${commentsHtml}</div>
+
+    <button type="button" class="btn-primary" id="fp-write-review-btn" style="width:100%;margin-top:1.4rem;">✍️ Write a Recommendation</button>
+  `;
+
+  document.getElementById("fp-write-review-btn").addEventListener("click", () => {
+    openReviewModal(faculty, allCourses);
+  });
+}
+
+document.getElementById("faculty-profile-close")?.addEventListener("click", closeFacultyProfile);
+document.getElementById("faculty-profile-overlay")?.addEventListener("click", (e) => {
+  if (e.target.id === "faculty-profile-overlay") closeFacultyProfile();
+});
+function closeFacultyProfile() {
+  document.getElementById("faculty-profile-overlay")?.classList.add("hidden");
+  document.body.style.overflow = "";
+}
+
+// ============================================
+// REVIEW SUBMISSION MODAL
+// ============================================
+function openReviewModal(faculty, allCourses) {
+  const session = requireSession();
+  if (!session) return;
+
+  const overlay = document.getElementById("review-modal-overlay");
+  const body = document.getElementById("review-modal-body");
+  overlay.classList.remove("hidden");
+  document.body.style.overflow = "hidden";
+
+  const courseOptions = (faculty.courseCodes || [])
+    .map(code => `<option value="${esc(code)}">${esc(code)}${allCourses.has(code) ? " — " + esc(allCourses.get(code)) : ""}</option>`)
+    .join("");
+
+  body.innerHTML = `
+    <h3>✍️ Recommend ${esc(faculty.name)}</h3>
+    <p class="modal-desc" style="max-height:none;">We only want to know the good things — this space is for positive, encouraging feedback that helps other students. There's no way to leave a written negative comment here.</p>
+    <form id="review-form">
+      <div class="form-field">
+        <label>Your rating</label>
+        <div class="rv-stars" id="rv-stars" data-value="0">
+          ${[1,2,3,4,5].map(n => `<span class="rv-star" data-star="${n}">☆</span>`).join("")}
+        </div>
+      </div>
+
+      <div class="form-field">
+        <label>Would you recommend this teacher?</label>
+        <div class="rv-toggle">
+          <button type="button" class="rv-toggle-btn" data-rec="yes">👍 Recommended</button>
+          <button type="button" class="rv-toggle-btn" data-rec="no">🙅 Not recommended</button>
+        </div>
+      </div>
+
+      ${courseOptions ? `
+      <div class="form-field">
+        <label for="rv-course">Which course was this for?</label>
+        <select id="rv-course">${courseOptions}</select>
+      </div>` : ""}
+
+      <div class="form-field">
+        <label>What stood out? (choose at least one)</label>
+        <div class="rv-tags">
+          ${POSITIVE_TAGS.map(t => `<label class="rv-tag"><input type="checkbox" value="${t.key}"> ${t.emoji} ${esc(t.label)}</label>`).join("")}
+        </div>
+      </div>
+
+      <div class="form-field">
+        <label for="rv-comment">A short note (optional)</label>
+        <textarea id="rv-comment" maxlength="400" placeholder="Tell future students what you liked — only the positive parts get published."></textarea>
+      </div>
+
+      <div class="form-field" style="margin-bottom:.4rem;">
+        <label style="display:flex;align-items:center;gap:.5rem;font-weight:500;">
+          <input type="checkbox" id="rv-anonymous" style="width:auto;">
+          Post this anonymously
+        </label>
+        <p style="font-size:.78rem;color:var(--moss-600);margin:.3rem 0 0;">Anonymous recommendations are reviewed by admin before they appear publicly. Signed ones (with your name) go live right away.</p>
+      </div>
+
+      <p id="review-status" style="font-size:.85rem;min-height:1.2em;"></p>
+      <button type="submit" class="btn-primary" id="review-submit-btn" style="width:100%;">Submit Recommendation</button>
+    </form>
+  `;
+
+  let starValue = 0;
+  let recValue = null;
+  const starsEl = body.querySelector("#rv-stars");
+  starsEl.querySelectorAll(".rv-star").forEach(star => {
+    star.addEventListener("click", () => {
+      starValue = Number(star.dataset.star);
+      starsEl.querySelectorAll(".rv-star").forEach(s => {
+        s.textContent = Number(s.dataset.star) <= starValue ? "★" : "☆";
+        s.classList.toggle("is-active", Number(s.dataset.star) <= starValue);
+      });
+    });
+  });
+  body.querySelectorAll(".rv-toggle-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      recValue = btn.dataset.rec === "yes";
+      body.querySelectorAll(".rv-toggle-btn").forEach(b => b.classList.remove("is-active"));
+      btn.classList.add("is-active");
+    });
+  });
+
+  const statusEl = body.querySelector("#review-status");
+  function showStatus(msg, isError) {
+    statusEl.textContent = msg;
+    statusEl.style.color = isError ? "var(--terracotta-500)" : "var(--leaf-500)";
+  }
+
+  body.querySelector("#review-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (starValue < 1) { showStatus("Please choose a star rating.", true); return; }
+    if (recValue === null) { showStatus("Please choose Recommended or Not recommended.", true); return; }
+    const tags = [...body.querySelectorAll(".rv-tags input:checked")].map(i => i.value);
+    if (tags.length < 1) { showStatus("Please choose at least one positive tag.", true); return; }
+
+    const courseSelect = body.querySelector("#rv-course");
+    const courseCode = courseSelect ? courseSelect.value : "";
+    const isAnonymous = body.querySelector("#rv-anonymous").checked;
+    const comment = sanitizeComment(body.querySelector("#rv-comment").value);
+
+    const submitBtn = body.querySelector("#review-submit-btn");
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Submitting…";
+    showStatus("Submitting your recommendation…");
+
+    const reviewId = `${faculty.id}_${session.regId}`;
+    const docData = {
+      facultyId: faculty.id,
+      facultyName: faculty.name,
+      courseCode: courseCode || "",
+      reviewerRegId: session.regId,
+      reviewerName: session.fullName || "",
+      reviewerAvatarUrl: session.avatarUrl || "",
+      rating: starValue,
+      recommended: recValue,
+      tags,
+      comment,
+      isAnonymous,
+      status: isAnonymous ? "pending" : "approved",
+      submittedAt: serverTimestamp()
+    };
+
+    try {
+      await setDoc(doc(db, "facultyReviews", reviewId), docData);
+
+      // Signed reviews are live immediately, so bump the faculty's public
+      // aggregate right now. Anonymous ones only count once admin
+      // approves them (js/admin.js loadFacultyReviews does the same
+      // increment at that point) — otherwise a pending, unreviewed
+      // comment could still move the public numbers.
+      if (!isAnonymous) {
+        const statsUpdate = {
+          "stats.reviewCount": increment(1),
+          "stats.recommendCount": increment(recValue ? 1 : 0),
+          "stats.ratingSum": increment(starValue),
+          "stats.ratingCount": increment(1)
+        };
+        tags.forEach(t => { statsUpdate[`stats.tagCounts.${t}`] = increment(1); });
+        await updateDoc(doc(db, "faculty", faculty.id), statsUpdate);
+      }
+
+      showStatus(isAnonymous
+        ? "✅ Submitted! Anonymous recommendations are reviewed by admin before they go public."
+        : "✅ Thank you! Your recommendation is live.");
+      setTimeout(() => {
+        closeReviewModal();
+        closeFacultyProfile();
+        window.location.reload();
+      }, 1300);
+    } catch (err) {
+      console.error("[Faculty] review submit failed:", err);
+      // A permission-denied here almost always means this student already
+      // has a review on file for this faculty (see the doc-id trick above).
+      if (String(err && err.code) === "permission-denied") {
+        showStatus("It looks like you've already recommended this teacher — one recommendation per student per faculty.", true);
+      } else {
+        showStatus("Something went wrong: " + (err && err.message ? err.message : "please try again."), true);
+      }
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Submit Recommendation";
+    }
+  });
+}
+
+document.getElementById("review-modal-close")?.addEventListener("click", closeReviewModal);
+document.getElementById("review-modal-overlay")?.addEventListener("click", (e) => {
+  if (e.target.id === "review-modal-overlay") closeReviewModal();
+});
+function closeReviewModal() {
+  document.getElementById("review-modal-overlay")?.classList.add("hidden");
+  document.body.style.overflow = "";
+}

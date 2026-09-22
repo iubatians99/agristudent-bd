@@ -77,6 +77,8 @@
       <button id="tab-resources" class="admin-nav-item" data-label="Resources"><span class="admin-nav-icon">📚</span><span>Resources</span></button>
       <button id="tab-blog" class="admin-nav-item" data-label="Blog"><span class="admin-nav-icon">✍️</span><span>Blog</span></button>
       <button id="tab-terms" class="admin-nav-item" data-label="Terms"><span class="admin-nav-icon">📖</span><span>Terms</span></button>
+      <button id="tab-faculty" class="admin-nav-item" data-label="Faculty"><span class="admin-nav-icon">🎓</span><span>Faculty</span></button>
+      <button id="tab-faculty-reviews" class="admin-nav-item" data-label="Faculty Reviews"><span class="admin-nav-icon">⭐</span><span>Faculty Reviews</span></button>
       <button id="tab-registrations" class="admin-nav-item" data-label="Registered Users"><span class="admin-nav-icon">👥</span><span>Registered Users</span></button>
       <button id="tab-manual-unlock" class="admin-nav-item" data-label="Manual Unlock"><span class="admin-nav-icon">🔓</span><span>Manual Unlock</span></button>
       <button id="tab-timeline" class="admin-nav-item" data-label="Timeline"><span class="admin-nav-icon">📅</span><span>Timeline</span></button>
@@ -291,6 +293,61 @@
         <div id="admin-term-list"></div>
       </div>
 
+      <div id="faculty-panel" class="admin-panel-card hidden">
+        <h2 class="admin-panel-heading">🎓 Faculty — Teacher Recommendation Directory</h2>
+        <p style="font-size:.84rem;color:var(--moss-600);margin-top:-.5rem;margin-bottom:1rem;">Add every faculty member students can search for and recommend. Course codes must match the codes already used on Resources (e.g. <code>AGR101</code>) so a course-code search finds them.</p>
+
+        <form id="faculty-form" style="border:1px solid var(--line);padding:1rem;border-radius:8px;background:#fff;margin-bottom:1.6rem;display:flex;flex-direction:column;gap:.8rem;">
+          <input type="hidden" id="faculty-form-editing-id">
+          <div style="display:flex;gap:.8rem;flex-wrap:wrap;">
+            <div style="flex:1;min-width:200px;">
+              <label style="display:block;font-size:.78rem;font-weight:600;margin-bottom:.2rem;">Full name</label>
+              <input type="text" id="faculty-name" required placeholder="e.g. Dr. Jane Rahman" style="width:100%;padding:.55rem .7rem;border:1px solid var(--line);border-radius:6px;">
+            </div>
+            <div style="flex:1;min-width:200px;">
+              <label style="display:block;font-size:.78rem;font-weight:600;margin-bottom:.2rem;">Department</label>
+              <input type="text" id="faculty-department" required placeholder="e.g. Department of Agriculture" style="width:100%;padding:.55rem .7rem;border:1px solid var(--line);border-radius:6px;">
+            </div>
+          </div>
+          <div style="display:flex;gap:.8rem;flex-wrap:wrap;">
+            <div style="flex:1;min-width:200px;">
+              <label style="display:block;font-size:.78rem;font-weight:600;margin-bottom:.2rem;">Designation (optional)</label>
+              <input type="text" id="faculty-designation" placeholder="e.g. Assistant Professor" style="width:100%;padding:.55rem .7rem;border:1px solid var(--line);border-radius:6px;">
+            </div>
+            <div style="flex:1;min-width:200px;">
+              <label style="display:block;font-size:.78rem;font-weight:600;margin-bottom:.2rem;">Course codes taught (comma-separated)</label>
+              <input type="text" id="faculty-courses" required placeholder="e.g. AGR101, AGR205" style="width:100%;padding:.55rem .7rem;border:1px solid var(--line);border-radius:6px;">
+            </div>
+          </div>
+          <div>
+            <label style="display:block;font-size:.78rem;font-weight:600;margin-bottom:.2rem;">Photo (optional)</label>
+            <input type="file" id="faculty-photo" accept="image/*">
+            <small style="color:var(--moss-600);">If left empty, a colored initial avatar is shown instead.</small>
+          </div>
+          <div style="display:flex;gap:.6rem;align-items:center;">
+            <button type="submit" class="btn-primary" id="faculty-form-submit">➕ Add Faculty</button>
+            <button type="button" id="faculty-form-cancel" class="hidden" style="background:none;border:1px solid var(--line);padding:.6rem 1rem;border-radius:8px;cursor:pointer;font-weight:600;">Cancel edit</button>
+            <span id="faculty-form-status" style="font-size:.85rem;"></span>
+          </div>
+        </form>
+
+        <div id="admin-faculty-list"></div>
+      </div>
+
+      <div id="faculty-reviews-panel" class="admin-panel-card hidden">
+        <h2 class="admin-panel-heading">⭐ Faculty Reviews — Moderation</h2>
+        <p style="font-size:.84rem;color:var(--moss-600);margin-top:-.5rem;margin-bottom:1rem;">Signed recommendations (student's own name) go live automatically. Anonymous ones land here first — approving one publishes it and adds it to that faculty's public rating; rejecting one deletes it, so it never affects the public score.</p>
+        <div class="admin-filter-bar">
+          <label for="faculty-review-status-filter">Status</label>
+          <select id="faculty-review-status-filter" class="admin-filter-select">
+            <option value="pending">🕓 Pending (anonymous, awaiting review)</option>
+            <option value="approved">✅ Approved (live)</option>
+            <option value="">All</option>
+          </select>
+        </div>
+        <div id="admin-faculty-reviews-list"></div>
+      </div>
+
       <div id="timeline-panel" class="admin-panel-card hidden">
         <h2 class="admin-panel-heading">Academic Timeline Events</h2>
         <form id="add-event-form" style="display:flex;gap:.6rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:1.6rem;border:1px solid var(--line);padding:1rem;border-radius:8px;background:#fff;">
@@ -418,6 +475,8 @@
             <button class="btn-danger danger-delete-btn" data-collection="timeline" data-label="Timeline Events">🗑 Delete ALL Timeline Events</button>
             <button class="btn-danger danger-delete-btn" data-collection="messages" data-label="Messages">🗑 Delete ALL Messages</button>
             <button class="btn-danger danger-delete-btn" data-collection="classroomCodes" data-label="Classroom Codes">🗑 Delete ALL Classroom Codes</button>
+            <button class="btn-danger danger-delete-btn" data-collection="faculty" data-label="Faculty">🗑 Delete ALL Faculty</button>
+            <button class="btn-danger danger-delete-btn" data-collection="facultyReviews" data-label="Faculty Reviews">🗑 Delete ALL Faculty Reviews</button>
             <button class="btn-danger danger-delete-btn" data-collection="adminMessages" data-label="Notify User Messages">🗑 Delete ALL Notify User Messages</button>
           </div>
           <p id="danger-result" class="hidden" style="font-weight:700;font-size:.9rem;"></p>

@@ -10,32 +10,31 @@
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
 <link rel="manifest" href="manifest.json">
 <title>Teacher Recommendation — Agri Core</title>
-<meta name="description" content="Find and recommend IUBAT Agriculture faculty — browse by department, read student ratings, and share your own recommendation. Coming soon to Agri Core.">
+<meta name="description" content="Find IUBAT Agriculture faculty by course or name, see what students recommend, and share your own positive recommendation — Agri Core.">
 <meta name="robots" content="index, follow">
 <link rel="canonical" href="https://agristudent-bd.web.app/teacher-recommendation.html">
 <meta property="og:title" content="Teacher Recommendation — Agri Core">
-<meta property="og:description" content="Find and recommend IUBAT Agriculture faculty — browse by department, read student ratings, and share your own recommendation. Coming soon to Agri Core.">
+<meta property="og:description" content="Find IUBAT Agriculture faculty by course or name, see what students recommend, and share your own positive recommendation.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://agristudent-bd.web.app/teacher-recommendation.html">
 <meta property="og:image" content="https://agristudent-bd.web.app/assets/icon-512.png">
 <meta property="og:locale" content="en_US">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="Teacher Recommendation — Agri Core">
-<meta name="twitter:description" content="Find and recommend IUBAT Agriculture faculty — browse by department, read student ratings, and share your own recommendation. Coming soon to Agri Core.">
+<meta name="twitter:description" content="Find IUBAT Agriculture faculty by course or name, see what students recommend, and share your own positive recommendation.">
 <meta name="twitter:image" content="https://agristudent-bd.web.app/assets/icon-512.png">
 <script src="js/auth-guard.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Work+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 <style>
-  /* Page-scoped styles for this feature preview — kept local since the
-     rest of the site never needs a hero like this outside this page. */
+  /* Page-scoped styles for Teacher Recommendation. */
   .tr-hero {
     position: relative;
     overflow: hidden;
     border-radius: 22px;
-    padding: 3rem 2rem;
-    margin-bottom: 2.6rem;
+    padding: 2.6rem 1.6rem;
+    margin-bottom: 1.8rem;
     background: linear-gradient(135deg, var(--moss-900), var(--moss-700));
     color: #fff;
     text-align: center;
@@ -50,81 +49,116 @@
     z-index: -1;
   }
   .tr-hero .tr-icon {
-    width: 64px; height: 64px; border-radius: 50%;
+    width: 60px; height: 60px; border-radius: 50%;
     background: rgba(255,255,255,.12);
     border: 1px solid rgba(255,255,255,.22);
     display: flex; align-items: center; justify-content: center;
-    font-size: 1.8rem; margin: 0 auto 1.1rem;
+    font-size: 1.7rem; margin: 0 auto 1rem;
   }
-  .tr-hero h1 { margin: 0 0 .6rem; font-size: 2.1rem; }
-  .tr-hero p { margin: 0 auto; max-width: 520px; opacity: .9; line-height: 1.6; }
+  .tr-hero h1 { margin: 0 0 .55rem; font-size: 1.95rem; }
+  .tr-hero p { margin: 0 auto; max-width: 520px; opacity: .92; line-height: 1.6; font-size: .95rem; }
   .tr-hero .tr-hero-badge {
     display: inline-flex; align-items: center; gap: .4rem;
-    font-family: var(--font-mono); font-size: .72rem; letter-spacing: .08em;
+    font-family: var(--font-mono); font-size: .7rem; letter-spacing: .06em;
     text-transform: uppercase; background: rgba(255,255,255,.14);
     border: 1px solid rgba(255,255,255,.28);
-    padding: .35rem .85rem; border-radius: 999px; margin-top: 1.3rem;
+    padding: .35rem .85rem; border-radius: 999px; margin-top: 1.1rem;
   }
 
-  .tr-section-title { text-align: center; font-size: 1.4rem; margin: 0 0 .35rem; }
-  .tr-section-sub { text-align: center; color: var(--moss-600); margin-bottom: 1.8rem; max-width: 480px; margin-left: auto; margin-right: auto; }
+  /* Search */
+  .tr-search-wrap { max-width: 560px; margin: 0 auto 2.2rem; }
+  .tr-search-form { display: flex; gap: .6rem; }
+  .tr-search-form input {
+    flex: 1; padding: .85rem 1rem; border: 1.5px solid var(--line); border-radius: 999px;
+    font-size: .95rem; font-family: var(--font-body); background: #fff;
+  }
+  .tr-search-form input:focus { outline: none; border-color: var(--leaf-500); }
+  .tr-search-form button {
+    background: var(--leaf-500); color: #fff; border: none; border-radius: 999px;
+    padding: 0 1.4rem; font-weight: 700; cursor: pointer; font-size: .9rem;
+  }
+  .tr-search-hint { text-align: center; font-size: .78rem; color: var(--moss-600); margin-top: .55rem; }
+  .tr-search-result-label { text-align: center; font-weight: 700; font-size: .92rem; color: var(--moss-700); margin: 1.4rem 0 1rem; }
 
-  .tr-preview-grid {
+  /* Faculty grid */
+  .fc-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 1.3rem;
-    margin-bottom: 3rem;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 1.1rem;
+    margin-bottom: 2rem;
   }
-  .tr-preview-card {
-    background: #fff;
-    border: 1.5px solid var(--line);
-    border-radius: 14px;
-    padding: 1.4rem 1.2rem;
-    text-align: left;
-    position: relative;
+  .fc-card {
+    background: #fff; border: 1.5px solid var(--line); border-radius: 16px;
+    padding: 1.3rem 1.1rem; text-align: center; cursor: pointer;
+    font-family: var(--font-body); transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
   }
-  .tr-preview-card .tr-num {
-    font-family: var(--font-mono);
-    font-size: .7rem;
-    color: var(--leaf-500);
-    letter-spacing: .06em;
-  }
-  .tr-preview-card .tr-emoji { font-size: 1.6rem; margin: .5rem 0 .6rem; }
-  .tr-preview-card h3 { margin: 0 0 .4rem; font-size: 1rem; }
-  .tr-preview-card p { margin: 0; font-size: .84rem; color: var(--moss-600); line-height: 1.5; }
-
-  /* A muted, non-functional mockup of the future teacher card — purely
-     illustrative, so it's visually greyed / labeled as a preview. */
-  .tr-mock-wrap { margin-bottom: 3rem; }
-  .tr-mock-card {
-    display: flex; align-items: center; gap: 1rem;
-    background: var(--paper-100);
-    border: 1.5px dashed var(--line);
-    border-radius: 14px;
-    padding: 1rem 1.2rem;
-    opacity: .8;
-  }
-  .tr-mock-avatar {
-    width: 46px; height: 46px; border-radius: 50%; flex-shrink: 0;
+  .fc-card:hover { transform: translateY(-3px); box-shadow: 0 10px 26px rgba(31,46,34,.1); border-color: var(--leaf-400); }
+  .fc-avatar { display: flex; justify-content: center; margin-bottom: .8rem; }
+  .fc-avatar-img { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid var(--paper-100); }
+  .fc-avatar-fallback {
+    width: 64px; height: 64px; border-radius: 50%;
     background: linear-gradient(135deg, var(--leaf-400), var(--moss-700));
-    display: flex; align-items: center; justify-content: center;
-    color: #fff; font-weight: 700; font-family: var(--font-display);
+    color: #fff; display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-family: var(--font-display); font-size: 1.1rem;
   }
-  .tr-mock-name { font-weight: 700; color: var(--moss-900); font-size: .95rem; }
-  .tr-mock-dept { font-size: .78rem; color: var(--moss-600); }
-  .tr-mock-stars { margin-left: auto; font-size: .9rem; color: var(--wheat-400); white-space: nowrap; }
-  .tr-mock-note {
-    text-align: center; font-family: var(--font-mono); font-size: .72rem;
-    color: var(--moss-600); margin-top: .7rem; letter-spacing: .03em;
-  }
+  .fc-name { font-weight: 700; color: var(--moss-900); font-size: 1rem; margin-bottom: .2rem; }
+  .fc-dept { font-size: .78rem; color: var(--moss-600); margin-bottom: .7rem; min-height: 1.1em; }
+  .fc-stats { display: flex; flex-direction: column; gap: .25rem; align-items: center; }
+  .fc-stars { color: var(--wheat-400); font-size: .95rem; letter-spacing: .05em; }
+  .fc-recommend { font-size: .76rem; color: var(--leaf-600, #2D4A35); font-weight: 700; }
 
-  @media (max-width: 900px) {
-    .tr-preview-grid { grid-template-columns: repeat(2, 1fr); }
+  #faculty-grid-status { text-align: center; color: var(--moss-600); padding: 1.5rem 0; }
+
+  /* Faculty profile modal */
+  .fp-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.1rem; }
+  .fp-avatar .fc-avatar-img, .fp-avatar .fc-avatar-fallback { width: 56px; height: 56px; }
+  .fp-name { margin: 0; font-size: 1.25rem; }
+  .fp-dept { font-size: .82rem; color: var(--moss-600); }
+  .fp-stat-row { display: flex; gap: .6rem; margin-bottom: 1.3rem; }
+  .fp-stat { flex: 1; background: var(--paper-100); border-radius: 12px; padding: .7rem .5rem; text-align: center; }
+  .fp-stat-num { font-family: var(--font-display); font-weight: 700; font-size: 1.25rem; color: var(--moss-900); }
+  .fp-stat-label { font-size: .72rem; color: var(--moss-600); text-transform: uppercase; letter-spacing: .04em; }
+  .fp-subhead { font-size: .9rem; margin: 1.2rem 0 .5rem; }
+  .fp-chip-row { display: flex; flex-wrap: wrap; gap: .4rem; }
+  .fp-chip {
+    display: inline-block; background: var(--paper-100); border: 1px solid var(--line);
+    border-radius: 999px; padding: .3rem .7rem; font-size: .78rem; color: var(--moss-700);
   }
+  .fp-chip-muted { color: var(--moss-600); font-style: italic; }
+  .fp-chip-tag { background: #EEF5EE; border-color: var(--leaf-400); color: var(--moss-900); font-weight: 600; }
+  .fp-comments { display: flex; flex-direction: column; gap: .7rem; margin-top: .3rem; }
+  .fp-comment { background: var(--paper-100); border-radius: 12px; padding: .8rem .9rem; }
+  .fp-comment-head { display: flex; justify-content: space-between; align-items: center; gap: .5rem; margin-bottom: .3rem; }
+  .fp-comment-author { font-size: .8rem; font-weight: 700; color: var(--moss-800, var(--moss-900)); }
+  .fp-comment-stars { color: var(--wheat-400); font-size: .82rem; white-space: nowrap; }
+  .fp-comment-text { margin: 0; font-size: .86rem; color: var(--moss-700); line-height: 1.55; }
+
+  /* Review form */
+  .rv-stars { display: flex; gap: .3rem; font-size: 1.9rem; line-height: 1; }
+  .rv-star { cursor: pointer; color: var(--wheat-400); user-select: none; }
+  .rv-toggle { display: flex; gap: .6rem; }
+  .rv-toggle-btn {
+    flex: 1; padding: .7rem .5rem; border-radius: 10px; border: 1.5px solid var(--line);
+    background: #fff; font-weight: 700; font-size: .85rem; cursor: pointer; color: var(--moss-700);
+    transition: all .15s ease;
+  }
+  .rv-toggle-btn.is-active[data-rec="yes"] { background: #E4F2E7; border-color: var(--leaf-500); color: var(--leaf-600, #2D4A35); }
+  .rv-toggle-btn.is-active[data-rec="no"] { background: #FCEEE6; border-color: var(--terracotta-400); color: var(--terracotta-500); }
+  .rv-tags { display: flex; flex-wrap: wrap; gap: .5rem; }
+  .rv-tag {
+    display: flex; align-items: center; gap: .4rem; background: var(--paper-100);
+    border: 1.5px solid var(--line); border-radius: 999px; padding: .4rem .8rem;
+    font-size: .8rem; cursor: pointer; font-weight: 500;
+  }
+  .rv-tag input { width: auto; margin: 0; }
+  .rv-tag:has(input:checked) { border-color: var(--leaf-500); background: #E4F2E7; }
+
   @media (max-width: 560px) {
-    .tr-preview-grid { grid-template-columns: 1fr; }
-    .tr-hero h1 { font-size: 1.7rem; }
-    .tr-mock-stars { display: block; margin-left: 0; margin-top: .3rem; }
+    .fc-grid { grid-template-columns: repeat(2, 1fr); }
+    .tr-hero h1 { font-size: 1.55rem; }
+    .tr-search-form { flex-direction: column; }
+    .tr-search-form button { padding: .8rem; }
+    .fp-stat-row { flex-wrap: wrap; }
   }
 </style>
 </head>
@@ -140,62 +174,39 @@
     <div class="tr-hero">
       <div class="tr-icon">🎓</div>
       <h1>Teacher Recommendation</h1>
-      <p>Find faculty by department, see what other IUBAT Agriculture students say about their classes, and share your own recommendation to help juniors pick the right teacher.</p>
-      <span class="tr-hero-badge">🚧 Under construction</span>
+      <p>Find faculty by course or name, see what other IUBAT Agriculture students recommend, and share your own positive experience to help juniors pick the right teacher.</p>
+      <span class="tr-hero-badge">🌱 Positive recommendations only</span>
     </div>
 
-    <h2 class="tr-section-title">What's coming</h2>
-    <p class="tr-section-sub">Four simple pieces, built to sit right alongside the Academic Timeline on the homepage.</p>
-
-    <div class="tr-preview-grid">
-      <div class="tr-preview-card">
-        <div class="tr-num">01</div>
-        <div class="tr-emoji">🏛️</div>
-        <h3>Browse by Course</h3>
-        <p>Look up every teacher tied to a course code or semester, the same way you already search Hand Notes.</p>
-      </div>
-      <div class="tr-preview-card">
-        <div class="tr-num">02</div>
-        <div class="tr-emoji">⭐</div>
-        <h3>Student Ratings</h3>
-        <p>Quick star ratings on teaching style, grading fairness, and class engagement — left by verified students only.</p>
-      </div>
-      <div class="tr-preview-card">
-        <div class="tr-num">03</div>
-        <div class="tr-emoji">✍️</div>
-        <h3>Write a Recommendation</h3>
-        <p>Add a short, honest note about a teacher's course so future students know what to expect before registering.</p>
-      </div>
-      <div class="tr-preview-card">
-        <div class="tr-num">04</div>
-        <div class="tr-emoji">🔍</div>
-        <h3>Compare Faculty</h3>
-        <p>See two or more teachers side by side for the same course before choosing a section.</p>
-      </div>
+    <div class="tr-search-wrap">
+      <form id="faculty-search-form" class="tr-search-form">
+        <input type="text" id="faculty-search-input" placeholder="Search by course code (e.g. AGR101) or faculty name…" autocomplete="off">
+        <button type="submit">🔍 Search</button>
+      </form>
+      <p class="tr-search-hint">Tip: search a course code to see every faculty who teaches it, ranked by student recommendations.</p>
     </div>
 
-    <div class="tr-mock-wrap">
-      <h2 class="tr-section-title">A quick preview</h2>
-      <p class="tr-section-sub">Just a look at the card design — not live data yet.</p>
-      <div class="tr-mock-card">
-        <div class="tr-mock-avatar">T</div>
-        <div>
-          <div class="tr-mock-name">Faculty Name</div>
-          <div class="tr-mock-dept">Department of Agriculture · Course Code</div>
-        </div>
-        <div class="tr-mock-stars">★★★★☆</div>
-      </div>
-      <div class="tr-mock-note">Sample layout only — recommendations aren't open yet</div>
-    </div>
-
-    <div class="uc-panel">
-      <span class="badge">🚧 Under construction</span>
-      <h3>Teacher Recommendation is being built next</h3>
-      <p>This page is a preview of the design — submitting and browsing real recommendations isn't live yet. Check back soon, or use Ask For Help if you'd like to suggest what this section should include.</p>
-    </div>
-
+    <p id="faculty-search-result-label" class="tr-search-result-label hidden"></p>
+    <div id="faculty-grid" class="fc-grid"></div>
+    <p id="faculty-grid-status" class="hidden">Loading faculty…</p>
   </div>
 </section>
+
+<!-- FACULTY PROFILE MODAL -->
+<div id="faculty-profile-overlay" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:560px;">
+    <button type="button" class="modal-close" id="faculty-profile-close">✕</button>
+    <div class="modal-body" id="faculty-profile-body"></div>
+  </div>
+</div>
+
+<!-- WRITE A RECOMMENDATION MODAL -->
+<div id="review-modal-overlay" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:480px;">
+    <button type="button" class="modal-close" id="review-modal-close">✕</button>
+    <div class="modal-body" id="review-modal-body"></div>
+  </div>
+</div>
 
 <!-- FOOTER -->
 <footer>
@@ -229,5 +240,6 @@
 
 <script type="module" src="js/session.js"></script>
 <script src="js/main.js"></script>
+<script type="module" src="js/faculty.js"></script>
 </body>
 </html>
