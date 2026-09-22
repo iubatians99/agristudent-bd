@@ -2396,6 +2396,19 @@ function startEditFaculty(id) {
   document.getElementById("faculty-courses").value = (f.courseCodes || []).join(", ");
   document.getElementById("faculty-form-submit").textContent = "💾 Save Changes";
   document.getElementById("faculty-form-cancel").classList.remove("hidden");
+  // A <input type="file"> can never be pre-filled, so without this the admin
+  // has no way to tell whether the faculty member already has a photo (e.g.
+  // one that came in through the bulk-sheet Cloudinary fetch) before
+  // deciding whether to replace it.
+  const preview = document.getElementById("faculty-photo-preview");
+  const previewImg = document.getElementById("faculty-photo-preview-img");
+  if (f.photoUrl) {
+    previewImg.src = f.photoUrl;
+    preview.classList.remove("hidden");
+  } else {
+    previewImg.src = "";
+    preview.classList.add("hidden");
+  }
   document.getElementById("faculty-panel").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
@@ -2404,6 +2417,8 @@ function resetFacultyForm() {
   document.getElementById("faculty-form-editing-id").value = "";
   document.getElementById("faculty-form-submit").textContent = "➕ Add Faculty";
   document.getElementById("faculty-form-cancel").classList.add("hidden");
+  document.getElementById("faculty-photo-preview").classList.add("hidden");
+  document.getElementById("faculty-photo-preview-img").src = "";
 }
 
 function wireFacultyForm() {

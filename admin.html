@@ -321,6 +321,10 @@
           </div>
           <div>
             <label style="display:block;font-size:.78rem;font-weight:600;margin-bottom:.2rem;">Photo (optional)</label>
+            <div id="faculty-photo-preview" class="hidden" style="display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem;">
+              <img id="faculty-photo-preview-img" src="" alt="Current photo" style="width:52px;height:52px;border-radius:50%;object-fit:cover;border:1px solid var(--line);">
+              <span style="font-size:.75rem;color:var(--moss-600);">Current photo on file. Fetched/uploaded images will be added here — choose a file below only to replace it.</span>
+            </div>
             <input type="file" id="faculty-photo" accept="image/*">
             <small style="color:var(--moss-600);">If left empty, a colored initial avatar is shown instead.</small>
           </div>
