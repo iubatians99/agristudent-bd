@@ -91,8 +91,11 @@ if (form) {
       html += pqHits.map(r => `<a class="search-result-item" href="previous-questions.html?course=${esc(r.courseCode)}"><span>${esc(r.courseCode)}</span><small>${esc(r.courseName || "")}</small></a>`).join("");
     }
     if (timelineHits.length) {
+      // Academic Timeline no longer has its own page — its content now
+      // lives only on the homepage, so search results jump straight to
+      // that embedded section instead of a separate timeline.html.
       html += `<div class="search-group-label">📅 Timeline</div>`;
-      html += timelineHits.map(e => `<a class="search-result-item" href="timeline.html"><span>${esc(e.title)}</span></a>`).join("");
+      html += timelineHits.map(e => `<a class="search-result-item" href="#academic-timeline"><span>${esc(e.title)}</span></a>`).join("");
     }
 
     resultsBox.innerHTML = html;
