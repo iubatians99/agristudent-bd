@@ -331,6 +331,29 @@
           </div>
         </form>
 
+        <div class="faculty-bulk-card" style="border:1px solid var(--line);padding:1rem;border-radius:12px;background:linear-gradient(135deg,#fbfdf9,#fff);margin-bottom:1.4rem;box-shadow:0 8px 24px rgba(31,61,43,.06);">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap;">
+            <div>
+              <h3 style="margin:0 0 .25rem;font-size:1rem;color:var(--moss-900,#183524);">📊 Bulk Upload Faculty from Sheet</h3>
+              <p style="margin:0;color:var(--moss-600);font-size:.8rem;line-height:1.55;">Upload a <strong>CSV, XLSX or XLS</strong> sheet. Required columns: <code>name</code>, <code>department</code>, <code>courseCodes</code>. Optional: <code>designation</code>, <code>photoUrl</code>. <strong>photoUrl accepts a direct image URL or a Google Drive share/view link</strong> (set the Drive file to “Anyone with the link” → Viewer).
+              </p>
+            </div>
+            <button type="button" id="faculty-bulk-template-btn" class="btn-primary" style="white-space:nowrap;">⬇️ Download Template</button>
+          </div>
+          <div style="display:flex;gap:.8rem;align-items:end;flex-wrap:wrap;margin-top:1rem;">
+            <div style="flex:1;min-width:240px;">
+              <label for="faculty-bulk-sheet" style="display:block;font-size:.78rem;font-weight:700;margin-bottom:.3rem;">Faculty sheet</label>
+              <input type="file" id="faculty-bulk-sheet" accept=".csv,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="width:100%;padding:.55rem;border:1px solid var(--line);border-radius:8px;background:#fff;">
+            </div>
+            <button type="button" id="faculty-bulk-preview-btn" class="btn-primary" style="min-height:42px;">👀 Preview Sheet</button>
+            <button type="button" id="faculty-bulk-upload-btn" class="btn-primary hidden" style="min-height:42px;">⬆️ Upload Faculty</button>
+            <button type="button" id="faculty-bulk-clear-btn" class="hidden" style="min-height:42px;background:#fff;border:1px solid var(--line);padding:.6rem .9rem;border-radius:8px;cursor:pointer;font-weight:700;">Clear</button>
+          </div>
+          <div id="faculty-bulk-summary" style="margin-top:.8rem;font-size:.82rem;color:var(--moss-600);min-height:1.2em;"></div>
+          <div id="faculty-bulk-preview" class="hidden" style="margin-top:1rem;overflow:auto;border:1px solid var(--line);border-radius:10px;background:#fff;"></div>
+          <div id="faculty-bulk-status" style="margin-top:.8rem;font-size:.82rem;min-height:1.2em;"></div>
+        </div>
+
         <div id="admin-faculty-list"></div>
       </div>
 

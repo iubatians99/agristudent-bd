@@ -2000,6 +2000,8 @@ const TAG_LABELS = Object.fromEntries(facultyReviewTagsCache.map(t => [t.key, `$
 
 let facultyFormWired = false;
 let facultyCache = {};
+let facultyBulkRows = [];
+let facultyBulkWired = false;
 
 function parseCourseCodes(raw) {
   return String(raw || "")
@@ -2008,9 +2010,249 @@ function parseCourseCodes(raw) {
     .filter(Boolean);
 }
 
+function facultyBulkNormalizeHeader(value) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]+/g, "")
+    .replace(/[()]/g, "");
+}
+
+function facultyBulkPick(row, aliases) {
+  const wanted = new Set(aliases.map(facultyBulkNormalizeHeader));
+  for (const [key, value] of Object.entries(row || {})) {
+    if (wanted.has(facultyBulkNormalizeHeader(key))) return value;
+  }
+  return "";
+}
+
+function facultyBulkParseCourseCodes(raw) {
+  return String(raw ?? "")
+    .split(/[,;|\n]+/)
+    .map(v => v.trim().toUpperCase())
+    .filter(Boolean)
+    .filter((v, i, arr) => arr.indexOf(v) === i);
+}
+
+// Accept either a normal direct image URL or a Google Drive share/view URL.
+// Drive files must be shared so that anyone with the link can view them.
+function normalizeFacultyPhotoUrl(raw) {
+  const value = String(raw ?? "").trim();
+  if (!value) return "";
+  try {
+    const url = new URL(value);
+    const host = url.hostname.toLowerCase();
+    if (host === "drive.google.com" || host === "docs.google.com") {
+      let fileId = "";
+      const pathMatch = url.pathname.match(/\/(?:file\/d|d)\/([a-zA-Z0-9_-]+)/);
+      if (pathMatch) fileId = pathMatch[1];
+      if (!fileId) fileId = url.searchParams.get("id") || "";
+      if (fileId) {
+        return `https://drive.google.com/thumbnail?id=${encodeURIComponent(fileId)}&sz=w1600`;
+      }
+    }
+    return value;
+  } catch {
+    return value;
+  }
+}
+
+function facultyBulkParseRows(rows) {
+  return rows.map((raw, index) => {
+    const name = String(facultyBulkPick(raw, ["name", "fullname", "facultyname", "teachername"]) ?? "").trim();
+    const department = String(facultyBulkPick(raw, ["department", "dept", "facultydepartment"]) ?? "").trim();
+    const designation = String(facultyBulkPick(raw, ["designation", "title", "position"]) ?? "").trim();
+    const courseCodes = facultyBulkParseCourseCodes(facultyBulkPick(raw, ["coursecodes", "courses", "coursecode", "course"]))
+    const photoInput = String(facultyBulkPick(raw, ["photourl", "photo", "imageurl", "image", "profilephoto"]) ?? "").trim();
+    const photoUrl = normalizeFacultyPhotoUrl(photoInput);
+    const errors = [];
+    if (!name) errors.push("Missing name");
+    if (!department) errors.push("Missing department");
+    if (!courseCodes.length) errors.push("Missing course code(s)");
+    if (photoUrl && !/^https?:\/\//i.test(photoUrl)) errors.push("Photo URL must start with http:// or https://");
+    return { rowNumber: index + 2, name, department, designation, courseCodes, photoUrl, errors, raw };
+  }).filter(r => r.name || r.department || r.designation || r.courseCodes.length || r.photoUrl);
+}
+
+function renderFacultyBulkPreview() {
+  const wrap = document.getElementById("faculty-bulk-preview");
+  const summary = document.getElementById("faculty-bulk-summary");
+  const uploadBtn = document.getElementById("faculty-bulk-upload-btn");
+  if (!wrap || !summary || !uploadBtn) return;
+  const valid = facultyBulkRows.filter(r => !r.errors.length);
+  const invalid = facultyBulkRows.length - valid.length;
+  summary.innerHTML = `Found <strong>${facultyBulkRows.length}</strong> faculty row(s): <strong>${valid.length}</strong> ready, <strong>${invalid}</strong> with errors.`;
+  wrap.classList.remove("hidden");
+  if (!facultyBulkRows.length) {
+    wrap.innerHTML = `<div style="padding:.9rem;color:var(--terracotta-500);">No faculty rows were found in the sheet.</div>`;
+    uploadBtn.classList.add("hidden");
+    return;
+  }
+  wrap.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:.78rem;min-width:760px;">
+    <thead><tr style="background:var(--paper-50,#fbfaf6);text-align:left;">
+      <th style="padding:.65rem;border-bottom:1px solid var(--line);">Row</th>
+      <th style="padding:.65rem;border-bottom:1px solid var(--line);">Name</th>
+      <th style="padding:.65rem;border-bottom:1px solid var(--line);">Department</th>
+      <th style="padding:.65rem;border-bottom:1px solid var(--line);">Designation</th>
+      <th style="padding:.65rem;border-bottom:1px solid var(--line);">Course codes</th>
+      <th style="padding:.65rem;border-bottom:1px solid var(--line);">Photo</th>
+      <th style="padding:.65rem;border-bottom:1px solid var(--line);">Status</th>
+    </tr></thead>
+    <tbody>${facultyBulkRows.map(r => `<tr>
+      <td style="padding:.6rem;border-bottom:1px solid var(--line);">${r.rowNumber}</td>
+      <td style="padding:.6rem;border-bottom:1px solid var(--line);font-weight:600;">${esc(r.name || "—")}</td>
+      <td style="padding:.6rem;border-bottom:1px solid var(--line);">${esc(r.department || "—")}</td>
+      <td style="padding:.6rem;border-bottom:1px solid var(--line);">${esc(r.designation || "—")}</td>
+      <td style="padding:.6rem;border-bottom:1px solid var(--line);">${esc(r.courseCodes.join(", ") || "—")}</td>
+      <td style="padding:.6rem;border-bottom:1px solid var(--line);">${r.photoUrl ? "🖼️" : "—"}</td>
+      <td style="padding:.6rem;border-bottom:1px solid var(--line);color:${r.errors.length ? "var(--terracotta-500)" : "var(--leaf-600,#2f6b46)"};">${r.errors.length ? `❌ ${esc(r.errors.join("; "))}` : "✅ Ready"}</td>
+    </tr>`).join("")}</tbody>
+  </table>`;
+  uploadBtn.classList.toggle("hidden", valid.length === 0);
+}
+
+function downloadFacultyBulkTemplate() {
+  const csv = [
+    ["name", "department", "designation", "courseCodes", "photoUrl"],
+    ["Dr. Example Rahman", "Department of Agricultural Sciences", "Professor", "AGR101, AGR205", "https://drive.google.com/file/d/FILE_ID/view?usp=sharing"],
+    ["Ms. Example Akter", "Department of Horticulture", "Assistant Professor", "AGR301; AGR305", "https://example.com/photo.jpg"]
+  ].map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+  const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "faculty-bulk-upload-template.csv";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function readFacultyBulkSheet(file) {
+  if (!file) throw new Error("Choose a CSV, XLSX or XLS file first.");
+  if (!window.XLSX) throw new Error("Spreadsheet reader is unavailable. Please refresh the admin page and try again.");
+  const buffer = await file.arrayBuffer();
+  const workbook = window.XLSX.read(buffer, { type: "array" });
+  const firstSheetName = workbook.SheetNames[0];
+  if (!firstSheetName) throw new Error("The sheet is empty.");
+  const sheet = workbook.Sheets[firstSheetName];
+  const rows = window.XLSX.utils.sheet_to_json(sheet, { defval: "", raw: false });
+  if (!Array.isArray(rows) || !rows.length) throw new Error("No data rows were found in the first sheet.");
+  return facultyBulkParseRows(rows);
+}
+
+async function bulkUploadFacultyRows() {
+  const status = document.getElementById("faculty-bulk-status");
+  const uploadBtn = document.getElementById("faculty-bulk-upload-btn");
+  const validRows = facultyBulkRows.filter(r => !r.errors.length);
+  if (!validRows.length) return;
+  uploadBtn.disabled = true;
+  status.style.color = "var(--moss-600)";
+  status.textContent = "Checking existing faculty…";
+  try {
+    const existingSnap = await getDocs(collection(db, "faculty"));
+    const existingKeys = new Set(existingSnap.docs.map(d => {
+      const f = d.data() || {};
+      return `${String(f.name || "").trim().toLowerCase()}|${String(f.department || "").trim().toLowerCase()}`;
+    }));
+    const seen = new Set(existingKeys);
+    const rowsToUpload = [];
+    let skipped = 0;
+    for (const r of validRows) {
+      const key = `${r.name.toLowerCase()}|${r.department.toLowerCase()}`;
+      if (seen.has(key)) { skipped++; continue; }
+      seen.add(key);
+      rowsToUpload.push(r);
+    }
+    if (!rowsToUpload.length) {
+      status.style.color = "var(--wheat-600,#8a651e)";
+      status.textContent = `Nothing new to upload. ${skipped} duplicate row(s) were skipped.`;
+      return;
+    }
+
+    status.textContent = `Uploading ${rowsToUpload.length} faculty profile(s)…`;
+    // Firestore batched writes are limited to 500 operations. Split into safe chunks.
+    let uploaded = 0;
+    for (let start = 0; start < rowsToUpload.length; start += 450) {
+      const chunk = rowsToUpload.slice(start, start + 450);
+      const batch = writeBatch(db);
+      chunk.forEach(r => {
+        const ref = doc(collection(db, "faculty"));
+        batch.set(ref, {
+          name: r.name,
+          department: r.department,
+          designation: r.designation,
+          courseCodes: r.courseCodes,
+          photoUrl: r.photoUrl || "",
+          status: "approved",
+          source: "admin_bulk_sheet",
+          stats: { reviewCount: 0, recommendCount: 0, ratingSum: 0, ratingCount: 0, tagCounts: {} },
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+      });
+      await batch.commit();
+      uploaded += chunk.length;
+      status.textContent = `Uploaded ${uploaded}/${rowsToUpload.length}…`;
+    }
+    status.style.color = "var(--leaf-600,#2f6b46)";
+    status.textContent = `✅ ${uploaded} faculty profile(s) uploaded and approved.${skipped ? ` ${skipped} duplicate row(s) skipped.` : ""}`;
+    loadFaculty();
+  } catch (err) {
+    console.error("[AgriAdmin] faculty bulk upload failed:", err);
+    status.style.color = "var(--terracotta-500)";
+    status.textContent = "❌ Bulk upload failed: " + err.message;
+  } finally {
+    uploadBtn.disabled = false;
+  }
+}
+
+function wireFacultyBulkUpload() {
+  if (facultyBulkWired) return;
+  facultyBulkWired = true;
+  const fileInput = document.getElementById("faculty-bulk-sheet");
+  const previewBtn = document.getElementById("faculty-bulk-preview-btn");
+  const uploadBtn = document.getElementById("faculty-bulk-upload-btn");
+  const clearBtn = document.getElementById("faculty-bulk-clear-btn");
+  const templateBtn = document.getElementById("faculty-bulk-template-btn");
+  const preview = document.getElementById("faculty-bulk-preview");
+  const summary = document.getElementById("faculty-bulk-summary");
+  const status = document.getElementById("faculty-bulk-status");
+  if (!fileInput || !previewBtn || !uploadBtn || !clearBtn) return;
+  templateBtn?.addEventListener("click", downloadFacultyBulkTemplate);
+  previewBtn.addEventListener("click", async () => {
+    status.style.color = "var(--moss-600)";
+    status.textContent = "Reading sheet…";
+    try {
+      facultyBulkRows = await readFacultyBulkSheet(fileInput.files[0]);
+      renderFacultyBulkPreview();
+      clearBtn.classList.remove("hidden");
+      status.textContent = facultyBulkRows.length ? "Review the preview, then click Upload Faculty." : "No rows found.";
+    } catch (err) {
+      facultyBulkRows = [];
+      preview.classList.add("hidden");
+      uploadBtn.classList.add("hidden");
+      summary.textContent = "";
+      status.style.color = "var(--terracotta-500)";
+      status.textContent = "❌ " + err.message;
+    }
+  });
+  uploadBtn.addEventListener("click", bulkUploadFacultyRows);
+  clearBtn.addEventListener("click", () => {
+    fileInput.value = "";
+    facultyBulkRows = [];
+    preview.classList.add("hidden");
+    uploadBtn.classList.add("hidden");
+    clearBtn.classList.add("hidden");
+    summary.textContent = "";
+    status.textContent = "";
+  });
+}
+
 async function loadFaculty() {
   if (!facultyList) return;
   wireFacultyForm();
+  wireFacultyBulkUpload();
   facultyList.innerHTML = `<p style="color:var(--moss-600);">Loading…</p>`;
   try {
     // Do not rely on an orderBy index here. Admins need to see every

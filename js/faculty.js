@@ -155,8 +155,34 @@ function initials(name) {
   return String(name || "?").trim().split(/\s+/).slice(0, 2).map(w => w[0]).join("").toUpperCase();
 }
 
+// Supports both direct online image URLs and Google Drive share/view links.
+// Drive files need to be shared as "Anyone with the link" (Viewer).
+function normalizeFacultyPhotoUrl(raw) {
+  const value = String(raw ?? "").trim();
+  if (!value) return "";
+  try {
+    const url = new URL(value);
+    const host = url.hostname.toLowerCase();
+    if (host === "drive.google.com" || host === "docs.google.com") {
+      let fileId = "";
+      const pathMatch = url.pathname.match(/\/(?:file\/d|d)\/([a-zA-Z0-9_-]+)/);
+      if (pathMatch) fileId = pathMatch[1];
+      if (!fileId) fileId = url.searchParams.get("id") || "";
+      if (fileId) return `https://drive.google.com/thumbnail?id=${encodeURIComponent(fileId)}&sz=w1600`;
+    }
+    return value;
+  } catch {
+    return value;
+  }
+}
+
+function facultyPhotoUrl(f) {
+  return normalizeFacultyPhotoUrl(f?.photoUrl);
+}
+
 function avatarHtml(f) {
-  if (f.photoUrl) return `<img src="${esc(f.photoUrl)}" alt="" class="fc-avatar-img">`;
+  const photoUrl = facultyPhotoUrl(f);
+  if (photoUrl) return `<img src="${esc(photoUrl)}" alt="" class="fc-avatar-img">`;
   return `<div class="fc-avatar-fallback">${esc(initials(f.name))}</div>`;
 }
 
@@ -264,8 +290,8 @@ async function init() {
   function renderHeroCollage(list) {
     if (!collage) return;
     const best10 = [...list].sort(recommendationSort).slice(0, 10);
-    const tile = (f, i) => f.photoUrl
-      ? `<div class="tr-photo-tile tr-photo-tile-${i + 1}"><img src="${esc(f.photoUrl)}" alt=""></div>`
+    const tile = (f, i) => facultyPhotoUrl(f)
+      ? `<div class="tr-photo-tile tr-photo-tile-${i + 1}"><img src="${esc(facultyPhotoUrl(f))}" alt=""></div>`
       : `<div class="tr-photo-tile tr-photo-tile-${i + 1}"><div class="tr-photo-tile-fallback">${esc(initials(f.name))}</div></div>`;
     collage.innerHTML = `<div class="tr-photo-side tr-photo-side-left">${best10.slice(0,5).map(tile).join("")}</div><div class="tr-photo-side tr-photo-side-right">${best10.slice(5,10).map((f,i)=>tile(f,i+5)).join("")}</div>`;
   }
