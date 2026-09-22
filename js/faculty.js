@@ -21,7 +21,7 @@
 // a deterministic doc id (`${facultyId}_${reviewerRegId}`) — see the
 // long comment on facultyReviews in firestore.rules.
 // ============================================
-import { db } from "./firebase-config.js";
+import { db, CLOUDINARY_UPLOAD_URL, CLOUDINARY_UPLOAD_PRESET } from "./firebase-config.js";
 import {
   collection, getDocs, getDoc, doc, setDoc, updateDoc, addDoc, query, where, orderBy, increment, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
@@ -48,7 +48,7 @@ function requireSession() {
 // ============================================
 // POSITIVE TAGS — the only kind of tag that exists in this feature.
 // ============================================
-const POSITIVE_TAGS = [
+const DEFAULT_POSITIVE_TAGS = [
   { key: "clear_explanations",   label: "Clear Explanations",   emoji: "💡" },
   { key: "fair_grading",         label: "Fair Grading",         emoji: "⚖️" },
   { key: "approachable",         label: "Approachable",         emoji: "🙂" },
@@ -58,7 +58,26 @@ const POSITIVE_TAGS = [
   { key: "punctual",             label: "Punctual & Reliable",  emoji: "⏰" },
   { key: "helpful_feedback",     label: "Helpful Feedback",     emoji: "📝" }
 ];
-const TAG_MAP = Object.fromEntries(POSITIVE_TAGS.map(t => [t.key, t]));
+let POSITIVE_TAGS = [...DEFAULT_POSITIVE_TAGS];
+let TAG_MAP = Object.fromEntries(POSITIVE_TAGS.map(t => [t.key, t]));
+
+async function loadReviewTags() {
+  try {
+    const snap = await getDoc(doc(db, "settings", "facultyReviewTags"));
+    const tags = snap.exists() ? snap.data().tags : null;
+    if (Array.isArray(tags) && tags.length) {
+      const cleaned = tags.map(t => ({
+        key: String(t?.key || "").trim().toLowerCase().replace(/[^a-z0-9_]+/g, "_"),
+        label: String(t?.label || "").trim().slice(0, 80),
+        emoji: String(t?.emoji || "✨").slice(0, 4)
+      })).filter(t => t.key && t.label);
+      if (cleaned.length) POSITIVE_TAGS = cleaned;
+    }
+  } catch (err) {
+    console.warn("[Faculty] review tag settings unavailable; using defaults.", err);
+  }
+  TAG_MAP = Object.fromEntries(POSITIVE_TAGS.map(t => [t.key, t]));
+}
 
 // ============================================
 // COMMENT FILTER — "we only want to hear the good things." Strips any
@@ -89,7 +108,7 @@ function sanitizeComment(raw) {
 // SHARED DATA HELPERS
 // ============================================
 async function fetchAllFaculty() {
-  const snap = await getDocs(collection(db, "faculty"));
+  const snap = await getDocs(query(collection(db, "faculty"), where("status", "==", "approved")));
   return snap.docs
     .map(d => ({ id: d.id, ...d.data() }))
     .filter(f => f.status !== "pending" && f.status !== "rejected");
@@ -128,6 +147,28 @@ function avatarHtml(f) {
   return `<div class="fc-avatar-fallback">${esc(initials(f.name))}</div>`;
 }
 
+function uploadFacultyPhoto(file, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", CLOUDINARY_UPLOAD_URL, true);
+    xhr.upload.addEventListener("progress", e => {
+      if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100));
+    });
+    xhr.onload = () => {
+      try {
+        const data = JSON.parse(xhr.responseText || "{}");
+        if (xhr.status >= 200 && xhr.status < 300 && data.secure_url) resolve(data.secure_url);
+        else reject(new Error("Photo upload failed."));
+      } catch { reject(new Error("Photo upload failed.")); }
+    };
+    xhr.onerror = () => reject(new Error("Photo upload failed."));
+    const form = new FormData();
+    form.append("file", file);
+    form.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+    xhr.send(form);
+  });
+}
+
 // ============================================
 // PAGE BOOTSTRAP
 // ============================================
@@ -146,6 +187,8 @@ async function init() {
   const addClose = document.getElementById("add-faculty-close");
   const addStatus = document.getElementById("add-faculty-status");
   const addSubmit = document.getElementById("add-faculty-submit");
+  const addPhotoInput = document.getElementById("new-faculty-photo");
+  const searchReviewBtn = document.getElementById("search-faculty-review-btn");
   const collage = document.getElementById("faculty-photo-collage");
 
   if (!grid) return;
@@ -156,7 +199,8 @@ async function init() {
   try {
     const [facultyList, courseSnap] = await Promise.all([
       fetchAllFaculty(),
-      getDocs(collection(db, "courses"))
+      getDocs(collection(db, "courses")),
+      loadReviewTags()
     ]);
     allFaculty = facultyList;
     courseSnap.forEach(d => {
@@ -206,14 +250,11 @@ async function init() {
 
   function renderHeroCollage(list) {
     if (!collage) return;
-    const withPhotos = list.filter(f => f.photoUrl).slice(0, 6);
-    const fallback = list.slice(0, 6);
-    const left = (withPhotos.length ? withPhotos.slice(0, 3) : fallback.slice(0, 3));
-    const right = (withPhotos.length ? withPhotos.slice(3, 6) : fallback.slice(3, 6));
-    const tile = f => f.photoUrl
-      ? `<div class="tr-photo-tile"><img src="${esc(f.photoUrl)}" alt=""></div>`
-      : `<div class="tr-photo-tile"><div class="tr-photo-tile-fallback">${esc(initials(f.name))}</div></div>`;
-    collage.innerHTML = `<div class="tr-photo-side">${left.map(tile).join("")}</div><div class="tr-photo-side">${right.map(tile).join("")}</div>`;
+    const best10 = [...list].sort(recommendationSort).slice(0, 10);
+    const tile = (f, i) => f.photoUrl
+      ? `<div class="tr-photo-tile tr-photo-tile-${i + 1}"><img src="${esc(f.photoUrl)}" alt=""></div>`
+      : `<div class="tr-photo-tile tr-photo-tile-${i + 1}"><div class="tr-photo-tile-fallback">${esc(initials(f.name))}</div></div>`;
+    collage.innerHTML = `<div class="tr-photo-side tr-photo-side-left">${best10.slice(0,5).map(tile).join("")}</div><div class="tr-photo-side tr-photo-side-right">${best10.slice(5,10).map((f,i)=>tile(f,i+5)).join("")}</div>`;
   }
 
   function renderGrid(list, emptyMsg) {
@@ -312,20 +353,50 @@ async function init() {
   }
 
   addBtn?.addEventListener("click", () => {
+    if (!getSession()) {
+      alert("🔒 Please log in as a registered user to add a faculty member.");
+      window.location.href = "login.html?return=teacher-recommendation.html";
+      return;
+    }
     addOverlay?.classList.remove("hidden");
     document.body.style.overflow = "hidden";
     document.getElementById("new-faculty-name")?.focus();
   });
   addClose?.addEventListener("click", closeAddFaculty);
   addOverlay?.addEventListener("click", e => { if (e.target === addOverlay) closeAddFaculty(); });
+  searchReviewBtn?.addEventListener("click", () => {
+    searchInput?.focus();
+    document.querySelector(".tr-search-wrap")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
 
   addForm?.addEventListener("submit", async (e) => {
     e.preventDefault();
+    const session = requireSession();
+    if (!session) return;
+    let registrationSnap;
+    try {
+      registrationSnap = await getDoc(doc(db, "registrations", session.regId));
+    } catch (err) {
+      addStatus.textContent = "Please log in again before submitting a faculty suggestion.";
+      addStatus.style.color = "var(--terracotta-500)";
+      return;
+    }
+    if (!registrationSnap.exists() || registrationSnap.data().status !== "verified") {
+      addStatus.textContent = "Only registered and verified users can add a faculty suggestion.";
+      addStatus.style.color = "var(--terracotta-500)";
+      return;
+    }
     const name = document.getElementById("new-faculty-name")?.value.trim() || "";
     const department = document.getElementById("new-faculty-department")?.value.trim() || "";
     const designation = document.getElementById("new-faculty-designation")?.value.trim() || "";
     const courseCodes = [...new Set((document.getElementById("new-faculty-courses")?.value || "")
       .split(/[,,\s]+/).map(c => c.trim().toUpperCase()).filter(Boolean))];
+    const photoFile = addPhotoInput?.files?.[0] || null;
+    if (photoFile && (!photoFile.type.startsWith("image/") || photoFile.size > 5 * 1024 * 1024)) {
+      addStatus.textContent = "Please choose an image up to 5 MB.";
+      addStatus.style.color = "var(--terracotta-500)";
+      return;
+    }
 
     if (!name || !department || !courseCodes.length) {
       addStatus.textContent = "Please enter the faculty name, department, and at least one course code.";
@@ -344,9 +415,14 @@ async function init() {
     addStatus.textContent = "Submitting…";
     addStatus.style.color = "var(--moss-600)";
     try {
+      let photoUrl = "";
+      if (photoFile) {
+        addStatus.textContent = "Uploading photo…";
+        photoUrl = await uploadFacultyPhoto(photoFile, pct => { addStatus.textContent = `Uploading photo ${pct}%…`; });
+      }
       await addDoc(collection(db, "faculty"), {
-        name, department, designation, courseCodes, status: "pending",
-        photoUrl: "",
+        name, department, designation, courseCodes, status: "pending", photoUrl,
+        submittedByRegId: session.regId,
         stats: { reviewCount: 0, recommendCount: 0, ratingSum: 0, ratingCount: 0, tagCounts: {} },
         createdAt: serverTimestamp()
       });
@@ -367,6 +443,12 @@ async function init() {
 // FACULTY PROFILE MODAL
 // ============================================
 async function openFacultyProfile(facultyId, allFaculty, allCourses) {
+  const session = getSession();
+  if (!session) {
+    alert("🔒 Please log in to see faculty details and reviews.");
+    window.location.href = "login.html?return=teacher-recommendation.html";
+    return;
+  }
   const faculty = allFaculty.find(f => f.id === facultyId);
   if (!faculty) return;
 
@@ -530,8 +612,9 @@ function openReviewModal(faculty, allCourses) {
       </div>
 
       <div class="form-field">
-        <label for="rv-comment">A short note (optional)</label>
-        <textarea id="rv-comment" maxlength="400" placeholder="Tell future students what you liked — only the positive parts get published."></textarea>
+        <label for="rv-comment">Write something that can help to get better score.</label>
+        <textarea id="rv-comment" maxlength="400" placeholder="Write a helpful, positive note for future students…"></textarea>
+        <p id="rv-draft-status" style="font-size:.72rem;color:var(--moss-500);margin:.3rem 0 0;">Draft autosaves while you write.</p>
       </div>
 
       <div class="form-field" style="margin-bottom:.4rem;">
@@ -572,6 +655,22 @@ function openReviewModal(faculty, allCourses) {
     statusEl.textContent = msg;
     statusEl.style.color = isError ? "var(--terracotta-500)" : "var(--leaf-500)";
   }
+
+  const draftKey = `agri_faculty_review_draft_${faculty.id}_${session.regId}`;
+  const commentEl = body.querySelector("#rv-comment");
+  try {
+    const savedDraft = localStorage.getItem(draftKey);
+    if (savedDraft && commentEl) commentEl.value = savedDraft;
+  } catch {}
+  let draftTimer;
+  commentEl?.addEventListener("input", () => {
+    clearTimeout(draftTimer);
+    draftTimer = setTimeout(() => {
+      try { localStorage.setItem(draftKey, commentEl.value.slice(0, 400)); } catch {}
+      const ds = body.querySelector("#rv-draft-status");
+      if (ds) ds.textContent = "✓ Draft saved";
+    }, 250);
+  });
 
   body.querySelector("#review-form").addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -626,6 +725,7 @@ function openReviewModal(faculty, allCourses) {
         await updateDoc(doc(db, "faculty", faculty.id), statsUpdate);
       }
 
+      try { localStorage.removeItem(draftKey); } catch {}
       showStatus(isAnonymous
         ? "✅ Submitted! Anonymous recommendations are reviewed by admin before they go public."
         : "✅ Thank you! Your recommendation is live.");

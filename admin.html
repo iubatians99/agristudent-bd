@@ -345,6 +345,14 @@
             <option value="">All</option>
           </select>
         </div>
+        <div id="faculty-review-tags-manager" style="margin:1rem 0 1.25rem;border:1px solid var(--line);border-radius:12px;padding:1rem;background:var(--paper-50,#fbfaf6);">
+          <div style="display:flex;justify-content:space-between;gap:.75rem;align-items:flex-start;flex-wrap:wrap;">
+            <div><strong>⚙️ What stood out? — Admin Controls</strong><p style="margin:.25rem 0 0;font-size:.76rem;color:var(--moss-600);">Edit, add, or remove the positive points students can choose when reviewing faculty.</p></div>
+            <button type="button" id="faculty-review-tag-add" class="btn-primary" style="padding:.45rem .75rem;font-size:.78rem;">＋ Add Point</button>
+          </div>
+          <div id="faculty-review-tags-list" style="display:grid;gap:.55rem;margin-top:.8rem;"></div>
+          <div id="faculty-review-tags-status" style="font-size:.76rem;min-height:1.1em;margin-top:.55rem;"></div>
+        </div>
         <div id="admin-faculty-reviews-list"></div>
       </div>
 

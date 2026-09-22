@@ -187,7 +187,7 @@ service cloud.firestore {
     // student per faculty) plus admin's ability to edit/delete any
     // faculty doc or review at any time.
     match /faculty/{id} {
-      allow read: if true;
+      allow get, list: if resource.data.status == 'approved' || isAdmin();
 
       // Admins can add a faculty profile directly. Students/visitors may
       // suggest a new faculty member, but their submission starts as
@@ -201,14 +201,17 @@ service cloud.firestore {
           request.resource.data.courseCodes is list && request.resource.data.courseCodes.size() > 0)
         ||
         (!isAdmin() &&
-          request.resource.data.keys().hasAll(['name', 'department', 'courseCodes', 'status']) &&
+          request.resource.data.keys().hasAll(['name', 'department', 'courseCodes', 'status', 'submittedByRegId']) &&
           request.resource.data.name is string && request.resource.data.name.size() > 0 &&
           request.resource.data.name.size() <= 160 &&
           request.resource.data.department is string && request.resource.data.department.size() > 0 &&
           request.resource.data.department.size() <= 160 &&
           request.resource.data.courseCodes is list && request.resource.data.courseCodes.size() > 0 &&
           request.resource.data.courseCodes.size() <= 20 &&
-          request.resource.data.status == 'pending');
+          request.resource.data.status == 'pending' &&
+          request.resource.data.submittedByRegId is string && request.resource.data.submittedByRegId.size() > 0 &&
+          get(/databases/$(database)/documents/registrations/$(request.resource.data.submittedByRegId)).data.status == 'verified' &&
+          (!('photoUrl' in request.resource.data) || (request.resource.data.photoUrl is string && (request.resource.data.photoUrl == '' || request.resource.data.photoUrl.matches('^https://res[.]cloudinary[.]com/.*')))));
 
       allow update: if isAdmin() || (
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stats']) &&

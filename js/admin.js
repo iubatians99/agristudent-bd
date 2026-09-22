@@ -1985,16 +1985,18 @@ initNotifyUser();
 // ============================================
 // FACULTY — Teacher Recommendation directory
 // ============================================
-const TAG_LABELS = {
-  clear_explanations: "💡 Clear Explanations",
-  fair_grading: "⚖️ Fair Grading",
-  approachable: "🙂 Approachable",
-  encourages_questions: "🙋 Encourages Questions",
-  well_organized: "🗂️ Well Organized",
-  inspiring: "✨ Inspiring",
-  punctual: "⏰ Punctual & Reliable",
-  helpful_feedback: "📝 Helpful Feedback"
-};
+const DEFAULT_FACULTY_REVIEW_TAGS = [
+  { key: "clear_explanations", label: "Clear Explanations", emoji: "💡" },
+  { key: "fair_grading", label: "Fair Grading", emoji: "⚖️" },
+  { key: "approachable", label: "Approachable", emoji: "🙂" },
+  { key: "encourages_questions", label: "Encourages Questions", emoji: "🙋" },
+  { key: "well_organized", label: "Well Organized", emoji: "🗂️" },
+  { key: "inspiring", label: "Inspiring", emoji: "✨" },
+  { key: "punctual", label: "Punctual & Reliable", emoji: "⏰" },
+  { key: "helpful_feedback", label: "Helpful Feedback", emoji: "📝" }
+];
+let facultyReviewTagsCache = [...DEFAULT_FACULTY_REVIEW_TAGS];
+const TAG_LABELS = Object.fromEntries(facultyReviewTagsCache.map(t => [t.key, `${t.emoji} ${t.label}`]));
 
 let facultyFormWired = false;
 let facultyCache = {};
@@ -2152,23 +2154,108 @@ function wireFacultyForm() {
 }
 
 // ============================================
+// FACULTY REVIEW TAG SETTINGS — admin controlled
+// ============================================
+function tagKeyFromLabel(label) {
+  return String(label || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 50) || `point_${Date.now()}`;
+}
+
+function renderFacultyReviewTags() {
+  const wrap = document.getElementById("faculty-review-tags-list");
+  if (!wrap) return;
+  wrap.innerHTML = facultyReviewTagsCache.map((tag, index) => `
+    <div class="faculty-review-tag-admin-row" data-index="${index}" style="display:grid;grid-template-columns:70px 1fr auto;gap:.55rem;align-items:center;">
+      <input class="faculty-review-tag-emoji" value="${esc(tag.emoji)}" maxlength="4" aria-label="Emoji" style="width:100%;padding:.5rem;border:1px solid var(--line);border-radius:8px;text-align:center;">
+      <input class="faculty-review-tag-label" value="${esc(tag.label)}" maxlength="80" aria-label="Review point" style="width:100%;padding:.5rem;border:1px solid var(--line);border-radius:8px;">
+      <button type="button" class="btn-danger faculty-review-tag-delete" data-index="${index}" style="padding:.42rem .65rem;font-size:.75rem;">Delete</button>
+    </div>`).join("");
+
+  wrap.querySelectorAll(".faculty-review-tag-delete").forEach(btn => btn.addEventListener("click", () => {
+    if (facultyReviewTagsCache.length <= 1) { alert("Keep at least one review point."); return; }
+    facultyReviewTagsCache.splice(Number(btn.dataset.index), 1);
+    renderFacultyReviewTags();
+    saveFacultyReviewTags();
+  }));
+  wrap.querySelectorAll(".faculty-review-tag-label, .faculty-review-tag-emoji").forEach(input => input.addEventListener("change", () => {
+    const row = input.closest(".faculty-review-tag-admin-row");
+    const index = Number(row?.dataset.index);
+    if (!Number.isInteger(index)) return;
+    const label = row.querySelector(".faculty-review-tag-label")?.value.trim() || "";
+    const emoji = row.querySelector(".faculty-review-tag-emoji")?.value.trim() || "✨";
+    if (!label) return;
+    facultyReviewTagsCache[index] = { ...facultyReviewTagsCache[index], label: label.slice(0,80), emoji: emoji.slice(0,4) };
+    saveFacultyReviewTags();
+  }));
+}
+
+async function loadFacultyReviewTags() {
+  try {
+    const snap = await getDoc(doc(db, "settings", "facultyReviewTags"));
+    if (snap.exists() && Array.isArray(snap.data().tags) && snap.data().tags.length) {
+      facultyReviewTagsCache = snap.data().tags.map(t => ({
+        key: String(t?.key || "").trim() || tagKeyFromLabel(t?.label),
+        label: String(t?.label || "").trim().slice(0,80),
+        emoji: String(t?.emoji || "✨").slice(0,4)
+      })).filter(t => t.label);
+    }
+  } catch (err) {
+    console.warn("[AgriAdmin] faculty review tag settings load failed:", err);
+  }
+  renderFacultyReviewTags();
+}
+
+async function saveFacultyReviewTags() {
+  const status = document.getElementById("faculty-review-tags-status");
+  try {
+    const seen = new Set();
+    facultyReviewTagsCache = facultyReviewTagsCache.map(t => {
+      let key = String(t.key || tagKeyFromLabel(t.label));
+      if (seen.has(key)) key = `${key}_${Date.now().toString(36).slice(-4)}`;
+      seen.add(key);
+      return { key, label: String(t.label || "").trim().slice(0,80), emoji: String(t.emoji || "✨").slice(0,4) };
+    }).filter(t => t.label);
+    await setDoc(doc(db, "settings", "facultyReviewTags"), { tags: facultyReviewTagsCache, updatedAt: serverTimestamp(), updatedBy: getCurrentUserEmail() }, { merge: true });
+    if (status) { status.textContent = "✓ Saved. New reviews will use these points."; status.style.color = "var(--leaf-600,#2d4a35)"; }
+  } catch (err) {
+    console.error("[AgriAdmin] faculty review tag save failed:", err);
+    if (status) { status.textContent = "Could not save review points: " + err.message; status.style.color = "var(--terracotta-500)"; }
+  }
+}
+
+document.getElementById("faculty-review-tag-add")?.addEventListener("click", () => {
+  const keyBase = `review_point_${facultyReviewTagsCache.length + 1}`;
+  let key = keyBase, i = 2;
+  while (facultyReviewTagsCache.some(t => t.key === key)) key = `${keyBase}_${i++}`;
+  facultyReviewTagsCache.push({ key, label: "New Positive Point", emoji: "✨" });
+  renderFacultyReviewTags();
+  saveFacultyReviewTags();
+});
+
+// ============================================
 // FACULTY REVIEWS — moderation queue
 // ============================================
 async function loadFacultyReviews() {
+  await loadFacultyReviewTags();
   if (!facultyReviewsList) return;
   const statusFilter = document.getElementById("faculty-review-status-filter")?.value || "pending";
   facultyReviewsList.innerHTML = `<p style="color:var(--moss-600);">Loading…</p>`;
   try {
-    const clauses = [orderBy("submittedAt", "desc")];
-    if (statusFilter) clauses.unshift(where("status", "==", statusFilter));
-    const snap = await getDocs(query(collection(db, "facultyReviews"), ...clauses));
+    const reviewQuery = statusFilter
+      ? query(collection(db, "facultyReviews"), where("status", "==", statusFilter))
+      : query(collection(db, "facultyReviews"));
+    const snap = await getDocs(reviewQuery);
     if (snap.empty) { facultyReviewsList.innerHTML = `<p style="color:var(--moss-600);">Nothing here right now.</p>`; return; }
 
     facultyReviewsList.innerHTML = "";
-    snap.forEach(d => {
+    const reviewDocs = [...snap.docs].sort((a, b) => {
+      const av = a.data().submittedAt?.toMillis?.() || 0;
+      const bv = b.data().submittedAt?.toMillis?.() || 0;
+      return bv - av;
+    });
+    reviewDocs.forEach(d => {
       const r = d.data();
       const isPending = r.status === "pending";
-      const tagsHtml = (r.tags || []).map(t => `<span style="display:inline-block;background:var(--paper-100,#f2eee2);border-radius:999px;padding:.15rem .55rem;font-size:.72rem;margin:.1rem .25rem .1rem 0;">${esc(TAG_LABELS[t] || t)}</span>`).join("");
+      const tagsHtml = (r.tags || []).map(t => { const tag = facultyReviewTagsCache.find(x => x.key === t); return `<span style="display:inline-block;background:var(--paper-100,#f2eee2);border-radius:999px;padding:.15rem .55rem;font-size:.72rem;margin:.1rem .25rem .1rem 0;">${esc(tag ? `${tag.emoji} ${tag.label}` : t)}</span>`; }).join("");
       const row = document.createElement("div");
       row.className = "resource-row";
       row.innerHTML = `
