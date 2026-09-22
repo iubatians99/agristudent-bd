@@ -82,7 +82,7 @@
         <button class="modal-close" id="upload-form-close">✕</button>
         <div class="modal-body">
           <h2 style="font-size:1.3rem;">⬆️ Upload Your Resource</h2>
-          <p style="color:var(--moss-600);font-size:.9rem;margin-bottom:1.4rem;">Upload relevant PDFs, images, or presentations. <strong>Max 10MB at once</strong>, up to 20 files. Hand Notes unlocks last 36 hours per credit; Class Slides and Images can unlock the full folder for lifetime access.</p>
+          <p style="color:var(--moss-600);font-size:.9rem;margin-bottom:1.4rem;">Upload relevant PDFs, images, or presentations. Max 20 files, 50MB each. Hand Notes unlocks last 36 hours per credit; Class Slides and Images can unlock the full folder for lifetime access.</p>
 
           <form id="upload-form">
             <div class="form-field">
@@ -125,7 +125,6 @@
             <div class="form-field">
               <label id="files-label" for="files">PDF, Image or Presentation File(s) *</label>
               <input type="file" id="files" multiple required accept=".pdf,application/pdf">
-              <small class="upload-limit-note">📦 Max 10MB at once.</small>
               <div id="files-selected-preview" class="selected-files-preview hidden"></div>
             </div>
             <div class="form-field hidden" id="upload-images-wrapper">
@@ -135,7 +134,7 @@
                 <div class="file-drop-text" style="color:var(--moss-600);font-size:.9rem;">Tap to choose images, or drag them here (JPEG, PNG, WebP supported)</div>
                 <input type="file" id="upload-images" multiple accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" style="display:none;">
               </div>
-              <small style="display:block;margin-top:.4rem;color:var(--moss-600);font-size:.85rem;">Multiple images will be uploaded as a folder. Max 10MB at once.</small>
+              <small style="display:block;margin-top:.4rem;color:var(--moss-600);font-size:.85rem;">Multiple images will be uploaded as a folder. Supports high-quality images up to 10MB each.</small>
               <div id="upload-images-selected-preview" class="selected-files-preview hidden"></div>
             </div>
             <button type="submit" id="upload-submit" class="btn-primary" style="width:100%;padding:.85rem;">Submit for Review</button>

@@ -48,8 +48,9 @@
 </script>
 <script src="js/mark-entry.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Work+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Work+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500;700&family=Playfair+Display:ital,wght@0,600;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/timeline-embed.css">
 </head>
 <body>
 
@@ -105,7 +106,7 @@
     <p class="sub reveal">Pick a section below — each one is being built one at a time.</p>
     <div class="card-grid">
 
-      <a href="knowledge-hub.html" class="seed-card reveal" data-section="knowledge">
+      <a href="knowledge-hub.html" class="seed-card reveal">
         <div class="tag-strip"><span class="tag-dot"></span><span class="tag">SECTION 01</span></div>
         <div class="card-body">
           <div class="icon">📖</div>
@@ -114,7 +115,7 @@
         </div>
       </a>
 
-      <a href="timeline.html" class="seed-card reveal" data-section="timeline">
+      <a href="timeline.html" class="seed-card reveal">
         <div class="tag-strip"><span class="tag-dot"></span><span class="tag">SECTION 02</span></div>
         <div class="card-body">
           <div class="icon">📅</div>
@@ -123,7 +124,7 @@
         </div>
       </a>
 
-      <a href="resources.html" class="seed-card reveal" data-section="resources">
+      <a href="resources.html" class="seed-card reveal">
         <div class="tag-strip"><span class="tag-dot"></span><span class="tag">SECTION 03</span></div>
         <div class="card-body">
           <div class="icon">📚</div>
@@ -132,7 +133,7 @@
         </div>
       </a>
 
-      <a href="calculators.html" class="seed-card reveal" data-section="calculators">
+      <a href="calculators.html" class="seed-card reveal">
         <div class="tag-strip"><span class="tag-dot"></span><span class="tag">SECTION 04</span></div>
         <div class="card-body">
           <div class="icon">🧮</div>
@@ -142,7 +143,7 @@
         </div>
       </a>
 
-      <a href="blog.html" class="seed-card reveal" data-section="blog">
+      <a href="blog.html" class="seed-card reveal">
         <div class="tag-strip"><span class="tag-dot"></span><span class="tag">SECTION 05</span></div>
         <div class="card-body">
           <div class="icon">✍️</div>
@@ -151,7 +152,7 @@
         </div>
       </a>
 
-      <a href="help.html" class="seed-card reveal" data-section="help">
+      <a href="help.html" class="seed-card reveal">
         <div class="tag-strip"><span class="tag-dot"></span><span class="tag">SECTION 06</span></div>
         <div class="card-body">
           <div class="icon">💬</div>
@@ -160,6 +161,56 @@
         </div>
       </a>
 
+    </div>
+  </div>
+</section>
+
+<!-- ACADEMIC TIMELINE (full design, embedded on the homepage) -->
+<section class="timeline-embed">
+  <div class="timeline-container">
+    <div class="ambient-glow glow-1"></div>
+    <div class="ambient-glow glow-2"></div>
+
+    <header class="timeline-header animate-fade-down">
+      <h2 class="timeline-main-title" style="font-size:2.4rem;">Academic Timeline</h2>
+      <p class="semester-subtitle" id="semester-label">Loading semester…</p>
+    </header>
+
+    <section class="calendar-banner card-panel animate-fade-up" style="animation-delay: 0.1s;">
+      <div class="calendar-inner-content">
+        <h3 class="calendar-widget-title">Academic Calendar</h3>
+        <div class="calendar-month-header" id="calendar-month-year">—</div>
+
+        <div class="calendar-weekdays">
+          <div class="weekday-lbl">Su</div><div class="weekday-lbl">Mo</div><div class="weekday-lbl">Tu</div><div class="weekday-lbl">We</div><div class="weekday-lbl">Th</div><div class="weekday-lbl">Fr</div><div class="weekday-lbl">Sa</div>
+        </div>
+
+        <div id="calendar-days-container" class="calendar-days-grid"></div>
+
+        <div class="calendar-legend">
+          <div class="legend-item"><span class="legend-dot dot-today"></span> Today</div>
+          <div class="legend-item"><span class="legend-dot dot-path"></span> Distance Track</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="exam-trackers-stack" id="exam-trackers-stack">
+      <p style="color:var(--te-text-muted,#486581);font-family:'JetBrains Mono',monospace;font-size:.85rem;text-align:center;">Loading exam dates…</p>
+    </section>
+
+    <section class="timeline-other-dates">
+      <h2>Other Important Dates</h2>
+      <ul class="timeline-list" id="other-dates-list">
+        <li style="color:var(--te-text-muted,#486581);font-family:'JetBrains Mono',monospace;font-size:.85rem;">Loading…</li>
+      </ul>
+    </section>
+
+    <div class="timeline-embed-footer">
+      <a href="timeline.html" class="timeline-embed-link">📅 View Full Academic Timeline →</a>
+      <a href="teacher-recommendation.html" class="teacher-rec-teaser">
+        <span class="trt-icon">🎓</span>
+        <span>Teacher Recommendation<span class="trt-badge">Coming soon</span></span>
+      </a>
     </div>
   </div>
 </section>
@@ -196,8 +247,8 @@
 
 <script type="module" src="js/stats.js"></script>
 <script type="module" src="js/search.js"></script>
+<script type="module" src="js/timeline.js"></script>
 <script type="module" src="js/session.js"></script>
-<script type="module" src="js/section-updates.js"></script>
 <script type="module">
   import { getSession } from "./js/session.js";
   if (getSession()) document.getElementById("hero-register-cta")?.classList.add("hidden");

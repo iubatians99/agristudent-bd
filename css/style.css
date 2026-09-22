@@ -299,13 +299,6 @@ img{ max-width:100%; display:block; }
   margin-top: 0.5rem;
 }
 
-.upload-limit-note {
-  display: block;
-  margin-top: 0.4rem;
-  color: var(--moss-600);
-  font-size: 0.85rem;
-}
-
 .selected-file-chip {
   font-size: 0.78rem;
   background: var(--paper-100);
@@ -1366,49 +1359,6 @@ img{ max-width:100%; display:block; }
 }
 @media (prefers-reduced-motion: reduce){
   .seed-card, .seed-card .icon, .seed-card .tag-strip::before{ transition:none; }
-}
-
-/* --- "This section has something new" — slow blink on the homepage card.
-   Class is added by js/section-updates.js and removed once the visitor opens
-   the section. Slow on purpose (3s cycle): noticeable, never frantic. --- */
-.seed-card.has-update{
-  animation:seedCardBlink 3s ease-in-out infinite;
-}
-.seed-card.has-update::before{
-  content:"";
-  position:absolute; inset:0;
-  background:rgba(212,162,76,.18);
-  pointer-events:none;
-  opacity:0;
-  animation:seedCardTint 3s ease-in-out infinite;
-}
-.seed-card.has-update .card-body{ position:relative; z-index:1; } /* keep text crisp above the tint */
-.seed-card.has-update .tag-dot{
-  background:var(--wheat-400);
-  animation:seedDotBlink 3s ease-in-out infinite;
-}
-/* Hovering = the visitor is about to open it; hand the card back to its normal hover look. */
-.seed-card.has-update:hover,
-.seed-card.has-update:hover::before,
-.seed-card.has-update:hover .tag-dot{ animation:none; }
-.seed-card.has-update:hover::before{ opacity:0; }
-
-@keyframes seedCardBlink{
-  0%, 100%{ border-color:var(--line); box-shadow:0 1px 2px rgba(31,46,34,.05), 0 0 0 0 rgba(212,162,76,0); }
-  50%{ border-color:var(--wheat-400); box-shadow:0 1px 2px rgba(31,46,34,.05), 0 0 0 4px rgba(212,162,76,.32), 0 10px 26px -8px rgba(212,162,76,.55); }
-}
-@keyframes seedCardTint{
-  0%, 100%{ opacity:0; }
-  50%{ opacity:1; }
-}
-@keyframes seedDotBlink{
-  0%, 100%{ box-shadow:0 0 0 3px rgba(212,162,76,.15); }
-  50%{ box-shadow:0 0 0 6px rgba(212,162,76,.45); }
-}
-/* Reduced motion: no blinking, but the card still reads as "updated". */
-@media (prefers-reduced-motion: reduce){
-  .seed-card.has-update{ border-color:var(--wheat-400); box-shadow:0 0 0 3px rgba(212,162,76,.3); }
-  .seed-card.has-update::before{ animation:none; opacity:.6; }
 }
 
 /* ============================================

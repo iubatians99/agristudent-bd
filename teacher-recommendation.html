@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+  <meta http-equiv="X-Content-Type-Options" content="nosniff">
+  <meta http-equiv="X-Frame-Options" content="SAMEORIGIN">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdnjs.cloudflare.com https://www.googletagmanager.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://res.cloudinary.com https://lh3.googleusercontent.com; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://api.cloudinary.com; frame-src 'none'; object-src 'none'; base-uri 'self';">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<link rel="manifest" href="manifest.json">
+<title>Teacher Recommendation — Agri Core</title>
+<meta name="description" content="Find and recommend IUBAT Agriculture faculty — browse by department, read student ratings, and share your own recommendation. Coming soon to Agri Core.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://agristudent-bd.web.app/teacher-recommendation.html">
+<meta property="og:title" content="Teacher Recommendation — Agri Core">
+<meta property="og:description" content="Find and recommend IUBAT Agriculture faculty — browse by department, read student ratings, and share your own recommendation. Coming soon to Agri Core.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://agristudent-bd.web.app/teacher-recommendation.html">
+<meta property="og:image" content="https://agristudent-bd.web.app/assets/icon-512.png">
+<meta property="og:locale" content="en_US">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Teacher Recommendation — Agri Core">
+<meta name="twitter:description" content="Find and recommend IUBAT Agriculture faculty — browse by department, read student ratings, and share your own recommendation. Coming soon to Agri Core.">
+<meta name="twitter:image" content="https://agristudent-bd.web.app/assets/icon-512.png">
+<script src="js/auth-guard.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Work+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<style>
+  /* Page-scoped styles for this feature preview — kept local since the
+     rest of the site never needs a hero like this outside this page. */
+  .tr-hero {
+    position: relative;
+    overflow: hidden;
+    border-radius: 22px;
+    padding: 3rem 2rem;
+    margin-bottom: 2.6rem;
+    background: linear-gradient(135deg, var(--moss-900), var(--moss-700));
+    color: #fff;
+    text-align: center;
+    isolation: isolate;
+  }
+  .tr-hero::before {
+    content: "";
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(circle at 12% 20%, rgba(212,162,76,.22), transparent 45%),
+      radial-gradient(circle at 88% 82%, rgba(107,155,94,.30), transparent 50%);
+    z-index: -1;
+  }
+  .tr-hero .tr-icon {
+    width: 64px; height: 64px; border-radius: 50%;
+    background: rgba(255,255,255,.12);
+    border: 1px solid rgba(255,255,255,.22);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.8rem; margin: 0 auto 1.1rem;
+  }
+  .tr-hero h1 { margin: 0 0 .6rem; font-size: 2.1rem; }
+  .tr-hero p { margin: 0 auto; max-width: 520px; opacity: .9; line-height: 1.6; }
+  .tr-hero .tr-hero-badge {
+    display: inline-flex; align-items: center; gap: .4rem;
+    font-family: var(--font-mono); font-size: .72rem; letter-spacing: .08em;
+    text-transform: uppercase; background: rgba(255,255,255,.14);
+    border: 1px solid rgba(255,255,255,.28);
+    padding: .35rem .85rem; border-radius: 999px; margin-top: 1.3rem;
+  }
+
+  .tr-section-title { text-align: center; font-size: 1.4rem; margin: 0 0 .35rem; }
+  .tr-section-sub { text-align: center; color: var(--moss-600); margin-bottom: 1.8rem; max-width: 480px; margin-left: auto; margin-right: auto; }
+
+  .tr-preview-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.3rem;
+    margin-bottom: 3rem;
+  }
+  .tr-preview-card {
+    background: #fff;
+    border: 1.5px solid var(--line);
+    border-radius: 14px;
+    padding: 1.4rem 1.2rem;
+    text-align: left;
+    position: relative;
+  }
+  .tr-preview-card .tr-num {
+    font-family: var(--font-mono);
+    font-size: .7rem;
+    color: var(--leaf-500);
+    letter-spacing: .06em;
+  }
+  .tr-preview-card .tr-emoji { font-size: 1.6rem; margin: .5rem 0 .6rem; }
+  .tr-preview-card h3 { margin: 0 0 .4rem; font-size: 1rem; }
+  .tr-preview-card p { margin: 0; font-size: .84rem; color: var(--moss-600); line-height: 1.5; }
+
+  /* A muted, non-functional mockup of the future teacher card — purely
+     illustrative, so it's visually greyed / labeled as a preview. */
+  .tr-mock-wrap { margin-bottom: 3rem; }
+  .tr-mock-card {
+    display: flex; align-items: center; gap: 1rem;
+    background: var(--paper-100);
+    border: 1.5px dashed var(--line);
+    border-radius: 14px;
+    padding: 1rem 1.2rem;
+    opacity: .8;
+  }
+  .tr-mock-avatar {
+    width: 46px; height: 46px; border-radius: 50%; flex-shrink: 0;
+    background: linear-gradient(135deg, var(--leaf-400), var(--moss-700));
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 700; font-family: var(--font-display);
+  }
+  .tr-mock-name { font-weight: 700; color: var(--moss-900); font-size: .95rem; }
+  .tr-mock-dept { font-size: .78rem; color: var(--moss-600); }
+  .tr-mock-stars { margin-left: auto; font-size: .9rem; color: var(--wheat-400); white-space: nowrap; }
+  .tr-mock-note {
+    text-align: center; font-family: var(--font-mono); font-size: .72rem;
+    color: var(--moss-600); margin-top: .7rem; letter-spacing: .03em;
+  }
+
+  @media (max-width: 900px) {
+    .tr-preview-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 560px) {
+    .tr-preview-grid { grid-template-columns: 1fr; }
+    .tr-hero h1 { font-size: 1.7rem; }
+    .tr-mock-stars { display: block; margin-left: 0; margin-top: .3rem; }
+  }
+</style>
+</head>
+<body>
+
+<div id="navbar-placeholder"></div>
+<script src="js/navbar-loader.js"></script>
+
+<section class="section-page">
+  <div class="container">
+    <div class="crumb"><a href="index.html">Home</a> / <a href="timeline.html">Academic Timeline</a> / Teacher Recommendation</div>
+
+    <div class="tr-hero">
+      <div class="tr-icon">🎓</div>
+      <h1>Teacher Recommendation</h1>
+      <p>Find faculty by department, see what other IUBAT Agriculture students say about their classes, and share your own recommendation to help juniors pick the right teacher.</p>
+      <span class="tr-hero-badge">🚧 Under construction</span>
+    </div>
+
+    <h2 class="tr-section-title">What's coming</h2>
+    <p class="tr-section-sub">Four simple pieces, built to sit right alongside the Academic Timeline you already use.</p>
+
+    <div class="tr-preview-grid">
+      <div class="tr-preview-card">
+        <div class="tr-num">01</div>
+        <div class="tr-emoji">🏛️</div>
+        <h3>Browse by Course</h3>
+        <p>Look up every teacher tied to a course code or semester, the same way you already search Hand Notes.</p>
+      </div>
+      <div class="tr-preview-card">
+        <div class="tr-num">02</div>
+        <div class="tr-emoji">⭐</div>
+        <h3>Student Ratings</h3>
+        <p>Quick star ratings on teaching style, grading fairness, and class engagement — left by verified students only.</p>
+      </div>
+      <div class="tr-preview-card">
+        <div class="tr-num">03</div>
+        <div class="tr-emoji">✍️</div>
+        <h3>Write a Recommendation</h3>
+        <p>Add a short, honest note about a teacher's course so future students know what to expect before registering.</p>
+      </div>
+      <div class="tr-preview-card">
+        <div class="tr-num">04</div>
+        <div class="tr-emoji">🔍</div>
+        <h3>Compare Faculty</h3>
+        <p>See two or more teachers side by side for the same course before choosing a section.</p>
+      </div>
+    </div>
+
+    <div class="tr-mock-wrap">
+      <h2 class="tr-section-title">A quick preview</h2>
+      <p class="tr-section-sub">Just a look at the card design — not live data yet.</p>
+      <div class="tr-mock-card">
+        <div class="tr-mock-avatar">T</div>
+        <div>
+          <div class="tr-mock-name">Faculty Name</div>
+          <div class="tr-mock-dept">Department of Agriculture · Course Code</div>
+        </div>
+        <div class="tr-mock-stars">★★★★☆</div>
+      </div>
+      <div class="tr-mock-note">Sample layout only — recommendations aren't open yet</div>
+    </div>
+
+    <div class="uc-panel">
+      <span class="badge">🚧 Under construction</span>
+      <h3>Teacher Recommendation is being built next</h3>
+      <p>This page is a preview of the design — submitting and browsing real recommendations isn't live yet. Check back soon, or use Ask For Help if you'd like to suggest what this section should include.</p>
+    </div>
+
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="container">
+    <div class="footer-grid">
+      <div>
+        <h4>🌱 Agri Core</h4>
+        <p style="opacity:.8;font-size:.88rem;max-width:320px;">Academic resource, knowledge &amp; timeline platform built for agriculture students in Bangladesh.</p>
+      </div>
+      <div>
+        <h4>Quick Links</h4>
+        <ul>
+          <li><a href="knowledge-hub.html">Knowledge Hub</a></li>
+          <li><a href="timeline.html">Academic Timeline</a></li>
+          <li><a href="resources.html">Resources</a></li>
+          <li><a href="calculators.html">Calculators</a></li>
+          <li><a href="blog.html">Blog</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Contact</h4>
+        <ul>
+          <li><a href="https://wa.me/8801753486065" target="_blank" rel="noopener">WhatsApp</a></li>
+          <li><a href="mailto:iubatagriculture@gmail.com">Email</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">© Agri Core — All Rights Reserved.</div>
+  </div>
+</footer>
+
+<script type="module" src="js/session.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

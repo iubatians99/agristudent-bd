@@ -11,9 +11,7 @@ import { computeCreditWallet } from "./credits.js";
 initEmailNotifications();
 
 const MAX_FILES = 20;
-// NOTE: "Max 10MB at once" is only a message shown on the upload forms —
-// there is deliberately NO client-side file-size check, so uploads of any size
-// are sent as-is.
+const MAX_SIZE = 50 * 1024 * 1024; // 50MB
 
 
 function detectFileType(file) {
@@ -453,6 +451,8 @@ if (uploadForm) {
     if (new Set(detectedTypes).size > 1) { showError("Please select files of a single type only — all PDF, all images, or all presentations, not a mix."); return; }
     currentFileType = detectedTypes[0];
 
+    const oversized = files.find(f => f.size > MAX_SIZE);
+    if (oversized) { showError(`"${oversized.name}" is over 50MB.`); return; }
 
     const finalCourseCode = matchedCourse ? matchedCourse.courseCode : rawCourseCode;
     const finalCourseName = matchedCourse ? matchedCourse.courseName : rawCourseName;
@@ -695,9 +695,21 @@ if (handNotesGate && handNotesContent) {
       const remaining = await hnGetRemainingCredits();
       if (remaining < 1) return false;
 
+      // BUG FIX — "can't re-unlock a file once it relocks": this used to
+      // check for ANY non-revoked file_unlock record ever made for this
+      // file, even one whose 36h window had already run out. That meant
+      // once a student unlocked a file, clicking "Unlock" again after it
+      // relocked found that old expired record, returned true (as if it
+      // were still open) and never created a new grant or spent a fresh
+      // credit — so the file stayed locked forever after its first use.
+      // Now we only skip re-unlocking when an existing grant for this file
+      // is STILL active; once it has expired, the flow below runs again
+      // exactly like the first time, spending a new credit for a new
+      // window.
       const items = window.__hnAccessItems || [];
-      const used = items.filter(i => i.kind === "file_unlock" && !i.revoked && i.targetFileId === fileId);
-      if (used.length) return true;
+      const stillActive = computeFileAccessStatus(items, fileId, Date.now(), category, window.__hnGlobalLockAt || 0)
+        .breakdown.some(b => b.kind === "file_unlock" && b.active && b.item?.targetFileId === fileId);
+      if (stillActive) return true;
 
       const created = await createFileCreditUnlock({
         email, name: session.fullName, targetFileId: fileId,
@@ -1514,6 +1526,11 @@ if (handNotesGate && handNotesContent) {
       }
       currentFileType = detectedTypes[0];
 
+      const oversized = files.find(f => f.size > MAX_SIZE);
+      if (oversized) { 
+        hnShowStatus(`"${oversized.name}" is over 50MB.`, true); 
+        return; 
+      }
 
       hnSubmit.disabled = true;
       hnSubmit.textContent = "Uploading…";
@@ -2414,6 +2431,8 @@ if (anotherUploadBtn && anotherUploadModal) {
     if (detectedTypes.some(t => t === "unknown")) { auShowStatus("One or more files have an unsupported type. Please use PDF, PPT/PPTX, JPG, PNG, GIF, or WebP.", true); return; }
     if (new Set(detectedTypes).size > 1) { auShowStatus("Please select files of a single type only — all PDF, all images, or all presentations, not a mix.", true); return; }
     auFileType = detectedTypes[0];
+    const oversized = files.find(f => f.size > MAX_SIZE);
+    if (oversized) { auShowStatus(`"${oversized.name}" is over 50MB.`, true); return; }
 
     auSubmit.disabled = true;
     auSubmit.textContent = "Uploading…";
