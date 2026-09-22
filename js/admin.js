@@ -2199,6 +2199,7 @@ async function bulkUploadFacultyRows() {
     // does the fetching on their servers, so this never touches the
     // browser and CORS doesn't come into it.
     let photoFailures = 0;
+    const failedPhotoNames = [];
     const rowsWithPhoto = rowsToUpload.filter(r => r.photoUrl);
     for (let i = 0; i < rowsWithPhoto.length; i++) {
       const r = rowsWithPhoto[i];
@@ -2206,12 +2207,20 @@ async function bulkUploadFacultyRows() {
       try {
         r.photoUrl = await uploadRemoteUrlToCloudinary(r.photoUrl);
       } catch (fetchErr) {
-        // Cloudinary couldn't pull it in (dead link, hotlink protection,
-        // a Drive file that isn't actually shared publicly, etc). Keep the
-        // original link rather than blocking the whole row — it may still
-        // render for some viewers, and the admin can fix it via Edit.
-        console.warn("[AgriAdmin] faculty bulk photo fetch failed, keeping original link:", r.name, fetchErr);
+        // Cloudinary couldn't pull it in (dead link, hotlink protection, a
+        // Drive file that isn't actually shared publicly, etc). We used to
+        // keep the original pasted link here, but that's worse than no
+        // photo at all: teacher-recommendation.html's CSP only allows
+        // <img> from res.cloudinary.com and lh3.googleusercontent.com, so
+        // an un-rehosted link (a raw Drive URL, a random website, etc.) is
+        // silently blocked by the browser — the faculty card just shows no
+        // photo, with no visible error. Drop it instead so the initials
+        // placeholder renders, and tell the admin by name which photos
+        // need fixing.
+        console.warn("[AgriAdmin] faculty bulk photo fetch failed, dropping link:", r.name, fetchErr);
+        r.photoUrl = "";
         photoFailures++;
+        failedPhotoNames.push(r.name);
       }
     }
 
@@ -2240,8 +2249,8 @@ async function bulkUploadFacultyRows() {
       uploaded += chunk.length;
       status.textContent = `Uploaded ${uploaded}/${rowsToUpload.length}…`;
     }
-    status.style.color = "var(--leaf-600,#2f6b46)";
-    status.textContent = `✅ ${uploaded} faculty profile(s) uploaded and approved.${skipped ? ` ${skipped} duplicate row(s) skipped.` : ""}${photoFailures ? ` ⚠️ ${photoFailures} photo(s) couldn't be fetched and kept their original link — check those on Edit.` : ""}`;
+    status.style.color = photoFailures ? "var(--wheat-600,#8a651e)" : "var(--leaf-600,#2f6b46)";
+    status.textContent = `✅ ${uploaded} faculty profile(s) uploaded and approved.${skipped ? ` ${skipped} duplicate row(s) skipped.` : ""}${photoFailures ? ` ⚠️ ${photoFailures} photo(s) couldn't be fetched, so those profiles were saved with no photo: ${failedPhotoNames.join(", ")}. Re-check the image URL (for Drive links: Share → "Anyone with the link" → Viewer) and add the photo via Edit.` : ""}`;
     loadFaculty();
   } catch (err) {
     console.error("[AgriAdmin] faculty bulk upload failed:", err);
