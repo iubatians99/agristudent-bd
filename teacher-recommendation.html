@@ -64,6 +64,31 @@
     border: 1px solid rgba(255,255,255,.28);
     padding: .35rem .85rem; border-radius: 999px; margin-top: 1.1rem;
   }
+  .tr-hero-content { position: relative; z-index: 2; }
+  .tr-photo-collage {
+    position: absolute; inset: 0; pointer-events: none; opacity: .38;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 1.2rem 1.4rem;
+  }
+  .tr-photo-side { display: flex; flex-direction: column; gap: .65rem; }
+  .tr-photo-tile {
+    width: 74px; height: 74px; border-radius: 18px; overflow: hidden;
+    border: 2px solid rgba(255,255,255,.38); background: rgba(255,255,255,.12);
+    box-shadow: 0 10px 26px rgba(0,0,0,.16); transform: rotate(-6deg);
+  }
+  .tr-photo-side:last-child .tr-photo-tile { transform: rotate(6deg); }
+  .tr-photo-tile img { width:100%; height:100%; object-fit:cover; display:block; }
+  .tr-photo-tile-fallback {
+    width:100%; height:100%; display:flex; align-items:center; justify-content:center;
+    font-family:var(--font-display); font-weight:700; font-size:1.05rem; color:#fff;
+    background:rgba(255,255,255,.14);
+  }
+  .tr-add-row { display:flex; justify-content:center; margin: -1rem 0 1.8rem; position:relative; z-index:2; }
+  .tr-add-btn {
+    background:#fff; color:var(--moss-700); border:1px solid var(--line); border-radius:999px;
+    padding:.65rem 1rem; font-weight:700; cursor:pointer; box-shadow:0 8px 22px rgba(31,46,34,.08);
+  }
+  .tr-add-btn:hover { border-color:var(--leaf-400); transform:translateY(-1px); }
 
   /* Search */
   .tr-search-wrap { max-width: 560px; margin: 0 auto 2.2rem; }
@@ -79,6 +104,14 @@
   }
   .tr-search-hint { text-align: center; font-size: .78rem; color: var(--moss-600); margin-top: .55rem; }
   .tr-search-result-label { text-align: center; font-weight: 700; font-size: .92rem; color: var(--moss-700); margin: 1.4rem 0 1rem; }
+  .tr-search-meta { display:flex; justify-content:center; gap:.5rem; flex-wrap:wrap; margin:-.8rem 0 1rem; }
+  .tr-search-chip { font-size:.72rem; color:var(--moss-700); background:var(--paper-100); border:1px solid var(--line); border-radius:999px; padding:.3rem .65rem; }
+  .fp-filter-row { display:flex; gap:.55rem; align-items:center; margin:1.15rem 0 .6rem; }
+  .fp-filter-row label { font-size:.78rem; color:var(--moss-600); font-weight:700; white-space:nowrap; }
+  .fp-filter-row select { flex:1; min-width:0; padding:.55rem .7rem; border:1px solid var(--line); border-radius:10px; background:#fff; color:var(--moss-900); }
+  .fp-filter-note { font-size:.72rem; color:var(--moss-500); margin:.35rem 0 0; }
+  .add-faculty-form .form-field { margin-bottom:.85rem; }
+  .add-faculty-form input, .add-faculty-form textarea { width:100%; }
 
   /* Faculty grid */
   .fc-grid {
@@ -155,10 +188,15 @@
 
   @media (max-width: 560px) {
     .fc-grid { grid-template-columns: repeat(2, 1fr); }
+    .tr-hero { padding:2.2rem 1rem; }
     .tr-hero h1 { font-size: 1.55rem; }
     .tr-search-form { flex-direction: column; }
     .tr-search-form button { padding: .8rem; }
     .fp-stat-row { flex-wrap: wrap; }
+    .tr-photo-collage { padding:.8rem; opacity:.25; }
+    .tr-photo-tile { width:52px; height:52px; border-radius:14px; }
+    .tr-photo-side { gap:.4rem; }
+    .fp-filter-row { align-items:stretch; flex-direction:column; }
   }
 </style>
 </head>
@@ -172,25 +210,52 @@
     <div class="crumb"><a href="index.html">Home</a> / Teacher Recommendation</div>
 
     <div class="tr-hero">
-      <div class="tr-icon">🎓</div>
-      <h1>Teacher Recommendation</h1>
-      <p>Find faculty by course or name, see what other IUBAT Agriculture students recommend, and share your own positive experience to help juniors pick the right teacher.</p>
-      <span class="tr-hero-badge">🌱 Positive recommendations only</span>
+      <div class="tr-photo-collage" id="faculty-photo-collage" aria-hidden="true"></div>
+      <div class="tr-hero-content">
+        <div class="tr-icon">🎓</div>
+        <h1>Teacher Recommendation</h1>
+        <p>Find faculty by course or name, see what other IUBAT Agriculture students recommend, and share your own positive experience to help juniors pick the right teacher.</p>
+        <span class="tr-hero-badge">🌱 Positive recommendations only</span>
+      </div>
+    </div>
+
+    <div class="tr-add-row">
+      <button type="button" class="tr-add-btn" id="add-faculty-btn">➕ Add a New Faculty</button>
     </div>
 
     <div class="tr-search-wrap">
       <form id="faculty-search-form" class="tr-search-form">
-        <input type="text" id="faculty-search-input" placeholder="Search by course code (e.g. AGR101) or faculty name…" autocomplete="off">
+        <input type="text" id="faculty-search-input" placeholder="Search anything: course code, course name, faculty name, department…" autocomplete="off">
         <button type="submit">🔍 Search</button>
       </form>
-      <p class="tr-search-hint">Tip: search a course code to see every faculty who teaches it, ranked by student recommendations.</p>
+      <p class="tr-search-hint">Tip: course-code searches are ranked by recommendation rate, then rating and review count. Other text searches match faculty and course details.</p>
     </div>
 
     <p id="faculty-search-result-label" class="tr-search-result-label hidden"></p>
+    <div id="faculty-search-meta" class="tr-search-meta hidden"></div>
     <div id="faculty-grid" class="fc-grid"></div>
     <p id="faculty-grid-status" class="hidden">Loading faculty…</p>
   </div>
 </section>
+
+<!-- ADD FACULTY MODAL -->
+<div id="add-faculty-overlay" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:500px;">
+    <button type="button" class="modal-close" id="add-faculty-close">✕</button>
+    <div class="modal-body">
+      <h3>➕ Add a New Faculty</h3>
+      <p class="modal-desc" style="max-height:none;">Know a faculty member who is missing? Submit the details below. New entries are checked by admin before they appear in the public directory.</p>
+      <form id="add-faculty-form" class="add-faculty-form">
+        <div class="form-field"><label for="new-faculty-name">Faculty name</label><input id="new-faculty-name" required maxlength="160" placeholder="e.g. Dr. Jane Rahman"></div>
+        <div class="form-field"><label for="new-faculty-department">Department</label><input id="new-faculty-department" required maxlength="160" placeholder="e.g. Department of Agricultural Sciences"></div>
+        <div class="form-field"><label for="new-faculty-designation">Designation <span style="font-weight:400;color:var(--moss-500);">(optional)</span></label><input id="new-faculty-designation" maxlength="120" placeholder="e.g. Assistant Professor"></div>
+        <div class="form-field"><label for="new-faculty-courses">Course code(s)</label><input id="new-faculty-courses" required maxlength="240" placeholder="e.g. AGR371, AGR381"></div>
+        <p id="add-faculty-status" style="font-size:.84rem;min-height:1.2em;"></p>
+        <button type="submit" class="btn-primary" id="add-faculty-submit" style="width:100%;">Submit Faculty</button>
+      </form>
+    </div>
+  </div>
+</div>
 
 <!-- FACULTY PROFILE MODAL -->
 <div id="faculty-profile-overlay" class="modal-overlay hidden">

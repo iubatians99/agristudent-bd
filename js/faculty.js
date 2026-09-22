@@ -23,7 +23,7 @@
 // ============================================
 import { db } from "./firebase-config.js";
 import {
-  collection, getDocs, getDoc, doc, setDoc, updateDoc, query, where, orderBy, increment, serverTimestamp
+  collection, getDocs, getDoc, doc, setDoc, updateDoc, addDoc, query, where, orderBy, increment, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getSession } from "./session.js";
 
@@ -90,7 +90,9 @@ function sanitizeComment(raw) {
 // ============================================
 async function fetchAllFaculty() {
   const snap = await getDocs(collection(db, "faculty"));
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  return snap.docs
+    .map(d => ({ id: d.id, ...d.data() }))
+    .filter(f => f.status !== "pending" && f.status !== "rejected");
 }
 
 async function fetchApprovedReviewsForFaculty(facultyId) {
@@ -137,8 +139,16 @@ async function init() {
   const searchInput = document.getElementById("faculty-search-input");
   const searchForm = document.getElementById("faculty-search-form");
   const searchResultLabel = document.getElementById("faculty-search-result-label");
+  const searchMeta = document.getElementById("faculty-search-meta");
+  const addBtn = document.getElementById("add-faculty-btn");
+  const addOverlay = document.getElementById("add-faculty-overlay");
+  const addForm = document.getElementById("add-faculty-form");
+  const addClose = document.getElementById("add-faculty-close");
+  const addStatus = document.getElementById("add-faculty-status");
+  const addSubmit = document.getElementById("add-faculty-submit");
+  const collage = document.getElementById("faculty-photo-collage");
 
-  if (!grid) return; // page not present
+  if (!grid) return;
 
   let allFaculty = [];
   let allCourses = new Map(); // courseCode -> courseName
@@ -149,12 +159,61 @@ async function init() {
       getDocs(collection(db, "courses"))
     ]);
     allFaculty = facultyList;
-    courseSnap.forEach(d => allCourses.set(d.id, d.data().courseName || d.id));
+    courseSnap.forEach(d => {
+      const data = d.data();
+      const code = String(data.courseCode || d.id).trim().toUpperCase().replace(/\s+/g, "");
+      allCourses.set(code, data.courseName || d.id);
+    });
   } catch (err) {
     console.error("[Faculty] load failed:", err);
     gridStatus.textContent = "Couldn't load faculty right now. Please refresh.";
     gridStatus.classList.remove("hidden");
     return;
+  }
+
+  function normalizeSearch(value) {
+    return String(value || "").toLowerCase().replace(/[\s\-_./]+/g, "").trim();
+  }
+
+  function courseCodesForFaculty(f) {
+    return (f.courseCodes || []).map(c => String(c || "").trim().toUpperCase().replace(/\s+/g, ""));
+  }
+
+  function facultySearchText(f) {
+    const codes = courseCodesForFaculty(f);
+    const names = codes.map(c => allCourses.get(c) || "");
+    return [f.name, f.department, f.designation, codes.join(" "), names.join(" ")].filter(Boolean).join(" ").toLowerCase();
+  }
+
+  function recommendationSort(a, b) {
+    const sa = facultyScore(a), sb = facultyScore(b);
+    // Course searches are intentionally ranked by recommendation quality:
+    // recommendation rate first, then average rating, then review volume.
+    const ap = sa.recommendPct === null ? -1 : sa.recommendPct;
+    const bp = sb.recommendPct === null ? -1 : sb.recommendPct;
+    if (bp !== ap) return bp - ap;
+    if (sb.avgRating !== sa.avgRating) return sb.avgRating - sa.avgRating;
+    if (sb.reviewCount !== sa.reviewCount) return sb.reviewCount - sa.reviewCount;
+    return String(a.name || "").localeCompare(String(b.name || ""));
+  }
+
+  function generalSort(a, b) {
+    const sa = facultyScore(a), sb = facultyScore(b);
+    if (sb.reviewCount !== sa.reviewCount) return sb.reviewCount - sa.reviewCount;
+    if (sb.avgRating !== sa.avgRating) return sb.avgRating - sa.avgRating;
+    return String(a.name || "").localeCompare(String(b.name || ""));
+  }
+
+  function renderHeroCollage(list) {
+    if (!collage) return;
+    const withPhotos = list.filter(f => f.photoUrl).slice(0, 6);
+    const fallback = list.slice(0, 6);
+    const left = (withPhotos.length ? withPhotos.slice(0, 3) : fallback.slice(0, 3));
+    const right = (withPhotos.length ? withPhotos.slice(3, 6) : fallback.slice(3, 6));
+    const tile = f => f.photoUrl
+      ? `<div class="tr-photo-tile"><img src="${esc(f.photoUrl)}" alt=""></div>`
+      : `<div class="tr-photo-tile"><div class="tr-photo-tile-fallback">${esc(initials(f.name))}</div></div>`;
+    collage.innerHTML = `<div class="tr-photo-side">${left.map(tile).join("")}</div><div class="tr-photo-side">${right.map(tile).join("")}</div>`;
   }
 
   function renderGrid(list, emptyMsg) {
@@ -183,40 +242,124 @@ async function init() {
     });
   }
 
-  function sortedByScore(list) {
-    return [...list].sort((a, b) => {
-      const sa = facultyScore(a), sb = facultyScore(b);
-      if (sb.reviewCount !== sa.reviewCount) return sb.reviewCount - sa.reviewCount;
-      return sb.avgRating - sa.avgRating;
-    });
+  function showSearch(list, raw, mode, matchedCourses = []) {
+    searchResultLabel.textContent = mode === "course"
+      ? `Faculty matching ${matchedCourses.length === 1 ? matchedCourses[0].code : "course search"}`
+      : `Results for "${raw}"`;
+    searchResultLabel.classList.remove("hidden");
+    if (searchMeta) {
+      if (mode === "course") {
+        const labels = matchedCourses.slice(0, 4).map(c => `${c.code}${c.name ? " — " + c.name : ""}`);
+        searchMeta.innerHTML = `<span class="tr-search-chip">🏆 Ranked by recommendation rate → rating → review count</span>${labels.map(x => `<span class="tr-search-chip">${esc(x)}</span>`).join("")}`;
+      } else {
+        searchMeta.innerHTML = `<span class="tr-search-chip">🔎 Matches faculty and course details</span>`;
+      }
+      searchMeta.classList.remove("hidden");
+    }
+    renderGrid(list, `No faculty matched "${raw}".`);
   }
 
-  renderGrid(sortedByScore(allFaculty));
+  function runSearch(rawValue) {
+    const raw = String(rawValue || "").trim();
+    if (!raw) {
+      searchResultLabel.classList.add("hidden");
+      searchMeta?.classList.add("hidden");
+      renderGrid([...allFaculty].sort(generalSort));
+      return;
+    }
+
+    const needle = normalizeSearch(raw);
+    const matchedCourses = [];
+    for (const [code, name] of allCourses.entries()) {
+      const codeMatch = normalizeSearch(code).includes(needle);
+      const nameMatch = normalizeSearch(name).includes(needle);
+      if (codeMatch || nameMatch) matchedCourses.push({ code, name, codeMatch });
+    }
+
+    // Also allow partial course-code searches even when a course document
+    // hasn't been created yet, using the faculty's linked courseCodes.
+    const linkedCodes = new Set(allFaculty.flatMap(courseCodesForFaculty));
+    linkedCodes.forEach(code => {
+      if (normalizeSearch(code).includes(needle) && !matchedCourses.some(c => c.code === code)) {
+        matchedCourses.push({ code, name: allCourses.get(code) || "", codeMatch: true });
+      }
+    });
+
+    if (matchedCourses.length) {
+      const matchedCodeSet = new Set(matchedCourses.map(c => c.code));
+      const list = allFaculty.filter(f => courseCodesForFaculty(f).some(c => matchedCodeSet.has(c))).sort(recommendationSort);
+      showSearch(list, raw, "course", matchedCourses);
+      return;
+    }
+
+    const list = allFaculty.filter(f => normalizeSearch(facultySearchText(f)).includes(needle)).sort(generalSort);
+    showSearch(list, raw, "general");
+  }
+
+  renderHeroCollage(allFaculty);
+  renderGrid([...allFaculty].sort(generalSort));
 
   searchForm?.addEventListener("submit", (e) => {
     e.preventDefault();
-    const raw = searchInput.value.trim();
-    if (!raw) {
-      searchResultLabel.classList.add("hidden");
-      renderGrid(sortedByScore(allFaculty));
+    runSearch(searchInput?.value || "");
+  });
+  searchInput?.addEventListener("input", () => runSearch(searchInput.value));
+
+  function closeAddFaculty() {
+    addOverlay?.classList.add("hidden");
+    document.body.style.overflow = "";
+    if (addStatus) addStatus.textContent = "";
+  }
+
+  addBtn?.addEventListener("click", () => {
+    addOverlay?.classList.remove("hidden");
+    document.body.style.overflow = "hidden";
+    document.getElementById("new-faculty-name")?.focus();
+  });
+  addClose?.addEventListener("click", closeAddFaculty);
+  addOverlay?.addEventListener("click", e => { if (e.target === addOverlay) closeAddFaculty(); });
+
+  addForm?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const name = document.getElementById("new-faculty-name")?.value.trim() || "";
+    const department = document.getElementById("new-faculty-department")?.value.trim() || "";
+    const designation = document.getElementById("new-faculty-designation")?.value.trim() || "";
+    const courseCodes = [...new Set((document.getElementById("new-faculty-courses")?.value || "")
+      .split(/[,,\s]+/).map(c => c.trim().toUpperCase()).filter(Boolean))];
+
+    if (!name || !department || !courseCodes.length) {
+      addStatus.textContent = "Please enter the faculty name, department, and at least one course code.";
+      addStatus.style.color = "var(--terracotta-500)";
       return;
     }
-    const codeGuess = raw.toUpperCase().replace(/\s+/g, "");
-    // Course-code mode: matches a real course code (with or without the
-    // space students often type, e.g. "AGR 101" -> "AGR101").
-    if (allCourses.has(codeGuess)) {
-      const list = allFaculty.filter(f => (f.courseCodes || []).includes(codeGuess));
-      searchResultLabel.textContent = `Faculty teaching ${codeGuess} — ${esc(allCourses.get(codeGuess))}`;
-      searchResultLabel.classList.remove("hidden");
-      renderGrid(sortedByScore(list), `No faculty linked to ${codeGuess} yet.`);
+
+    const duplicate = allFaculty.some(f => normalizeSearch(f.name) === normalizeSearch(name));
+    if (duplicate) {
+      addStatus.textContent = "This faculty member is already in the directory.";
+      addStatus.style.color = "var(--terracotta-500)";
       return;
     }
-    // Faculty-name mode: simple case-insensitive contains match.
-    const needle = raw.toLowerCase();
-    const list = allFaculty.filter(f => (f.name || "").toLowerCase().includes(needle));
-    searchResultLabel.textContent = `Results for "${raw}"`;
-    searchResultLabel.classList.remove("hidden");
-    renderGrid(sortedByScore(list), `No faculty matched "${raw}". Try a course code like AGR101, or a faculty name.`);
+
+    addSubmit.disabled = true;
+    addStatus.textContent = "Submitting…";
+    addStatus.style.color = "var(--moss-600)";
+    try {
+      await addDoc(collection(db, "faculty"), {
+        name, department, designation, courseCodes, status: "pending",
+        photoUrl: "",
+        stats: { reviewCount: 0, recommendCount: 0, ratingSum: 0, ratingCount: 0, tagCounts: {} },
+        createdAt: serverTimestamp()
+      });
+      addStatus.textContent = "✅ Submitted successfully. It will appear after admin review.";
+      addForm.reset();
+      setTimeout(closeAddFaculty, 1700);
+    } catch (err) {
+      console.error("[Faculty] add faculty failed:", err);
+      addStatus.textContent = "Could not submit right now. Please try again.";
+      addStatus.style.color = "var(--terracotta-500)";
+    } finally {
+      addSubmit.disabled = false;
+    }
   });
 }
 
@@ -240,29 +383,31 @@ async function openFacultyProfile(facultyId, allFaculty, allCourses) {
     console.error("[Faculty] profile load failed:", err);
   }
 
-  const { avgRating, ratingCount, recommendPct, reviewCount } = facultyScore(faculty);
   const tagCounts = (faculty.stats && faculty.stats.tagCounts) || {};
   const topTags = Object.entries(tagCounts)
     .filter(([, n]) => n > 0)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 6);
 
-  const courseChips = (faculty.courseCodes || [])
+  const courseCodes = (faculty.courseCodes || []).map(c => String(c).trim().toUpperCase().replace(/\s+/g, ""));
+  const courseChips = courseCodes
     .map(code => `<span class="fp-chip">${esc(code)}${allCourses.has(code) ? " — " + esc(allCourses.get(code)) : ""}</span>`)
     .join("") || `<span class="fp-chip fp-chip-muted">No courses linked yet</span>`;
 
-  const commentsHtml = reviews
-    .filter(r => r.comment)
-    .slice(0, 20)
-    .map(r => `
-      <div class="fp-comment">
-        <div class="fp-comment-head">
-          <span class="fp-comment-author">${r.isAnonymous ? "🙈 Anonymous student" : "🎓 " + esc(r.reviewerName || "A student")}</span>
-          <span class="fp-comment-stars">${starString(r.rating || 0)}</span>
-        </div>
-        <p class="fp-comment-text">${esc(r.comment)}</p>
-      </div>
-    `).join("") || `<p style="color:var(--moss-600);font-size:.88rem;">No written recommendations yet — be the first!</p>`;
+  const statsFor = (list) => {
+    const reviewCount = list.length;
+    const ratingCount = list.filter(r => Number.isFinite(Number(r.rating)) && Number(r.rating) > 0).length;
+    const ratingSum = list.reduce((sum, r) => sum + (Number(r.rating) || 0), 0);
+    const recommendCount = list.filter(r => r.recommended === true).length;
+    return {
+      reviewCount,
+      ratingCount,
+      avgRating: ratingCount ? ratingSum / ratingCount : 0,
+      recommendPct: reviewCount ? Math.round((recommendCount / reviewCount) * 100) : null
+    };
+  };
+
+  const courseOptions = courseCodes.map(code => `<option value="${esc(code)}">${esc(code)}${allCourses.has(code) ? " — " + esc(allCourses.get(code)) : ""}</option>`).join("");
 
   body.innerHTML = `
     <div class="fp-header">
@@ -273,14 +418,18 @@ async function openFacultyProfile(facultyId, allFaculty, allCourses) {
       </div>
     </div>
 
-    <div class="fp-stat-row">
-      <div class="fp-stat"><div class="fp-stat-num">${ratingCount ? avgRating.toFixed(1) : "—"}</div><div class="fp-stat-label">${ratingCount ? starString(avgRating) : "Not yet rated"}</div></div>
-      <div class="fp-stat"><div class="fp-stat-num">${recommendPct !== null ? recommendPct + "%" : "—"}</div><div class="fp-stat-label">Recommend</div></div>
-      <div class="fp-stat"><div class="fp-stat-num">${reviewCount}</div><div class="fp-stat-label">Review${reviewCount === 1 ? "" : "s"}</div></div>
-    </div>
+    <div class="fp-stat-row" id="fp-stat-row"></div>
 
     <h4 class="fp-subhead">Courses</h4>
     <div class="fp-chip-row">${courseChips}</div>
+
+    ${courseOptions ? `
+      <div class="fp-filter-row">
+        <label for="fp-course-filter">Filter reviews by course</label>
+        <select id="fp-course-filter"><option value="__all__">All courses</option>${courseOptions}</select>
+      </div>
+      <p class="fp-filter-note">Course-specific rating, recommendation rate, and reviews update with the selected course.</p>
+    ` : ""}
 
     ${topTags.length ? `
       <h4 class="fp-subhead">Most mentioned</h4>
@@ -288,11 +437,36 @@ async function openFacultyProfile(facultyId, allFaculty, allCourses) {
     ` : ""}
 
     <h4 class="fp-subhead">What students say</h4>
-    <div class="fp-comments">${commentsHtml}</div>
-
+    <div class="fp-comments" id="fp-comments"></div>
     <button type="button" class="btn-primary" id="fp-write-review-btn" style="width:100%;margin-top:1.4rem;">✍️ Write a Recommendation</button>
   `;
 
+  const statRow = body.querySelector("#fp-stat-row");
+  const commentsEl = body.querySelector("#fp-comments");
+
+  function renderCourseReviews(filter) {
+    const selected = filter === "__all__" ? reviews : reviews.filter(r => String(r.courseCode || "").toUpperCase().replace(/\s+/g, "") === filter);
+    const stats = statsFor(selected);
+    statRow.innerHTML = `
+      <div class="fp-stat"><div class="fp-stat-num">${stats.ratingCount ? stats.avgRating.toFixed(1) : "—"}</div><div class="fp-stat-label">${stats.ratingCount ? starString(stats.avgRating) : "Not yet rated"}</div></div>
+      <div class="fp-stat"><div class="fp-stat-num">${stats.recommendPct !== null ? stats.recommendPct + "%" : "—"}</div><div class="fp-stat-label">Recommend</div></div>
+      <div class="fp-stat"><div class="fp-stat-num">${stats.reviewCount}</div><div class="fp-stat-label">Review${stats.reviewCount === 1 ? "" : "s"}</div></div>`;
+
+    const comments = selected.filter(r => r.comment).slice(0, 20);
+    commentsEl.innerHTML = comments.map(r => `
+      <div class="fp-comment">
+        <div class="fp-comment-head">
+          <span class="fp-comment-author">${r.isAnonymous ? "🙈 Anonymous student" : "🎓 " + esc(r.reviewerName || "A student")}</span>
+          <span class="fp-comment-stars">${starString(r.rating || 0)}</span>
+        </div>
+        ${r.courseCode ? `<div style="font-size:.7rem;color:var(--moss-500);margin-bottom:.25rem;">${esc(r.courseCode)}${allCourses.has(String(r.courseCode).toUpperCase().replace(/\s+/g, "")) ? " · " + esc(allCourses.get(String(r.courseCode).toUpperCase().replace(/\s+/g, ""))) : ""}</div>` : ""}
+        <p class="fp-comment-text">${esc(r.comment)}</p>
+      </div>
+    `).join("") || `<p style="color:var(--moss-600);font-size:.88rem;">${filter === "__all__" ? "No written recommendations yet — be the first!" : "No written recommendations for this course yet."}</p>`;
+  }
+
+  renderCourseReviews("__all__");
+  body.querySelector("#fp-course-filter")?.addEventListener("change", e => renderCourseReviews(e.target.value));
   document.getElementById("fp-write-review-btn").addEventListener("click", () => {
     openReviewModal(faculty, allCourses);
   });

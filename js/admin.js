@@ -2022,22 +2022,40 @@ async function loadFaculty() {
       const stats = f.stats || {};
       const ratingCount = stats.ratingCount || 0;
       const avgRating = ratingCount > 0 ? (stats.ratingSum / ratingCount).toFixed(1) : "—";
+      const isPending = f.status === "pending";
       const row = document.createElement("div");
       row.className = "resource-row";
       row.innerHTML = `
-        <div style="display:flex;align-items:center;gap:.8rem;">
-          ${f.photoUrl ? `<img src="${esc(f.photoUrl)}" alt="" style="width:44px;height:44px;border-radius:50%;object-fit:cover;">` : `<div style="width:44px;height:44px;border-radius:50%;background:var(--leaf-400);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;">${esc((f.name||"?").slice(0,1).toUpperCase())}</div>`}
-          <div>
-            <strong>${esc(f.name)}</strong>
+        <div style="display:flex;align-items:center;gap:.8rem;min-width:0;">
+          ${f.photoUrl ? `<img src="${esc(f.photoUrl)}" alt="" style="width:44px;height:44px;border-radius:50%;object-fit:cover;flex-shrink:0;">` : `<div style="width:44px;height:44px;border-radius:50%;background:var(--leaf-400);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;">${esc((f.name||"?").slice(0,1).toUpperCase())}</div>`}
+          <div style="min-width:0;">
+            <strong>${esc(f.name)}</strong> ${isPending ? `<span style="display:inline-block;margin-left:.35rem;padding:.15rem .45rem;border-radius:999px;background:rgba(212,162,76,.16);color:var(--wheat-500,var(--wheat-400));font-size:.68rem;font-weight:700;">PENDING</span>` : ""}
             <div style="font-size:.8rem;color:var(--moss-600);">${esc(f.department||"")}${f.designation ? " · " + esc(f.designation) : ""}</div>
             <div style="font-size:.76rem;color:var(--moss-500);margin-top:.15rem;">${(f.courseCodes||[]).map(esc).join(", ") || "No courses linked"} · ⭐ ${avgRating} (${stats.reviewCount||0} reviews) · 👍 ${stats.recommendCount||0} recommend</div>
           </div>
         </div>
-        <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap;justify-content:flex-end;">
+          ${isPending ? `<button type="button" class="faculty-approve-btn" data-id="${d.id}" style="background:var(--leaf-500);color:#fff;border:none;padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">✅ Approve</button>` : ""}
           <button type="button" class="faculty-edit-btn" data-id="${d.id}" style="background:none;border:1px solid var(--line);padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">✏️ Edit</button>
           <button type="button" class="btn-danger faculty-delete-btn" data-id="${d.id}" style="padding:.35rem .7rem;font-size:.78rem;">🗑 Delete</button>
         </div>`;
       facultyList.appendChild(row);
+    });
+
+    facultyList.querySelectorAll(".faculty-approve-btn").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        btn.textContent = "Approving…";
+        try {
+          await updateDoc(doc(db, "faculty", btn.dataset.id), { status: "approved" });
+          loadFaculty();
+        } catch (err) {
+          console.error(err);
+          alert("Could not approve faculty: " + err.message);
+          btn.disabled = false;
+          btn.textContent = "✅ Approve";
+        }
+      });
     });
 
     facultyList.querySelectorAll(".faculty-edit-btn").forEach(btn => {
@@ -2115,7 +2133,7 @@ function wireFacultyForm() {
         await updateDoc(doc(db, "faculty", editingId), { name, department, designation, courseCodes, photoUrl });
       } else {
         await addDoc(collection(db, "faculty"), {
-          name, department, designation, courseCodes, photoUrl,
+          name, department, designation, courseCodes, photoUrl, status: "approved",
           stats: { reviewCount: 0, recommendCount: 0, ratingSum: 0, ratingCount: 0, tagCounts: {} },
           createdAt: serverTimestamp()
         });

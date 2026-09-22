@@ -188,10 +188,28 @@ service cloud.firestore {
     // faculty doc or review at any time.
     match /faculty/{id} {
       allow read: if true;
-      allow create: if isAdmin() &&
-        request.resource.data.keys().hasAll(['name', 'department', 'courseCodes']) &&
-        request.resource.data.name is string && request.resource.data.name.size() > 0 &&
-        request.resource.data.courseCodes is list;
+
+      // Admins can add a faculty profile directly. Students/visitors may
+      // suggest a new faculty member, but their submission starts as
+      // `pending` so it cannot appear in the public directory until an
+      // admin approves it. No student PII is stored in the faculty doc.
+      allow create: if
+        (isAdmin() &&
+          request.resource.data.keys().hasAll(['name', 'department', 'courseCodes']) &&
+          request.resource.data.name is string && request.resource.data.name.size() > 0 &&
+          request.resource.data.department is string && request.resource.data.department.size() > 0 &&
+          request.resource.data.courseCodes is list && request.resource.data.courseCodes.size() > 0)
+        ||
+        (!isAdmin() &&
+          request.resource.data.keys().hasAll(['name', 'department', 'courseCodes', 'status']) &&
+          request.resource.data.name is string && request.resource.data.name.size() > 0 &&
+          request.resource.data.name.size() <= 160 &&
+          request.resource.data.department is string && request.resource.data.department.size() > 0 &&
+          request.resource.data.department.size() <= 160 &&
+          request.resource.data.courseCodes is list && request.resource.data.courseCodes.size() > 0 &&
+          request.resource.data.courseCodes.size() <= 20 &&
+          request.resource.data.status == 'pending');
+
       allow update: if isAdmin() || (
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stats']) &&
         request.resource.data.name == resource.data.name &&

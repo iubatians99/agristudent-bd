@@ -14,8 +14,10 @@ if (form) {
   const resultsBox = document.createElement("div");
   resultsBox.id = "search-results";
   resultsBox.className = "search-results hidden";
-  form.appendChild(resultsBox);
-  form.style.position = "relative";
+  // Render the dropdown at document/body level so the sticky navbar cannot
+  // paint over it. Keeping it outside the hero also avoids introducing a
+  // stacking context that could interfere with the mobile navigation drawer.
+  document.body.appendChild(resultsBox);
 
   function esc(str) {
     return String(str ?? "")
@@ -56,6 +58,14 @@ if (form) {
     return (text || "").toLowerCase().includes(needle);
   }
 
+  function positionResultsBox() {
+    const rect = form.getBoundingClientRect();
+    resultsBox.style.position = "fixed";
+    resultsBox.style.top = `${Math.round(rect.bottom + 10)}px`;
+    resultsBox.style.left = `${Math.round(rect.left)}px`;
+    resultsBox.style.width = `${Math.round(rect.width)}px`;
+  }
+
   function renderResults(data, q) {
     const needle = q.toLowerCase();
     const termHits = data.terms.filter(t => matches(t.name, needle)).slice(0, 5);
@@ -73,6 +83,7 @@ if (form) {
 
     if (total === 0) {
       resultsBox.innerHTML = `<div class="search-empty">No matches for "${esc(q)}" — try a different term or course code.</div>`;
+      positionResultsBox();
       resultsBox.classList.remove("hidden");
       return;
     }
@@ -99,6 +110,7 @@ if (form) {
     }
 
     resultsBox.innerHTML = html;
+    positionResultsBox();
     resultsBox.classList.remove("hidden");
   }
 
@@ -109,6 +121,7 @@ if (form) {
     debounceTimer = setTimeout(async () => {
       if (!q) { resultsBox.classList.add("hidden"); return; }
       resultsBox.innerHTML = `<div class="search-empty">Searching…</div>`;
+      positionResultsBox();
       resultsBox.classList.remove("hidden");
       try {
         const data = await loadData();
@@ -126,7 +139,13 @@ if (form) {
   });
 
   document.addEventListener("click", (e) => {
-    if (!form.contains(e.target)) resultsBox.classList.add("hidden");
+    if (!form.contains(e.target) && !resultsBox.contains(e.target)) resultsBox.classList.add("hidden");
+  });
+  window.addEventListener("scroll", () => {
+    if (!resultsBox.classList.contains("hidden")) positionResultsBox();
+  }, { passive: true });
+  window.addEventListener("resize", () => {
+    if (!resultsBox.classList.contains("hidden")) positionResultsBox();
   });
 
   // If arriving with #search in the URL (from navbar icon, on any page —

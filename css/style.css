@@ -1211,7 +1211,7 @@ img{ max-width:100%; display:block; }
   text-align:left;
   max-height:380px;
   overflow-y:auto;
-  z-index:60;
+  z-index:1000;
 }
 .search-group-label{
   font-family:var(--font-mono);
