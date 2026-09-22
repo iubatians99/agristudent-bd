@@ -268,6 +268,25 @@ async function init() {
     return [f.name, f.department, f.designation, codes.join(" "), names.join(" ")].filter(Boolean).join(" ").toLowerCase();
   }
 
+  // Faculty display order: Professor & Chair first, then Coordinator, then
+  // the usual academic ladder from Professor down to Teaching Assistant.
+  // Checked most-specific-first so "Associate Professor" doesn't get caught
+  // by the plain "professor" test. Anything unrecognized sorts after the
+  // known ranks but before faculty with no designation at all.
+  function designationRank(designation) {
+    const d = String(designation || "").trim().toLowerCase();
+    if (!d) return 99;
+    if (d.includes("chair")) return 1;
+    if (d.includes("coordinator")) return 2;
+    if (d.includes("associate professor")) return 4;
+    if (d.includes("assistant professor")) return 5;
+    if (d.includes("senior lecturer")) return 6;
+    if (d.includes("professor")) return 3;
+    if (d.includes("lecturer")) return 7;
+    if (d.includes("teaching assistant") || d.includes("instructor")) return 8;
+    return 50;
+  }
+
   function recommendationSort(a, b) {
     const sa = facultyScore(a), sb = facultyScore(b);
     // Course searches are intentionally ranked by recommendation quality:
@@ -281,6 +300,8 @@ async function init() {
   }
 
   function generalSort(a, b) {
+    const ra = designationRank(a.designation), rb = designationRank(b.designation);
+    if (ra !== rb) return ra - rb;
     const sa = facultyScore(a), sb = facultyScore(b);
     if (sb.reviewCount !== sa.reviewCount) return sb.reviewCount - sa.reviewCount;
     if (sb.avgRating !== sa.avgRating) return sb.avgRating - sa.avgRating;

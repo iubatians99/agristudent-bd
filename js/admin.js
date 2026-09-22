@@ -2010,6 +2010,25 @@ function parseCourseCodes(raw) {
     .filter(Boolean);
 }
 
+// Faculty display order: Professor & Chair first, then Coordinator, then
+// the usual academic ladder from Professor down to Teaching Assistant.
+// Checked most-specific-first so "Associate Professor" doesn't get caught
+// by the plain "professor" test. Anything unrecognized sorts after the
+// known ranks but before faculty with no designation at all.
+function designationRank(designation) {
+  const d = String(designation || "").trim().toLowerCase();
+  if (!d) return 99;
+  if (d.includes("chair")) return 1;
+  if (d.includes("coordinator")) return 2;
+  if (d.includes("associate professor")) return 4;
+  if (d.includes("assistant professor")) return 5;
+  if (d.includes("senior lecturer")) return 6;
+  if (d.includes("professor")) return 3;
+  if (d.includes("lecturer")) return 7;
+  if (d.includes("teaching assistant") || d.includes("instructor")) return 8;
+  return 50;
+}
+
 function facultyBulkNormalizeHeader(value) {
   return String(value ?? "")
     .trim()
@@ -2170,6 +2189,32 @@ async function bulkUploadFacultyRows() {
       return;
     }
 
+    // Sheet rows only ever carry a *link* to a photo (a direct URL or a
+    // Google Drive share link) — unlike the single-add form, which uploads
+    // an actual file. Saving that raw link straight into Firestore is why
+    // bulk-uploaded faculty end up with no visible photo: Drive links in
+    // particular routinely fail to render as an <img src>. Re-host each
+    // photo through Cloudinary (same helper the term bulk-image uploader
+    // uses) so it ends up as a real, reliably-loading image. Cloudinary
+    // does the fetching on their servers, so this never touches the
+    // browser and CORS doesn't come into it.
+    let photoFailures = 0;
+    const rowsWithPhoto = rowsToUpload.filter(r => r.photoUrl);
+    for (let i = 0; i < rowsWithPhoto.length; i++) {
+      const r = rowsWithPhoto[i];
+      status.textContent = `Fetching photo ${i + 1}/${rowsWithPhoto.length}…`;
+      try {
+        r.photoUrl = await uploadRemoteUrlToCloudinary(r.photoUrl);
+      } catch (fetchErr) {
+        // Cloudinary couldn't pull it in (dead link, hotlink protection,
+        // a Drive file that isn't actually shared publicly, etc). Keep the
+        // original link rather than blocking the whole row — it may still
+        // render for some viewers, and the admin can fix it via Edit.
+        console.warn("[AgriAdmin] faculty bulk photo fetch failed, keeping original link:", r.name, fetchErr);
+        photoFailures++;
+      }
+    }
+
     status.textContent = `Uploading ${rowsToUpload.length} faculty profile(s)…`;
     // Firestore batched writes are limited to 500 operations. Split into safe chunks.
     let uploaded = 0;
@@ -2196,7 +2241,7 @@ async function bulkUploadFacultyRows() {
       status.textContent = `Uploaded ${uploaded}/${rowsToUpload.length}…`;
     }
     status.style.color = "var(--leaf-600,#2f6b46)";
-    status.textContent = `✅ ${uploaded} faculty profile(s) uploaded and approved.${skipped ? ` ${skipped} duplicate row(s) skipped.` : ""}`;
+    status.textContent = `✅ ${uploaded} faculty profile(s) uploaded and approved.${skipped ? ` ${skipped} duplicate row(s) skipped.` : ""}${photoFailures ? ` ⚠️ ${photoFailures} photo(s) couldn't be fetched and kept their original link — check those on Edit.` : ""}`;
     loadFaculty();
   } catch (err) {
     console.error("[AgriAdmin] faculty bulk upload failed:", err);
@@ -2268,6 +2313,8 @@ async function loadFaculty() {
       const ap = af.status === "pending" ? 0 : 1;
       const bp = bf.status === "pending" ? 0 : 1;
       if (ap !== bp) return ap - bp;
+      const ar = designationRank(af.designation), br = designationRank(bf.designation);
+      if (ar !== br) return ar - br;
       return String(af.name || "").localeCompare(String(bf.name || ""));
     });
     facultyDocs.forEach(d => {
