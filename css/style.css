@@ -818,15 +818,36 @@ img{ max-width:100%; display:block; }
    NAVBAR
    ============================================ */
 .navbar{
+  /* NOTE: no backdrop-filter here on purpose (see .navbar::after below).
+     backdrop-filter (like transform/filter) makes the element a
+     containing block for position:fixed descendants. .nav-links (the
+     mobile drawer) is position:fixed and needs to size itself against
+     the real viewport, not this ~70px-tall header — with the filter
+     applied directly here, the drawer's top/right/bottom collapsed to
+     the navbar's own box and the open menu rendered as an unreadable
+     70px sliver instead of the full-height panel. Do not move
+     backdrop-filter back onto this rule. */
   background:rgba(250,248,242,.92);
-  backdrop-filter:blur(10px) saturate(1.4);
-  -webkit-backdrop-filter:blur(10px) saturate(1.4);
   border-bottom:1px solid var(--line);
   position:sticky;
   top:0;
   z-index:500;
   transition:box-shadow .25s ease, border-color .25s ease;
   padding-top:env(safe-area-inset-top, 0px);
+  isolation:isolate;
+}
+.navbar::after{
+  /* Reproduces the frosted-glass blur behind the navbar without ever
+     being an ancestor of .nav-links's fixed positioning — pseudo-
+     elements don't count as ancestors for containing-block purposes,
+     so this is safe where a real wrapper element would not be. */
+  content:"";
+  position:absolute;
+  inset:0;
+  backdrop-filter:blur(10px) saturate(1.4);
+  -webkit-backdrop-filter:blur(10px) saturate(1.4);
+  z-index:-1;
+  pointer-events:none;
 }
 .navbar::before{
   /* thin brand-gradient seam along the very top edge — a small

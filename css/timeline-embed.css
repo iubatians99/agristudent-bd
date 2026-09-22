@@ -46,7 +46,11 @@
 }
 .timeline-embed .glow-1 { top: -40px; left: -100px; background: rgba(107, 155, 94, .35); }
 .timeline-embed .glow-2 { bottom: 60px; right: -100px; background: rgba(212, 162, 76, .3); }
-.timeline-embed .timeline-container > * { position: relative; z-index: 1; }
+/* :not(.ambient-glow) is required here — without it, this rule (same
+   specificity as ".ambient-glow", but later in the file) silently flips
+   the glow circles from absolute to relative, pulling ~800px of blank
+   space into the page flow above the timeline heading. Do not remove. */
+.timeline-embed .timeline-container > *:not(.ambient-glow) { position: relative; z-index: 1; }
 
 .timeline-embed .timeline-header { text-align: center; margin-bottom: 44px; }
 .timeline-embed .timeline-main-title {
