@@ -98,8 +98,8 @@
     border:1px solid rgba(255,255,255,.85); letter-spacing:.01em; transition:transform .18s ease, box-shadow .18s ease, background .18s ease;
     box-shadow:0 12px 30px rgba(31,46,34,.16); display:inline-flex; align-items:center; justify-content:center; gap:.45rem;
   }
-  .tr-add-btn { background:linear-gradient(135deg,#f8d991,#d6a54b); color:#173322; border-color:#e9c879; box-shadow:0 13px 30px rgba(170,121,40,.25); }
-  .tr-review-btn { background:#fff; color:var(--moss-800,#24432d); border-color:#d7e0d6; }
+  .tr-add-btn { background:linear-gradient(135deg,#f8d991,#d6a54b); color:#173322 !important; border-color:#f2d28b; box-shadow:0 13px 30px rgba(170,121,40,.25), inset 0 1px 0 rgba(255,255,255,.45); }
+  .tr-review-btn { background:linear-gradient(135deg,#ffffff,#f4f8f2); color:#24432d !important; border-color:#d7e0d6; box-shadow:0 13px 30px rgba(31,46,34,.14), inset 0 1px 0 #fff; }
   .tr-action-btn:hover { transform:translateY(-2px); box-shadow:0 16px 34px rgba(31,46,34,.20); }
   .tr-add-btn:hover { background:linear-gradient(135deg,#ffe3a4,#e2b65d); }
   .tr-review-btn:hover { background:#f5faf4; border-color:var(--leaf-400); }
@@ -113,10 +113,18 @@
   }
   .tr-search-form input:focus { outline: none; border-color: var(--leaf-500); }
   .tr-search-form button {
-    background: linear-gradient(135deg, var(--moss-800), var(--leaf-500)); color: #fff; border: 1px solid rgba(255,255,255,.25); border-radius: 999px;
-    padding: 0 1.5rem; font-weight: 800; cursor: pointer; font-size: .9rem; box-shadow: 0 8px 20px rgba(31,46,34,.13);
+    appearance: none; -webkit-appearance: none;
+    background: linear-gradient(135deg, #173a27 0%, #2f6845 55%, #4f8b5d 100%);
+    color: #ffffff !important; -webkit-text-fill-color: #ffffff; opacity: 1 !important;
+    border: 1px solid rgba(255,255,255,.34); border-radius: 999px;
+    min-height: 48px; padding: 0 1.55rem; font-weight: 800; cursor: pointer; font-size: .9rem;
+    font-family: var(--font-body); letter-spacing: .01em; text-shadow: 0 1px 2px rgba(0,0,0,.18);
+    box-shadow: 0 10px 24px rgba(31,46,34,.18), inset 0 1px 0 rgba(255,255,255,.18);
+    transition: transform .18s ease, box-shadow .18s ease, filter .18s ease;
   }
-  .tr-search-form button:hover { transform:translateY(-1px); box-shadow:0 12px 25px rgba(31,46,34,.18); }
+  .tr-search-form button:hover { transform:translateY(-2px); filter:brightness(1.05); box-shadow:0 14px 28px rgba(31,46,34,.22), inset 0 1px 0 rgba(255,255,255,.2); }
+  .tr-search-form button:focus-visible { outline:3px solid rgba(212,162,76,.45); outline-offset:3px; }
+  .tr-search-form button:active { transform:translateY(0); }
   .tr-search-hint { text-align: center; font-size: .78rem; color: var(--moss-600); margin-top: .55rem; }
   .tr-search-result-label { text-align: center; font-weight: 700; font-size: .92rem; color: var(--moss-700); margin: 1.4rem 0 1rem; }
   .tr-search-meta { display:flex; justify-content:center; gap:.5rem; flex-wrap:wrap; margin:-.8rem 0 1rem; }
@@ -127,6 +135,9 @@
   .fp-filter-note { font-size:.72rem; color:var(--moss-500); margin:.35rem 0 0; }
   .add-faculty-form .form-field { margin-bottom:.85rem; }
   .add-faculty-form input, .add-faculty-form textarea { width:100%; }
+  .tr-submit-faculty-btn { min-height:50px; border-radius:14px; font-weight:800; font-size:.95rem; background:linear-gradient(135deg,#244d33,#4d8b5b); color:#fff !important; -webkit-text-fill-color:#fff; box-shadow:0 12px 25px rgba(36,77,51,.18); }
+  .tr-submit-faculty-btn:hover { filter:brightness(1.06); transform:translateY(-1px); }
+  .tr-submit-faculty-btn:disabled { opacity:.62; cursor:wait; transform:none; }
 
   /* Faculty grid */
   .fc-grid {
@@ -231,7 +242,7 @@
         <div class="tr-icon">🎓</div>
         <h1>Teacher Recommendation</h1>
         <p>Find faculty by course or name, see what other IUBAT Agriculture students recommend, and share your own positive experience to help juniors pick the right teacher.</p>
-        <span class="tr-hero-badge">🌱 Know the best one,No need to know the wrong one. &nbsp;•&nbsp; ⭐ Top 10 faculty highlighted</span>
+        <span class="tr-hero-badge">🌱 Positive recommendations only &nbsp;•&nbsp; ⭐ Top 10 faculty highlighted</span>
       </div>
     </div>
 
@@ -269,7 +280,7 @@
         <div class="form-field"><label for="new-faculty-courses">Course code(s)</label><input id="new-faculty-courses" required maxlength="240" placeholder="e.g. AGR371, AGR381"></div>
         <div class="form-field"><label for="new-faculty-photo">Faculty photo <span style="font-weight:400;color:var(--moss-500);">(optional)</span></label><input id="new-faculty-photo" type="file" accept="image/*"><small style="display:block;color:var(--moss-500);margin-top:.3rem;">Optional image, maximum 5 MB. Admin can replace or add the final photo.</small></div>
         <p id="add-faculty-status" style="font-size:.84rem;min-height:1.2em;"></p>
-        <button type="submit" class="btn-primary" id="add-faculty-submit" style="width:100%;">Submit Faculty</button>
+        <button type="submit" class="btn-primary tr-submit-faculty-btn" id="add-faculty-submit" style="width:100%;">➕ Submit Faculty for Review</button>
       </form>
     </div>
   </div>

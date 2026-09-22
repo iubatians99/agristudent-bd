@@ -2013,12 +2013,22 @@ async function loadFaculty() {
   wireFacultyForm();
   facultyList.innerHTML = `<p style="color:var(--moss-600);">Loading…</p>`;
   try {
-    const snap = await getDocs(query(collection(db, "faculty"), orderBy("name")));
+    // Do not rely on an orderBy index here. Admins need to see every
+    // submission, including older pending records, so fetch the collection
+    // and sort locally with pending submissions first.
+    const snap = await getDocs(collection(db, "faculty"));
     if (snap.empty) { facultyList.innerHTML = `<p style="color:var(--moss-600);">No faculty added yet — use the form above.</p>`; return; }
 
     facultyCache = {};
     facultyList.innerHTML = "";
-    snap.forEach(d => {
+    const facultyDocs = [...snap.docs].sort((a, b) => {
+      const af = a.data() || {}, bf = b.data() || {};
+      const ap = af.status === "pending" ? 0 : 1;
+      const bp = bf.status === "pending" ? 0 : 1;
+      if (ap !== bp) return ap - bp;
+      return String(af.name || "").localeCompare(String(bf.name || ""));
+    });
+    facultyDocs.forEach(d => {
       const f = d.data();
       facultyCache[d.id] = f;
       const stats = f.stats || {};
@@ -2034,6 +2044,7 @@ async function loadFaculty() {
             <strong>${esc(f.name)}</strong> ${isPending ? `<span style="display:inline-block;margin-left:.35rem;padding:.15rem .45rem;border-radius:999px;background:rgba(212,162,76,.16);color:var(--wheat-500,var(--wheat-400));font-size:.68rem;font-weight:700;">PENDING</span>` : ""}
             <div style="font-size:.8rem;color:var(--moss-600);">${esc(f.department||"")}${f.designation ? " · " + esc(f.designation) : ""}</div>
             <div style="font-size:.76rem;color:var(--moss-500);margin-top:.15rem;">${(f.courseCodes||[]).map(esc).join(", ") || "No courses linked"} · ⭐ ${avgRating} (${stats.reviewCount||0} reviews) · 👍 ${stats.recommendCount||0} recommend</div>
+            ${isPending ? `<div style="font-size:.72rem;color:var(--moss-500);margin-top:.25rem;">Submitted by ${esc(f.submittedByName || "Registered user")}${f.submittedByEmail ? ` · ${esc(f.submittedByEmail)}` : ""}</div>` : ""}
           </div>
         </div>
         <div style="display:flex;gap:.5rem;flex-wrap:wrap;justify-content:flex-end;">
@@ -2253,9 +2264,11 @@ async function loadFacultyReviews() {
       return bv - av;
     });
     reviewDocs.forEach(d => {
-      const r = d.data();
+      const r = d.data() || {};
       const isPending = r.status === "pending";
-      const tagsHtml = (r.tags || []).map(t => { const tag = facultyReviewTagsCache.find(x => x.key === t); return `<span style="display:inline-block;background:var(--paper-100,#f2eee2);border-radius:999px;padding:.15rem .55rem;font-size:.72rem;margin:.1rem .25rem .1rem 0;">${esc(tag ? `${tag.emoji} ${tag.label}` : t)}</span>`; }).join("");
+      const reviewTags = Array.isArray(r.tags) ? r.tags : [];
+      const safeRating = Math.min(5, Math.max(0, Number(r.rating) || 0));
+      const tagsHtml = reviewTags.map(t => { const tag = facultyReviewTagsCache.find(x => x.key === t); return `<span style="display:inline-block;background:var(--paper-100,#f2eee2);border-radius:999px;padding:.15rem .55rem;font-size:.72rem;margin:.1rem .25rem .1rem 0;">${esc(tag ? `${tag.emoji} ${tag.label}` : t)}</span>`; }).join("");
       const row = document.createElement("div");
       row.className = "resource-row";
       row.innerHTML = `
@@ -2264,7 +2277,7 @@ async function loadFacultyReviews() {
           <span style="margin-left:.5rem;font-size:.75rem;font-weight:700;padding:.15rem .5rem;border-radius:999px;${isPending ? "background:#FDF3D9;color:#8A6A1A;" : "background:#E4F2E7;color:var(--leaf-600,#2D4A35);"}">${isPending ? "Pending review" : "Approved"}</span>
           ${r.isAnonymous ? `<span style="margin-left:.4rem;font-size:.75rem;color:var(--moss-600);">🙈 Anonymous</span>` : ""}
           <div style="font-size:.83rem;color:var(--moss-700);margin-top:.35rem;">
-            ${"⭐".repeat(r.rating || 0)}${"☆".repeat(5 - (r.rating || 0))} · ${r.recommended ? "👍 Recommended" : "🙅 Not recommended"}${r.courseCode ? " · " + esc(r.courseCode) : ""}
+            ${"⭐".repeat(safeRating)}${"☆".repeat(5 - safeRating)} · ${r.recommended === true ? "👍 Recommended" : "🙅 Not recommended"}${r.courseCode ? " · " + esc(r.courseCode) : ""}
           </div>
           <div style="margin-top:.35rem;">${tagsHtml}</div>
           ${r.comment ? `<p style="font-size:.84rem;color:var(--moss-700);margin:.5rem 0 0;background:var(--paper-100,#f2eee2);padding:.5rem .7rem;border-radius:8px;">${esc(r.comment)}</p>` : ""}
@@ -2293,7 +2306,7 @@ async function loadFacultyReviews() {
           const statsUpdate = {
             "stats.reviewCount": increment(1),
             "stats.recommendCount": increment(r.recommended ? 1 : 0),
-            "stats.ratingSum": increment(r.rating || 0),
+            "stats.ratingSum": increment(safeRating),
             "stats.ratingCount": increment(1)
           };
           (r.tags || []).forEach(t => { statsUpdate[`stats.tagCounts.${t}`] = increment(1); });

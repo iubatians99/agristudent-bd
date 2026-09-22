@@ -45,6 +45,18 @@ function requireSession() {
   return s;
 }
 
+async function getVerifiedRegistration(session) {
+  if (!session?.regId) return null;
+  const snap = await getDoc(doc(db, "registrations", session.regId));
+  if (!snap.exists()) return null;
+  const reg = snap.data() || {};
+  if (reg.removed || reg.status !== "verified") return null;
+  const sessionEmail = String(session.email || "").trim().toLowerCase();
+  const regEmail = String(reg.email || "").trim().toLowerCase();
+  if (!sessionEmail || !regEmail || sessionEmail !== regEmail) return null;
+  return { id: snap.id, ...reg };
+}
+
 // ============================================
 // POSITIVE TAGS — the only kind of tag that exists in this feature.
 // ============================================
@@ -108,10 +120,11 @@ function sanitizeComment(raw) {
 // SHARED DATA HELPERS
 // ============================================
 async function fetchAllFaculty() {
+  // Keep the public directory limited to approved profiles. Legacy profiles
+  // without a status are intentionally not treated as public here; the admin
+  // panel can approve/migrate them explicitly so pending submissions never leak.
   const snap = await getDocs(query(collection(db, "faculty"), where("status", "==", "approved")));
-  return snap.docs
-    .map(d => ({ id: d.id, ...d.data() }))
-    .filter(f => f.status !== "pending" && f.status !== "rejected");
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
 async function fetchApprovedReviewsForFaculty(facultyId) {
@@ -373,16 +386,17 @@ async function init() {
     e.preventDefault();
     const session = requireSession();
     if (!session) return;
-    let registrationSnap;
+    let registration;
     try {
-      registrationSnap = await getDoc(doc(db, "registrations", session.regId));
+      registration = await getVerifiedRegistration(session);
     } catch (err) {
-      addStatus.textContent = "Please log in again before submitting a faculty suggestion.";
+      console.error("[Faculty] registration check failed:", err);
+      addStatus.textContent = "Could not verify your account. Please refresh and log in again.";
       addStatus.style.color = "var(--terracotta-500)";
       return;
     }
-    if (!registrationSnap.exists() || registrationSnap.data().status !== "verified") {
-      addStatus.textContent = "Only registered and verified users can add a faculty suggestion.";
+    if (!registration) {
+      addStatus.textContent = "Only a registered and verified account can submit a faculty suggestion.";
       addStatus.style.color = "var(--terracotta-500)";
       return;
     }
@@ -421,12 +435,20 @@ async function init() {
         photoUrl = await uploadFacultyPhoto(photoFile, pct => { addStatus.textContent = `Uploading photo ${pct}%…`; });
       }
       await addDoc(collection(db, "faculty"), {
-        name, department, designation, courseCodes, status: "pending", photoUrl,
-        submittedByRegId: session.regId,
-        stats: { reviewCount: 0, recommendCount: 0, ratingSum: 0, ratingCount: 0, tagCounts: {} },
-        createdAt: serverTimestamp()
+        name,
+        department,
+        designation,
+        courseCodes,
+        status: "pending",
+        photoUrl,
+        submittedByRegId: registration.id,
+        submittedByEmail: String(registration.email || "").trim().toLowerCase(),
+        submittedByName: String(registration.fullName || session.fullName || "").trim().slice(0, 160),
+        submittedAt: serverTimestamp(),
+        createdAt: serverTimestamp(),
+        stats: { reviewCount: 0, recommendCount: 0, ratingSum: 0, ratingCount: 0, tagCounts: {} }
       });
-      addStatus.textContent = "✅ Submitted successfully. It will appear after admin review.";
+      addStatus.textContent = "✅ Faculty submitted successfully. Admin will review and publish it.";
       addForm.reset();
       setTimeout(closeAddFaculty, 1700);
     } catch (err) {

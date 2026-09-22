@@ -187,32 +187,62 @@ service cloud.firestore {
     // student per faculty) plus admin's ability to edit/delete any
     // faculty doc or review at any time.
     match /faculty/{id} {
-      allow get, list: if resource.data.status == 'approved' || isAdmin();
+      // Public directory: approved faculty only. Admins can see every
+      // record, including pending submissions that have not been published.
+      allow get, list: if isAdmin() || resource.data.status == "approved";
 
-      // Admins can add a faculty profile directly. Students/visitors may
-      // suggest a new faculty member, but their submission starts as
-      // `pending` so it cannot appear in the public directory until an
-      // admin approves it. No student PII is stored in the faculty doc.
+      // Admin-created profiles are immediately approved. A normal site
+      // account may submit only a pending suggestion, and the registration
+      // record is checked server-side so the browser cannot submit as an
+      // unregistered/removed account. The submitted email must also match
+      // the verified registration used for the submission.
       allow create: if
         (isAdmin() &&
           request.resource.data.keys().hasAll(['name', 'department', 'courseCodes']) &&
-          request.resource.data.name is string && request.resource.data.name.size() > 0 &&
-          request.resource.data.department is string && request.resource.data.department.size() > 0 &&
-          request.resource.data.courseCodes is list && request.resource.data.courseCodes.size() > 0)
+          request.resource.data.name is string &&
+          request.resource.data.name.size() > 0 &&
+          request.resource.data.name.size() <= 160 &&
+          request.resource.data.department is string &&
+          request.resource.data.department.size() > 0 &&
+          request.resource.data.department.size() <= 160 &&
+          request.resource.data.courseCodes is list &&
+          request.resource.data.courseCodes.size() > 0 &&
+          request.resource.data.courseCodes.size() <= 20)
         ||
         (!isAdmin() &&
-          request.resource.data.keys().hasAll(['name', 'department', 'courseCodes', 'status', 'submittedByRegId']) &&
-          request.resource.data.name is string && request.resource.data.name.size() > 0 &&
+          request.resource.data.keys().hasAll([
+            'name', 'department', 'courseCodes', 'status',
+            'submittedByRegId', 'submittedByEmail', 'submittedByName'
+          ]) &&
+          request.resource.data.name is string &&
+          request.resource.data.name.size() > 0 &&
           request.resource.data.name.size() <= 160 &&
-          request.resource.data.department is string && request.resource.data.department.size() > 0 &&
+          request.resource.data.department is string &&
+          request.resource.data.department.size() > 0 &&
           request.resource.data.department.size() <= 160 &&
-          request.resource.data.courseCodes is list && request.resource.data.courseCodes.size() > 0 &&
+          (!('designation' in request.resource.data) ||
+            (request.resource.data.designation is string && request.resource.data.designation.size() <= 120)) &&
+          request.resource.data.courseCodes is list &&
+          request.resource.data.courseCodes.size() > 0 &&
           request.resource.data.courseCodes.size() <= 20 &&
           request.resource.data.status == 'pending' &&
-          request.resource.data.submittedByRegId is string && request.resource.data.submittedByRegId.size() > 0 &&
+          request.resource.data.submittedByRegId is string &&
+          request.resource.data.submittedByRegId.size() > 0 &&
+          request.resource.data.submittedByEmail is string &&
+          request.resource.data.submittedByEmail.size() > 0 &&
+          request.resource.data.submittedByEmail.size() <= 200 &&
+          request.resource.data.submittedByName is string &&
+          request.resource.data.submittedByName.size() <= 160 &&
           get(/databases/$(database)/documents/registrations/$(request.resource.data.submittedByRegId)).data.status == 'verified' &&
-          (!('photoUrl' in request.resource.data) || (request.resource.data.photoUrl is string && (request.resource.data.photoUrl == '' || request.resource.data.photoUrl.matches('^https://res[.]cloudinary[.]com/.*')))));
+          (!('removed' in get(/databases/$(database)/documents/registrations/$(request.resource.data.submittedByRegId)).data) || get(/databases/$(database)/documents/registrations/$(request.resource.data.submittedByRegId)).data.removed != true) &&
+          get(/databases/$(database)/documents/registrations/$(request.resource.data.submittedByRegId)).data.email == request.resource.data.submittedByEmail &&
+          (!('photoUrl' in request.resource.data) ||
+            (request.resource.data.photoUrl is string &&
+             (request.resource.data.photoUrl == '' || request.resource.data.photoUrl.matches('^https://res[.]cloudinary[.]com/.*'))))
+        );
 
+      // Only the aggregate stats may be changed by a non-admin. All faculty
+      // identity fields, including a pending submission, remain admin-owned.
       allow update: if isAdmin() || (
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stats']) &&
         request.resource.data.name == resource.data.name &&
@@ -253,7 +283,10 @@ service cloud.firestore {
         request.resource.data.tags is list &&
         request.resource.data.tags.size() >= 1 && request.resource.data.tags.size() <= 6 &&
         request.resource.data.isAnonymous is bool &&
+        (!('courseCode' in request.resource.data) || (request.resource.data.courseCode is string && request.resource.data.courseCode.size() <= 50)) &&
         (!('comment' in request.resource.data) || (request.resource.data.comment is string && request.resource.data.comment.size() <= 400)) &&
+        get(/databases/$(database)/documents/registrations/$(request.resource.data.reviewerRegId)).data.status == 'verified' &&
+        (!('removed' in get(/databases/$(database)/documents/registrations/$(request.resource.data.reviewerRegId)).data) || get(/databases/$(database)/documents/registrations/$(request.resource.data.reviewerRegId)).data.removed != true) &&
         (
           (request.resource.data.isAnonymous == true && request.resource.data.status == "pending") ||
           (request.resource.data.isAnonymous == false && request.resource.data.status == "approved")
