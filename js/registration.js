@@ -257,6 +257,12 @@ otpVerifyBtn.addEventListener("click", async () => {
       status: "pending",
       emailVerified: false,
       authUid: credential.user.uid,
+      // This account was created through this form, so the student chose
+      // and knows this password — distinct from an account migrated in by
+      // tools/migrate-existing-users.mjs, which sets this false because it
+      // assigns a random password nobody knows. See js/session.js and
+      // js/login.js for how this flag is used.
+      passwordSet: true,
       studentIdLockId: lockId,
       registrationCredits: 5,
       submittedAt: serverTimestamp()

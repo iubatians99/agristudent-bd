@@ -10,7 +10,6 @@ if (getSession() && auth.currentUser) window.location.replace(destinationAfterLo
 
 const steps = {
   id: document.getElementById("id-step"),
-  email: document.getElementById("email-step"),
   password: document.getElementById("password-step"),
   resetRequest: document.getElementById("reset-request-step"),
   resetOtp: document.getElementById("reset-otp-step"),
@@ -47,6 +46,23 @@ function loginToSession(id, reg) {
   saveSession({ regId: id, fullName: reg.fullName, email: reg.email, studentIdNumber: reg.studentIdNumber, gender: reg.gender, avatarUrl: reg.avatarUrl, status: reg.status });
 }
 
+// NOTE ON THE ACCOUNT LOOKUP THAT USED TO LIVE HERE:
+// This used to try to look up the typed email in Firestore first, to
+// decide whether to show a password field or an old "email only, no
+// password yet" screen. That lookup can't be done safely before sign-in:
+// firestore.rules only lets a visitor read/list a `registrations` doc
+// once they're already signed in as that account (see the `allow get` /
+// `allow list` rules), so an anonymous pre-login lookup either fails
+// outright or would require loosening the rules to leak account data to
+// anyone who types an email — not a trade worth making for a cosmetic
+// branch. Every account (freshly registered, or migrated by
+// tools/migrate-existing-users.mjs) already has a real Firebase Auth
+// password — freshly-registered students chose theirs at signup;
+// migrated students were given a random one nobody knows. So this
+// screen always asks for a password next, and "Forgot / never set a
+// password?" below is the one path for both "I forgot it" and "I never
+// knew it" — it hands out a secure reset link, which is the only safe
+// way to get a migrated account its first real, known password.
 idForm?.addEventListener("submit", async (e) => {
   e.preventDefault();
   const email = normalizeEmail(idInput.value);
@@ -55,6 +71,7 @@ idForm?.addEventListener("submit", async (e) => {
   status(idStatus, "Enter your password to continue.");
   emailStepId.textContent = email;
   passwordForm.dataset.email = email;
+  if (resetInput) resetInput.value = email;
   showStep("password");
   passwordInput.focus();
   idSubmit.disabled = false; idSubmit.textContent = "Continue";
@@ -62,10 +79,16 @@ idForm?.addEventListener("submit", async (e) => {
 
 document.getElementById("password-step-back")?.addEventListener("click", e => { e.preventDefault(); showStep("id"); });
 
-document.getElementById("email-step-back")?.addEventListener("click", e => { e.preventDefault(); showStep("id"); });
-
-document.getElementById("id-step-forgot-link")?.addEventListener("click", e => { e.preventDefault(); showStep("resetRequest"); });
-document.getElementById("forgot-password-link")?.addEventListener("click", e => { e.preventDefault(); showStep("resetRequest"); });
+document.getElementById("id-step-forgot-link")?.addEventListener("click", e => {
+  e.preventDefault();
+  if (resetInput) resetInput.value = normalizeEmail(idInput.value);
+  showStep("resetRequest");
+});
+document.getElementById("forgot-password-link")?.addEventListener("click", e => {
+  e.preventDefault();
+  if (resetInput) resetInput.value = passwordForm.dataset.email || "";
+  showStep("resetRequest");
+});
 
 passwordForm?.addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -82,8 +105,14 @@ passwordForm?.addEventListener("submit", async (e) => {
       return;
     }
     const { id, reg } = await loadOwnRegistration(email);
-    await updateDoc(doc(db, "registrations", id), { authUid: credential.user.uid, status: "verified", emailVerified: true });
-    loginToSession(id, { ...reg, authUid: credential.user.uid, status: "verified", emailVerified: true });
+    // Signing in with a password here — whichever password that is — is
+    // proof the student now knows a real one, whether they set it at
+    // registration or just finished a password-reset link for a migrated
+    // account. Recording that closes the loop with js/session.js's
+    // "Set Up a Password" popup, which should never re-nag someone who
+    // just successfully did exactly that.
+    await updateDoc(doc(db, "registrations", id), { authUid: credential.user.uid, status: "verified", emailVerified: true, passwordSet: true });
+    loginToSession(id, { ...reg, authUid: credential.user.uid, status: "verified", emailVerified: true, passwordSet: true });
     status(passwordStatus, "✅ Signed in. Redirecting…");
     setTimeout(() => window.location.replace(destinationAfterLogin()), 300);
   } catch (err) {

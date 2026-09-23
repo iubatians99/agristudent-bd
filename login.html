@@ -39,9 +39,17 @@
     <div class="crumb"><a href="index.html">Home</a> / Login</div>
 
     <!-- ============================================ -->
-    <!-- STEP 1 — Student ID only. We look the account up to decide
-         whether to ask for an email (no password set yet — original
-         method) or a password (they've set one up from their profile). -->
+    <!-- STEP 1 — Email address. Every account (new registrations and
+         accounts migrated in by tools/migrate-existing-users.mjs) has a
+         real Firebase Auth password, so this always continues to the
+         password step below. The old "no password yet" email-only
+         screen that used to live here has been removed: it can't be
+         made to work safely (firestore.rules won't let us look up an
+         account before sign-in — see the comment in js/login.js), and
+         "type an email, get in with nothing else" would let anyone log
+         in as anyone. Migrated accounts get in via "Forgot password?"
+         below instead — that flow is what hands them their first real,
+         known password. -->
     <!-- ============================================ -->
     <div id="id-step">
       <h1>🔐 Log In</h1>
@@ -61,34 +69,12 @@
         Not registered yet? <a href="register.html" style="color:var(--leaf-500);font-weight:600;">Register here →</a>
       </p>
       <p style="margin-top:.6rem;text-align:center;font-size:.88rem;">
-        <a href="#" id="id-step-forgot-link" style="color:var(--moss-600);text-decoration:underline;">Forgot password?</a>
+        <a href="#" id="id-step-forgot-link" style="color:var(--moss-600);text-decoration:underline;">Forgot password, or never set one?</a>
       </p>
     </div>
 
     <!-- ============================================ -->
-    <!-- STEP 2A — email login (accounts with no password set yet) -->
-    <!-- ============================================ -->
-    <div id="email-step" class="hidden">
-      <h1>🔐 Log In</h1>
-      <p style="color:var(--moss-600);margin-bottom:1.4rem;">Student ID: <strong id="email-step-id"></strong> · <a href="#" id="email-step-back">change</a></p>
-
-      <form id="email-form" style="display:flex;flex-direction:column;gap:1.1rem;">
-        <div>
-          <label for="login-email" style="display:block;font-weight:600;margin-bottom:.3rem;">Email Address *</label>
-          <input type="email" id="login-email" required placeholder="you@example.com" autocomplete="email"
-                 style="width:100%;padding:.7rem .9rem;border:1px solid var(--line);border-radius:8px;font-family:var(--font-body);font-size:.95rem;">
-        </div>
-        <button type="submit" id="email-submit" style="background:var(--moss-700);color:#fff;border:none;padding:.85rem;border-radius:8px;font-weight:600;font-size:1rem;cursor:pointer;">Log In</button>
-        <div id="email-status" class="hidden" style="text-align:center;font-size:.9rem;font-weight:600;"></div>
-      </form>
-
-      <p style="margin-top:1.2rem;text-align:center;font-size:.85rem;color:var(--moss-600);">
-        Tip: once you're in, set a password from your Profile page for faster login next time.
-      </p>
-    </div>
-
-    <!-- ============================================ -->
-    <!-- STEP 2B — password login (accounts that have set one up) -->
+    <!-- STEP 2 — password login -->
     <!-- ============================================ -->
     <div id="password-step" class="hidden">
       <h1>🔐 Log In</h1>
@@ -105,7 +91,7 @@
       </form>
 
       <p style="margin-top:1.2rem;text-align:center;font-size:.88rem;">
-        <a href="#" id="forgot-password-link" style="color:var(--leaf-500);font-weight:600;">Forgot password?</a>
+        <a href="#" id="forgot-password-link" style="color:var(--leaf-500);font-weight:600;">Forgot password, or never set one?</a>
       </p>
     </div>
 
@@ -116,8 +102,8 @@
          email — whichever the student remembers. -->
     <!-- ============================================ -->
     <div id="reset-request-step" class="uc-panel hidden" style="border-color:var(--moss-600);">
-      <h3 style="margin-bottom:.4rem;">🔑 Reset your password</h3>
-      <p id="reset-request-msg" style="color:var(--moss-600);font-size:.92rem;margin-bottom:1rem;">Enter the email address on your account. We'll send a secure Firebase password-reset link.</p>
+      <h3 style="margin-bottom:.4rem;">🔑 Set or reset your password</h3>
+      <p id="reset-request-msg" style="color:var(--moss-600);font-size:.92rem;margin-bottom:1rem;">Enter the email address on your account. We'll send a secure link to set your password — whether you forgot it or this is the first time you're setting one.</p>
       <label for="reset-lookup-input" style="display:block;font-weight:600;margin-bottom:.3rem;font-size:.9rem;">Email Address</label>
       <input type="text" id="reset-lookup-input" autocomplete="username" placeholder="you@example.com"
         style="width:100%;padding:.7rem .9rem;border:1px solid var(--line);border-radius:8px;font-family:var(--font-body);font-size:.95rem;margin-bottom:1rem;">

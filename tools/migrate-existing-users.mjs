@@ -67,7 +67,14 @@ for (const d of snap.docs) {
     authUid: user.uid,
     emailVerified: user.emailVerified === true,
     migratedToFirebaseAuthAt: FieldValue.serverTimestamp(),
-    passwordHash: FieldValue.delete()
+    passwordHash: FieldValue.delete(),
+    // The password just assigned above is a random string nobody knows —
+    // this flag is how js/login.js and js/session.js tell a migrated
+    // account (needs a reset link to get in) apart from one where the
+    // student set their own password (js/registration.js sets this true).
+    // It flips to true automatically the first time this account signs in
+    // with a real password (see js/login.js).
+    passwordSet: false
   });
   migrated++;
   console.log(`Migrated ${email} -> ${user.uid}`);

@@ -282,7 +282,16 @@ function pwdPopupDismissKey(regId) {
 function maybeShowPasswordSetupPopup(regId, reg) {
   // Profile has its own first-time setup modal; never create a second global popup there.
   if (/\/?profile\.html$/.test(window.location.pathname)) return;
-  if (!regId || auth.currentUser) return;
+  // BUG FIX: this used to check `auth.currentUser` backwards (skipping the
+  // popup whenever there WAS a Firebase Auth session) and never looked at
+  // `passwordSet` at all, so it nagged everyone who was merely logged in
+  // and — for the one group of people it actually meant to help — the
+  // "Set Password" button below always failed with "session expired",
+  // because updatePassword() requires exactly the auth.currentUser session
+  // this condition was throwing away. The popup only makes sense, and only
+  // works, when both are true: the account hasn't recorded a real password
+  // yet, AND there's a live Firebase Auth session to attach one to.
+  if (!regId || !auth.currentUser || reg.passwordSet === true) return;
   if (window.__agriPasswordPopupOpen || document.getElementById("pwd-setup-overlay")) return;
   window.__agriPasswordPopupOpen = true;
   try {
@@ -352,7 +361,7 @@ function maybeShowPasswordSetupPopup(regId, reg) {
       if (!auth.currentUser) throw new Error("Your secure login session has expired. Please log in again.");
       const { updatePassword } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js");
       await updatePassword(auth.currentUser, password);
-      await updateDoc(doc(db, "registrations", regId), { authUid: auth.currentUser.uid, emailVerified: !!auth.currentUser.emailVerified, status: auth.currentUser.emailVerified ? "verified" : reg.status });
+      await updateDoc(doc(db, "registrations", regId), { authUid: auth.currentUser.uid, emailVerified: !!auth.currentUser.emailVerified, status: auth.currentUser.emailVerified ? "verified" : reg.status, passwordSet: true });
       showStatus("✅ Password saved!");
       setTimeout(() => { overlay.remove(); window.__agriPasswordPopupOpen = false; }, 900);
     } catch (err) {

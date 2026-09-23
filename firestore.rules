@@ -104,7 +104,7 @@ service cloud.firestore {
         request.resource.data.authUid == request.auth.uid &&
         request.resource.data.email == resource.data.email &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'fullName','gender','avatarUrl','status','emailVerified','authUid',
+          'fullName','gender','avatarUrl','status','emailVerified','authUid','passwordSet',
           'accessUntil','restricted','restrictedUntil','lastAccessSyncAt',
           'approvedFileCount','pendingActiveCount','creditsResetAt','accountRestrictedUntil','accountRestrictedReason','accountRestrictedAt'
         ]) &&
