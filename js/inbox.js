@@ -19,7 +19,7 @@
 //   read       — false until the student opens it
 //   readAt     — serverTimestamp() the moment they do
 // ============================================
-import { db, auth } from "./firebase-config.js";
+import { db } from "./firebase-config.js";
 import {
   collection, addDoc, getDocs, query, where, orderBy, doc, updateDoc, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
@@ -54,8 +54,7 @@ export async function fetchAllSentMessages() {
 /** Student's own inbox — every message sent to their regId, newest first. */
 export async function fetchMessagesForUser(regId) {
   if (!regId) return [];
-  if (!auth.currentUser?.email) return [];
-  const q = query(collection(db, COLLECTION), where("toEmail", "==", auth.currentUser.email.toLowerCase()));
+  const q = query(collection(db, COLLECTION), where("toRegId", "==", regId));
   const snap = await getDocs(q);
   return snap.docs
     .map(d => ({ id: d.id, ...d.data() }))

@@ -5,42 +5,23 @@
 // ============================================
 import { db } from "./firebase-config.js";
 import {
-  collection, query, where, getDocs, doc, getDoc
+  collection, query, where, getDocs
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-
-// "stat-users" and "stat-pending" need a full scan of collections that
-// are (correctly) locked down to admin-only reads in firestore.rules —
-// registrations and facultyReviews both hold private student data, so
-// the browser can never be allowed to query them directly. Instead,
-// scripts/update-public-stats.mjs runs server-side with the Admin SDK
-// (bypassing rules) and writes ONLY the two resulting counts to the
-// public, read-only publicStats/counts document — no individual
-// record is ever exposed to the client. Both stats below share that
-// one lightweight read instead of two.
-let publicStatsPromise = null;
-function loadPublicStats() {
-  if (!publicStatsPromise) {
-    publicStatsPromise = getDoc(doc(db, "publicStats", "counts"))
-      .then(snap => (snap.exists() ? snap.data() : {}))
-      .catch(() => ({}));
-  }
-  return publicStatsPromise;
-}
 
 // Map of element id -> function that returns a Firestore count query
 //
-// NOTE: stat-resources and stat-terms use a plain getDocs() count
-// instead of getCountFromServer(). The aggregation call
-// (getCountFromServer) turned out to be unreliable for this project —
-// it would intermittently/silently fail and leave a homepage stat
-// stuck on its "—" placeholder even though the exact same query works
-// fine with getDocs() (as already proven by js/knowledge-hub.js for
-// terms). stat-users/stat-pending instead read the pre-aggregated
-// publicStats/counts document described above.
+// NOTE: every stat here now uses a plain getDocs() count instead of
+// getCountFromServer(). The aggregation call (getCountFromServer) turned out
+// to be unreliable for this project — it would intermittently/silently fail
+// and leave a homepage stat stuck on its "—" placeholder even though the
+// exact same query works fine with getDocs() (as already proven by
+// js/knowledge-hub.js for terms, and by the pre-existing "stat-resources"
+// count below). Standardizing all four stats on getDocs() avoids that
+// failure mode across the board.
 const STAT_SOURCES = {
   "stat-users": async () => {
-    const stats = await loadPublicStats();
-    return { data: () => ({ count: stats.registeredUsers || 0 }) };
+    const docsSnap = await getDocs(collection(db, "registrations"));
+    return { data: () => ({ count: docsSnap.size }) };
   },
 
   "stat-resources": async () => {
@@ -65,8 +46,10 @@ const STAT_SOURCES = {
   },
 
   "stat-pending": async () => {
-    const stats = await loadPublicStats();
-    return { data: () => ({ count: stats.pendingReviews || 0 }) };
+    const docsSnap = await getDocs(
+      query(collection(db, "resources"), where("status", "==", "pending"))
+    );
+    return { data: () => ({ count: docsSnap.size }) };
   },
 
   "stat-terms": async () => {

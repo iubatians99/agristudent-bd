@@ -13,9 +13,9 @@
 // single JSON blob under SESSION_KEY.
 // ============================================
 import { normalizeEmail, normalizeStudentId } from "./identity.js";
-import { db, auth } from "./firebase-config.js";
+import { db } from "./firebase-config.js";
 import { doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { isPasswordValid } from "./auth-core.js";
+import { hashPassword, isPasswordValid } from "./password.js";
 import { fetchMessagesForUser } from "./inbox.js";
 
 const SESSION_KEY = "agri_session_v1";
@@ -77,7 +77,6 @@ export function saveSession({ regId, fullName, email, studentIdNumber, gender, a
 
 export function clearSession() {
   localStorage.removeItem(SESSION_KEY);
-  auth.signOut().catch(() => {});
   try {
     sessionStorage.removeItem("agri_student_id");
     localStorage.removeItem("agri_handnotes_user_email");
@@ -282,16 +281,7 @@ function pwdPopupDismissKey(regId) {
 function maybeShowPasswordSetupPopup(regId, reg) {
   // Profile has its own first-time setup modal; never create a second global popup there.
   if (/\/?profile\.html$/.test(window.location.pathname)) return;
-  // BUG FIX: this used to check `auth.currentUser` backwards (skipping the
-  // popup whenever there WAS a Firebase Auth session) and never looked at
-  // `passwordSet` at all, so it nagged everyone who was merely logged in
-  // and — for the one group of people it actually meant to help — the
-  // "Set Password" button below always failed with "session expired",
-  // because updatePassword() requires exactly the auth.currentUser session
-  // this condition was throwing away. The popup only makes sense, and only
-  // works, when both are true: the account hasn't recorded a real password
-  // yet, AND there's a live Firebase Auth session to attach one to.
-  if (!regId || !auth.currentUser || reg.passwordSet === true) return;
+  if (!regId || reg.passwordHash) return;
   if (window.__agriPasswordPopupOpen || document.getElementById("pwd-setup-overlay")) return;
   window.__agriPasswordPopupOpen = true;
   try {
@@ -306,8 +296,8 @@ function maybeShowPasswordSetupPopup(regId, reg) {
       <div class="modal-body">
         <h3>🔐 Set Up a Password</h3>
         <p class="modal-desc" style="max-height:none;">
-          Set a password so you can log in with just your email and this password next
-          time — no sign-in link needed.
+          Secure your account with a password so you can log in faster next time — just your
+          Student ID and this password, no email step needed.
         </p>
         <form id="pwd-setup-form" style="margin-top:1rem;">
           <div class="form-field">
@@ -358,10 +348,8 @@ function maybeShowPasswordSetupPopup(regId, reg) {
     showStatus("Saving your password…");
 
     try {
-      if (!auth.currentUser) throw new Error("Your secure login session has expired. Please log in again.");
-      const { updatePassword } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js");
-      await updatePassword(auth.currentUser, password);
-      await updateDoc(doc(db, "registrations", regId), { authUid: auth.currentUser.uid, emailVerified: !!auth.currentUser.emailVerified, passwordSet: true });
+      const passwordHash = await hashPassword(password, reg.email);
+      await updateDoc(doc(db, "registrations", regId), { passwordHash });
       showStatus("✅ Password saved!");
       setTimeout(() => { overlay.remove(); window.__agriPasswordPopupOpen = false; }, 900);
     } catch (err) {

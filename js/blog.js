@@ -1417,7 +1417,7 @@ function openFullPostModal(item) {
       <div class="blog-post-time">${esc(timeAgo(created))}</div>
     </div>
   `;
-  fullPostBody.innerHTML = sanitizeHTML(item.content || "");
+  fullPostBody.innerHTML = item.content;
   fullPostGallery.innerHTML = buildGalleryHTML(item.imageUrls);
 
   const galleryTiles = fullPostGallery.querySelectorAll(".blog-gallery-tile");
@@ -1871,8 +1871,8 @@ async function loadMorePosts() {
   loadMoreBtn.disabled = true;
   loadMoreBtn.textContent = "Loading…";
   try {
-    let q = query(collection(db, "blogPosts"), where("status", "==", "approved"), orderBy("createdAt", "desc"), limit(PAGE_SIZE));
-    if (lastDoc) q = query(collection(db, "blogPosts"), where("status", "==", "approved"), orderBy("createdAt", "desc"), startAfter(lastDoc), limit(PAGE_SIZE));
+    let q = query(collection(db, "blogPosts"), orderBy("createdAt", "desc"), limit(PAGE_SIZE));
+    if (lastDoc) q = query(collection(db, "blogPosts"), orderBy("createdAt", "desc"), startAfter(lastDoc), limit(PAGE_SIZE));
 
     const snap = await getDocs(q);
     if (snap.empty && !lastDoc) {
@@ -1888,16 +1888,7 @@ async function loadMorePosts() {
 
     const session = getSession();
     const viewerEmail = session ? normalizeEmail(session.email) : "";
-    const docsToRender = [...snap.docs];
-    if (viewerEmail && !lastDoc) {
-      try {
-        const ownSnap = await getDocs(query(collection(db, "blogPosts"), where("authorEmail", "==", viewerEmail), orderBy("createdAt", "desc"), limit(8)));
-        const existing = new Set(docsToRender.map(d => d.id));
-        ownSnap.docs.forEach(d => { if (!existing.has(d.id)) docsToRender.push(d); });
-        docsToRender.sort((a,b) => (b.data().createdAt?.toMillis?.() || 0) - (a.data().createdAt?.toMillis?.() || 0));
-      } catch (ownErr) { console.warn("[Blog] own pending feed query skipped:", ownErr); }
-    }
-    docsToRender.forEach(d => {
+    snap.docs.forEach(d => {
       const item = d.data();
       const isAuthor = viewerEmail && normalizeEmail(item.authorEmail) === viewerEmail;
       // Pending/rejected posts belong only to their author's timeline.

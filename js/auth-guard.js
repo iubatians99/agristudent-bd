@@ -10,12 +10,7 @@
   const ENTRY_KEY = "agristudentbd_entered";
   try {
     if (sessionStorage.getItem(ENTRY_KEY) !== "true") {
-      // Preserve where the visitor was actually headed (e.g. a shared
-      // deep link) so index.html can forward them here once entry is
-      // recorded. Only the current page's own filename + query/hash is
-      // ever stored — never an arbitrary external URL.
-      const dest = location.pathname.split("/").pop() + location.search + location.hash;
-      window.location.replace("index.html?return=" + encodeURIComponent(dest));
+      window.location.replace("index.html");
     }
   } catch (err) {
     // sessionStorage unavailable (privacy mode) — fail open

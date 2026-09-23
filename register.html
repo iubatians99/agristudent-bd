@@ -5,7 +5,7 @@
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="X-Frame-Options" content="SAMEORIGIN">
   <meta name="referrer" content="strict-origin-when-cross-origin">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://www.googletagmanager.com https://www.google.com https://www.recaptcha.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://res.cloudinary.com https://lh3.googleusercontent.com; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://*.cloudfunctions.net https://api.cloudinary.com https://api.emailjs.com https://www.google.com; frame-src https://www.google.com https://www.recaptcha.net; object-src 'none'; base-uri 'self';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://www.googletagmanager.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://res.cloudinary.com https://lh3.googleusercontent.com; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://api.cloudinary.com https://api.emailjs.com; frame-src 'none'; object-src 'none'; base-uri 'self';">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
 <link rel="manifest" href="manifest.json">
@@ -41,8 +41,9 @@
     <h1>📝 Register</h1>
     <p style="color:var(--moss-600);margin-bottom:2rem;">
       Join the Agri Core community to unlock uploads and future premium resources.
-      You can register with Google for a faster start. After registration, complete your profile from My Profile — a profile reaches 100% when all required details are filled in.
-      An admin can then mark the profile as verified.
+      We'll send a 6-digit code to your email to confirm it's really you, then log you in right away.
+      After you verify the OTP, your account is ready immediately — no admin approval is required for registration.
+      Only one account is allowed per email address.
     </p>
     <p id="register-existing-login-link" class="hidden" style="margin-top:-1.2rem;margin-bottom:1.5rem;font-size:.9rem;">
       Already have an account? <a href="login.html" style="color:var(--leaf-500);font-weight:700;">Log in here →</a>
@@ -78,15 +79,12 @@
         <label for="studentIdNumber" style="display:block;font-size:.88rem;margin-bottom:.3rem;">Student ID Number *</label>
         <input type="text" id="studentIdNumber" required placeholder="e.g. 24209150 " style="width:100%;padding:.6rem .8rem;border:1px solid var(--line);border-radius:8px;font-family:var(--font-body);font-size:.92rem;margin-bottom:.9rem;">
 
-        <p style="font-size:.8rem;color:var(--moss-600);margin-top:.4rem;">Your Student ID number is part of your profile. No separate ID-card verification is required.</p>
+        <label for="studentIdPhoto" style="display:block;font-size:.88rem;margin-bottom:.3rem;">Student ID Card Photo (optional)</label>
+        <input type="file" id="studentIdPhoto" accept="image/*" style="width:100%;font-size:.85rem;">
+        <p style="font-size:.8rem;color:var(--moss-600);margin-top:.4rem;">Optional, but recommended — an admin reviews it and marks your profile with a verified ✅ badge once confirmed.</p>
       </div>
 
-      <button type="submit" id="submit-btn" style="background:var(--moss-700);color:#fff;border:none;padding:.85rem;border-radius:8px;font-weight:600;font-size:1rem;cursor:pointer;">Register with Email</button>
-      <div style="display:flex;align-items:center;gap:.7rem;margin:.15rem 0;color:var(--moss-600);font-size:.82rem;">
-        <span style="flex:1;height:1px;background:var(--line);"></span>OR<span style="flex:1;height:1px;background:var(--line);"></span>
-      </div>
-      <button type="button" id="google-register-btn" style="width:100%;background:#fff;color:var(--moss-900);border:1.5px solid var(--line);padding:.82rem;border-radius:8px;font-weight:700;font-size:.95rem;cursor:pointer;">Continue with Google</button>
-      <div id="google-register-status" class="hidden" style="text-align:center;font-size:.88rem;font-weight:600;"></div>
+      <button type="submit" id="submit-btn" style="background:var(--moss-700);color:#fff;border:none;padding:.85rem;border-radius:8px;font-weight:600;font-size:1rem;cursor:pointer;">Register</button>
 
       <div id="upload-progress-wrap" class="upload-progress-wrap hidden">
         <div class="progress-ring-box">

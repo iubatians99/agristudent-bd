@@ -1,12 +1,11 @@
-import { db, auth, CLOUDINARY_UPLOAD_URL, CLOUDINARY_UPLOAD_PRESET } from "./firebase-config.js";
+import { db, CLOUDINARY_UPLOAD_URL, CLOUDINARY_UPLOAD_PRESET } from "./firebase-config.js";
 import {
   doc, getDoc, updateDoc, deleteDoc, collection, query, where, getDocs, serverTimestamp, Timestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { normalizeEmail, normalizeStudentId } from "./identity.js";
+import { normalizeEmail } from "./identity.js";
 import { getSession, saveSession, clearSession } from "./session.js";
 import { initEmailNotifications } from "./email-config.js";
-import { isPasswordValid } from "./auth-core.js";
-import { updatePassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { hashPassword, isPasswordValid } from "./password.js";
 import { computeResourceAccessStatus, maybeSendAccessReminder, renderAccessBadge, renderAccessScale, formatDate, formatRemaining, DAY_MS } from "./access.js";
 import { fetchMessagesForUser, markMessageRead, formatMessageDateTime } from "./inbox.js";
 import { computeCreditWallet } from "./credits.js";
@@ -160,7 +159,6 @@ async function init() {
     });
 
     renderIdentity(reg);
-    renderProfileCompletion(reg, session.regId);
     renderPasswordSection(session.regId, reg);
 
     // Each section loads independently — a failure in one (e.g. a blocked
@@ -207,134 +205,26 @@ function renderIdentity(reg) {
   document.getElementById("profile-email").textContent = reg.email || "—";
   document.getElementById("profile-studentid").textContent = reg.studentIdNumber || "—";
 
-  const verifiedBadge = document.getElementById("profile-verified-badge");
-  verifiedBadge?.classList.toggle("hidden", reg.status !== "verified");
+  const idBadge = document.getElementById("profile-id-verified-badge");
+  const avatarWrapEl = document.getElementById("profile-avatar-wrap");
+  idBadge?.classList.toggle("hidden", !reg.idVerified);
+  avatarWrapEl?.classList.toggle("is-id-verified", !!reg.idVerified);
 
-  const status = reg.status || "incomplete";
+  const status = reg.status || "unverified";
   const pill = document.getElementById("profile-status-pill");
   const note = document.getElementById("profile-status-note");
-  const labels = { verified: "✅ Verified Profile", incomplete: "🕓 Complete Profile", pending: "🕓 Complete Profile", rejected: "❌ Needs Attention", unverified: "🕓 Complete Profile" };
+  const labels = { verified: "✅ Email Verified", unverified: "🕓 Unverified", rejected: "❌ Rejected" };
   pill.textContent = labels[status] || status;
   pill.className = "profile-status-pill " + status;
 
   if (status !== "verified") {
     note.classList.remove("hidden");
     note.innerHTML = status === "rejected"
-      ? `<p>Your profile needs attention. Please review and complete your details above.</p>`
-      : `<p>Complete your profile to 100%. Once complete, an admin can mark it as verified.</p>`;
+      ? `<p>Your registration was rejected. Please <a href="register.html" style="color:var(--leaf-500);font-weight:600;">register again</a> with correct details.</p>`
+      : `<p>Your registration is still awaiting admin review — this usually takes 24–48 hours. You'll get full access once verified.</p>`;
   } else {
     note.classList.add("hidden");
   }
-}
-
-
-// ============================================
-// PROFILE COMPLETION + UPDATE REQUEST
-// Google registrations can finish their required details here. A verified
-// profile is locked after approval; a student can request permission to
-// update it again instead of changing verified details silently.
-// ============================================
-function getProfileCompletion(reg) {
-  const checks = [
-    !!String(reg.fullName || "").trim(),
-    !!String(reg.email || "").trim(),
-    !!String(reg.gender || "").trim(),
-    !!String(reg.studentIdNumber || "").trim()
-  ];
-  const completed = checks.filter(Boolean).length;
-  return { percent: Math.round((completed / checks.length) * 100), completed, total: checks.length };
-}
-
-function renderProfileCompletion(reg, regId) {
-  const box = document.getElementById("profile-completion-card");
-  const percentEl = document.getElementById("profile-completion-percent");
-  const bar = document.getElementById("profile-completion-bar");
-  const note = document.getElementById("profile-completion-note");
-  const area = document.getElementById("profile-edit-area");
-  if (!box || !area) return;
-
-  const completion = getProfileCompletion(reg);
-  percentEl.textContent = `${completion.percent}%`;
-  bar.style.width = `${completion.percent}%`;
-
-  const verified = reg.status === "verified";
-  const requestPending = reg.profileUpdateRequested === true;
-  if (verified && !requestPending) {
-    note.textContent = completion.percent === 100
-      ? "Your profile is 100% complete and verified."
-      : "Your profile is verified.";
-    area.innerHTML = `<button type="button" id="request-profile-update-btn" style="background:#fff;border:1px solid var(--line);color:var(--moss-700);padding:.55rem .8rem;border-radius:7px;font-weight:700;cursor:pointer;">Request profile update</button>
-      <div id="profile-update-request-status" style="font-size:.8rem;margin-top:.5rem;"></div>`;
-    document.getElementById("request-profile-update-btn")?.addEventListener("click", async () => {
-      const btn = document.getElementById("request-profile-update-btn");
-      btn.disabled = true; btn.textContent = "Sending…";
-      try {
-        await updateDoc(doc(db, "registrations", regId), {
-          profileUpdateRequested: true,
-          profileUpdateRequestedAt: serverTimestamp(),
-          profileUpdateApproved: false
-        });
-        renderProfileCompletion({ ...reg, profileUpdateRequested: true }, regId);
-      } catch (err) {
-        btn.disabled = false; btn.textContent = "Request profile update";
-        const st = document.getElementById("profile-update-request-status");
-        if (st) st.textContent = "Could not send the request. Please try again.";
-      }
-    });
-    return;
-  }
-
-  note.textContent = completion.percent === 100
-    ? (verified ? "100% complete." : "100% complete — waiting for admin verification.")
-    : "Complete the missing details below to reach 100%.";
-
-  area.innerHTML = `
-    <form id="profile-completion-form" style="display:grid;gap:.7rem;margin-top:.8rem;">
-      <div><label for="profile-full-name" style="display:block;font-weight:600;font-size:.82rem;margin-bottom:.25rem;">Full Name</label>
-      <input id="profile-full-name" type="text" value="${esc(reg.fullName || "")}" required style="width:100%;padding:.6rem .7rem;border:1px solid var(--line);border-radius:7px;"></div>
-      <div><label for="profile-gender" style="display:block;font-weight:600;font-size:.82rem;margin-bottom:.25rem;">Gender</label>
-      <select id="profile-gender" required style="width:100%;padding:.6rem .7rem;border:1px solid var(--line);border-radius:7px;">
-        <option value="">Select gender</option><option value="female" ${reg.gender==="female"?"selected":""}>Female</option><option value="male" ${reg.gender==="male"?"selected":""}>Male</option>
-      </select></div>
-      <div><label for="profile-student-id" style="display:block;font-weight:600;font-size:.82rem;margin-bottom:.25rem;">Student ID Number</label>
-      <input id="profile-student-id" type="text" value="${esc(reg.studentIdNumber || "")}" required style="width:100%;padding:.6rem .7rem;border:1px solid var(--line);border-radius:7px;"></div>
-      <button type="submit" id="profile-completion-save" style="background:var(--moss-700);color:#fff;border:0;padding:.7rem;border-radius:7px;font-weight:700;cursor:pointer;">Save profile</button>
-      <div id="profile-completion-status" style="font-size:.8rem;"></div>
-    </form>`;
-  const form = document.getElementById("profile-completion-form");
-  form?.addEventListener("submit", async e => {
-    e.preventDefault();
-    const btn = document.getElementById("profile-completion-save");
-    const st = document.getElementById("profile-completion-status");
-    const fullName = document.getElementById("profile-full-name").value.trim();
-    const gender = document.getElementById("profile-gender").value;
-    const studentIdNumber = normalizeStudentId(document.getElementById("profile-student-id").value);
-    if (!fullName || !gender || !studentIdNumber) { st.textContent = "Please complete all required fields."; st.style.color = "var(--terracotta-500)"; return; }
-    btn.disabled = true; btn.textContent = "Saving…";
-    try {
-      const next = getProfileCompletion({ ...reg, fullName, gender, studentIdNumber });
-      const patch = {
-        fullName, gender, studentIdNumber,
-        profileComplete: next.percent === 100,
-        profileCompletionPercent: next.percent,
-        profileUpdateRequested: false,
-        profileUpdateApproved: false,
-        profileUpdatedAt: serverTimestamp()
-      };
-      // Completing a verified profile is allowed only after an explicit
-      // update request; the rules enforce this again server-side.
-      await updateDoc(doc(db, "registrations", regId), patch);
-      const updated = { ...reg, ...patch, profileUpdateRequested: false };
-      saveSession({ ...getSession(), fullName, gender, studentIdNumber, status: updated.status, profileComplete: next.percent === 100, profileCompletionPercent: next.percent });
-      renderIdentity(updated);
-      renderProfileCompletion(updated, regId);
-    } catch (err) {
-      console.error("[Profile] completion save failed:", err);
-      st.textContent = "Could not save your profile. Please try again.";
-      st.style.color = "var(--terracotta-500)";
-      btn.disabled = false; btn.textContent = "Save profile";
-    }
-  });
 }
 
 // ============================================
@@ -346,14 +236,7 @@ function renderProfileCompletion(reg, regId) {
 function renderPasswordSection(regId, reg) {
   const noPasswordBlock = document.getElementById("password-section-no-password");
   const hasPasswordBlock = document.getElementById("password-section-has-password");
-  // BUG FIX: this used to check `!!auth.currentUser`, which is true for
-  // every signed-in visitor on this page (you can't reach profile.html
-  // without a session) — so the "no password yet" card/popup could never
-  // actually show. Whether a real password has been set is tracked by
-  // the registration record's `passwordSet` flag instead (see
-  // js/registration.js, js/login.js and js/session.js, which all read
-  // and write this same flag).
-  const hasPassword = reg.passwordSet === true;
+  const hasPassword = !!reg.passwordHash;
   const cardCopy = document.getElementById("password-card-copy");
   const openBtn = document.getElementById("profile-password-open-btn");
   const modal = document.getElementById("profile-password-modal");
@@ -412,14 +295,9 @@ function renderPasswordSection(regId, reg) {
     statusEl.textContent = "Saving your password…";
     statusEl.style.color = "var(--moss-600)";
     try {
-      if (!auth.currentUser) throw new Error("Your secure login session has expired. Please log in again.");
-      await updatePassword(auth.currentUser, password);
-      // BUG FIX: this never wrote passwordSet:true, so a student who set
-      // their first password here kept getting re-nagged forever by both
-      // this card and js/session.js's site-wide popup (see hasPassword
-      // above and js/session.js's maybeShowPasswordSetupPopup).
-      await updateDoc(doc(db, "registrations", regId), { authUid: auth.currentUser.uid, emailVerified: !!auth.currentUser.emailVerified, passwordSet: true });
-      reg.passwordSet = true;
+      const passwordHash = await hashPassword(password, reg.email);
+      await updateDoc(doc(db, "registrations", regId), { passwordHash });
+      reg.passwordHash = passwordHash;
       statusEl.textContent = successText;
       statusEl.style.color = "var(--moss-600)";
       onSuccess?.();
@@ -491,18 +369,7 @@ function renderPasswordSection(regId, reg) {
     });
   }
 
-  if (hasPassword) {
-    closeModal();
-  } else if (modal && !window.__agriProfilePwdAutoOpened) {
-    // Auto-open on arrival (e.g. straight after registration, or after a
-    // passwordless email-link login) so setting a password doesn't
-    // require noticing and clicking the card first. Only once per tab —
-    // a dismissed modal shouldn't reopen itself every time renderPasswordSection
-    // re-runs (e.g. after other profile data refreshes).
-    window.__agriProfilePwdAutoOpened = true;
-    modal.classList.remove("hidden");
-    modal.setAttribute("aria-hidden", "false");
-  }
+  if (hasPassword) closeModal();
 }
 
 // ============================================

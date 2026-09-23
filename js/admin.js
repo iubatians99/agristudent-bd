@@ -1471,10 +1471,11 @@ async function loadTimeline() {
 }
 
 // ============================================
-// REGISTRATIONS (profile verification)
+// REGISTRATIONS (student ID verification)
 // ============================================
-// Profile verification is based on the admin-controlled `status` field.
- // Restrictions/removal remain independent account controls. A restriction that has already
+// A registration has no single "status" field — its state is spread across
+// idVerified, accountRestrictedUntil and removed — so the filter maps each
+// dropdown option onto the right combination. A restriction that has already
 // expired doesn't count as restricted.
 function matchesRegistrationFilter(item, filter) {
   if (!filter) return true;
@@ -1486,8 +1487,8 @@ function matchesRegistrationFilter(item, filter) {
   const isRemoved = !!item.removed;
 
   switch (filter) {
-    case "verified":   return item.status === "verified";
-    case "unverified": return item.status !== "verified";
+    case "verified":   return !!item.idVerified;
+    case "unverified": return !item.idVerified;
     case "restricted": return isRestricted;
     case "removed":    return isRemoved;
     case "active":     return !isRestricted && !isRemoved;
@@ -1537,9 +1538,10 @@ async function loadRegistrations() {
           </div>
         </div>
         <div style="display:flex;flex-direction:column;gap:.4rem;align-items:flex-end;">
-          ${item.status === "verified"
-            ? `<span style="display:inline-flex;align-items:center;gap:.35rem;padding:.35rem .65rem;border-radius:999px;background:linear-gradient(135deg,rgba(107,155,94,.22),rgba(63,91,61,.18));color:var(--leaf-500);font-size:.78rem;font-weight:700;">✅ Verified Profile · 100%</span>`
-            : `<span style="display:inline-flex;align-items:center;gap:.35rem;padding:.35rem .65rem;border-radius:999px;background:rgba(214,171,74,.15);color:var(--wheat-400);font-size:.78rem;font-weight:600;">🕓 Profile ${Number(item.profileCompletionPercent || 0)}% · Not Verified</span>`}
+          <span style="display:inline-flex;align-items:center;gap:.35rem;padding:.35rem .65rem;border-radius:999px;background:rgba(63,91,61,.10);color:var(--moss-700);font-size:.78rem;font-weight:600;">✅ OTP Verified · Auto-approved</span>
+          ${item.idVerified
+            ? `<span style="display:inline-flex;align-items:center;gap:.35rem;padding:.35rem .65rem;border-radius:999px;background:linear-gradient(135deg,rgba(107,155,94,.22),rgba(63,91,61,.18));color:var(--leaf-500);font-size:.78rem;font-weight:700;">🟢 ID Verified</span>`
+            : `<span style="display:inline-flex;align-items:center;gap:.35rem;padding:.35rem .65rem;border-radius:999px;background:rgba(214,171,74,.15);color:var(--wheat-400);font-size:.78rem;font-weight:600;">🕓 ID Not Verified</span>`}
           ${(() => {
             const now = Date.now();
             const accessUntilMs = item.accessUntil?.toDate?.()?.getTime?.() || 0;
@@ -1561,9 +1563,9 @@ async function loadRegistrations() {
           <div style="display:flex;gap:.4rem;flex-wrap:wrap;justify-content:flex-end;">
             <button type="button" class="credits-info-btn" data-id="${esc(d.id)}" data-email="${esc(item.email || "")}" style="background:none;border:1px solid var(--line);padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">💳 Credits</button>
             <button type="button" class="edit-btn" data-schema="registrations" data-id="${esc(d.id)}" style="background:none;border:1px solid var(--line);padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">✏️ Edit</button>
-            ${item.status === "verified"
-              ? `<button type="button" class="unverify-profile-btn" data-id="${esc(d.id)}" style="background:none;border:1px solid var(--line);color:var(--moss-600);padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">↩️ Unverify Profile</button>`
-              : `<button type="button" class="verify-profile-btn" data-id="${esc(d.id)}" ${Number(item.profileCompletionPercent || 0) < 100 ? "disabled" : ""} style="background:var(--leaf-500);border:none;color:#fff;padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;opacity:${Number(item.profileCompletionPercent || 0) < 100 ? ".5" : "1"};">✅ Mark Verified</button>`}
+            ${item.idVerified
+              ? `<button type="button" class="unverify-id-btn" data-id="${esc(d.id)}" style="background:none;border:1px solid var(--line);color:var(--moss-600);padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">↩️ Unverify</button>`
+              : `<button type="button" class="verify-id-btn" data-id="${esc(d.id)}" style="background:var(--leaf-500);border:none;color:#fff;padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">🟢 Mark Verified</button>`}
             ${item.accountRestrictedUntil
               ? `<button type="button" class="unrestrict-btn" data-id="${esc(d.id)}" data-email="${esc(item.email || "")}" style="background:none;border:1px solid var(--leaf-500);color:var(--leaf-500);padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">✅ Lift Restriction</button>`
               : `<button type="button" class="restrict-week-btn" data-id="${esc(d.id)}" data-email="${esc(item.email || "")}" style="background:none;border:1px solid var(--terracotta-500);color:var(--terracotta-500);padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">⛔ Restrict 7d</button>
@@ -1681,45 +1683,38 @@ async function loadRegistrations() {
       });
     });
 
-    regList.querySelectorAll(".verify-profile-btn").forEach(btn => {
+    regList.querySelectorAll(".verify-id-btn").forEach(btn => {
       btn.addEventListener("click", async () => {
-        if (btn.disabled) return;
         btn.disabled = true;
         btn.textContent = "Verifying…";
         try {
-          const item = registrationsCache[btn.dataset.id];
-          if (Number(item?.profileCompletionPercent || 0) < 100) throw new Error("Profile must be 100% complete before verification.");
           await updateDoc(doc(db, "registrations", btn.dataset.id), {
-            status: "verified",
-            profileComplete: true,
-            profileCompletionPercent: 100,
-            profileVerifiedAt: new Date(),
-            profileUpdateRequested: false,
-            profileUpdateApproved: false
+            idVerified: true,
+            idVerifiedAt: new Date()
           });
           loadRegistrations();
         } catch (err) {
-          console.error("[AgriAdmin] profile verify failed:", err);
-          alert(err?.message || "Something went wrong marking this profile verified.");
+          console.error("[AgriAdmin] ID verify failed:", err);
+          alert("Something went wrong marking this profile verified: " + (err && err.message ? err.message : "please try again."));
           btn.disabled = false;
-          btn.textContent = "✅ Mark Verified";
+          btn.textContent = "🟢 Mark Verified";
         }
       });
     });
 
-    regList.querySelectorAll(".unverify-profile-btn").forEach(btn => {
+    regList.querySelectorAll(".unverify-id-btn").forEach(btn => {
       btn.addEventListener("click", async () => {
-        if (!confirm("Remove the verified status from this profile?")) return;
+        if (!confirm("Remove the verified badge from this profile?")) return;
         btn.disabled = true;
         try {
           await updateDoc(doc(db, "registrations", btn.dataset.id), {
-            status: "incomplete",
-            profileVerifiedAt: null
+            idVerified: false,
+            idVerifiedAt: null
           });
           loadRegistrations();
         } catch (err) {
-          console.error("[AgriAdmin] profile unverify failed:", err);
-          alert("Something went wrong: " + (err?.message || "please try again."));
+          console.error("[AgriAdmin] ID unverify failed:", err);
+          alert("Something went wrong: " + (err && err.message ? err.message : "please try again."));
           btn.disabled = false;
         }
       });
