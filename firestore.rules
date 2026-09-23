@@ -564,6 +564,23 @@ service cloud.firestore {
     }
 
     // ============================================
+    // PUBLIC STATS: aggregate counters ONLY (e.g. total registered
+    // users, total items awaiting admin review) for the homepage
+    // stats strip. This document never contains any individual
+    // student's data — only numbers computed server-side by
+    // scripts/update-public-stats.mjs using the Admin SDK, which
+    // bypasses these rules entirely. Clients (including a signed-in
+    // admin) can read it, but NOTHING can write to it from the
+    // browser — that keeps the private registrations/facultyReviews
+    // collections themselves fully locked down while still letting
+    // the site show accurate live counts.
+    // ============================================
+    match /publicStats/{id} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // ============================================
     // SETTINGS: Configuration (admin-only, unchanged)
     // ============================================
     match /settings/{id} {

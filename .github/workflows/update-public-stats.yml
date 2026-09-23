@@ -1,0 +1,26 @@
+name: Update public stats
+
+on:
+  schedule:
+    # Every 30 minutes. Adjust to taste — this only ever writes two
+    # numbers to Firestore, so running it often is cheap and safe.
+    - cron: "*/30 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  update-stats:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install firebase-admin
+      - name: Write service account file
+        run: echo "$FIREBASE_SERVICE_ACCOUNT" > /tmp/service-account.json
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      - name: Update public stats
+        run: node scripts/update-public-stats.mjs
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/service-account.json
