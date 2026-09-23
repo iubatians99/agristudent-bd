@@ -651,6 +651,8 @@ async function openFacultyProfile(facultyId, allFaculty, allCourses) {
 
     const courseCode = codeInput.value.trim().toUpperCase().replace(/\s+/g, "");
     if (!courseCode) { setStatus("Please enter a course code.", true); return; }
+    if (courseCode.length > 20) { setStatus("Course code is too long.", true); return; }
+    if (!/^[A-Z0-9-]+$/.test(courseCode)) { setStatus("Use letters and numbers only, e.g. AGR371.", true); return; }
     if ((faculty.courseCodes || []).map(c => String(c).trim().toUpperCase().replace(/\s+/g, "")).includes(courseCode)) {
       setStatus("This course is already linked to this faculty.", true);
       return;
@@ -665,12 +667,18 @@ async function openFacultyProfile(facultyId, allFaculty, allCourses) {
         submitBtn.disabled = false;
         return;
       }
-      await addDoc(collection(db, "courseSuggestions"), {
+      const submittedByRegId = registration.id;
+      // Deterministic id (facultyId_courseCode_regId) so a repeat
+      // suggestion of the same course by the same student for the same
+      // faculty is rejected by the security rules as a duplicate, instead
+      // of piling up duplicate pending rows for admin to review.
+      const suggestionId = `${faculty.id}_${courseCode}_${submittedByRegId}`;
+      await setDoc(doc(db, "courseSuggestions", suggestionId), {
         facultyId: faculty.id,
         facultyName: faculty.name || "",
         courseCode,
         status: "pending",
-        submittedByRegId: registration.id,
+        submittedByRegId,
         submittedByEmail: String(registration.email || "").trim().toLowerCase(),
         submittedByName: String(registration.fullName || session.fullName || "").trim().slice(0, 160),
         createdAt: serverTimestamp()
@@ -681,7 +689,7 @@ async function openFacultyProfile(facultyId, allFaculty, allCourses) {
     } catch (err) {
       console.error("[Faculty] course suggestion failed:", err);
       if (err && err.code === "permission-denied") {
-        setStatus("Submission blocked by the site's security rules — ask the admin to deploy the latest firestore.rules.", true);
+        setStatus("You've already suggested this course for this faculty — it's awaiting admin review.", true);
       } else {
         setStatus("Could not submit right now. Please try again.", true);
       }

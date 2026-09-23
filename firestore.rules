@@ -29,6 +29,19 @@ service cloud.firestore {
       return request.auth != null && request.auth.token.admin == true;
     }
 
+    // Shared by any collection that needs "this regId belongs to a real,
+    // currently-verified, non-removed account" without also pinning an
+    // exact email string match (facultyReviews already uses this simpler
+    // check below and it's the one proven to work in practice — the
+    // extra email-equality some other rules add is redundant once regId
+    // itself resolves to one specific account, and is one more way a
+    // client-side normalization difference can turn into a silent
+    // permission-denied).
+    function isVerifiedRegistration(regId) {
+      let reg = get(/databases/$(database)/documents/registrations/$(regId)).data;
+      return reg.status == 'verified' && (!('removed' in reg) || reg.removed != true);
+    }
+
     // ============================================
     // REGISTRATIONS: Student signup + OTP verification
     // ============================================
@@ -262,23 +275,41 @@ service cloud.firestore {
     // ============================================
     match /courseSuggestions/{id} {
       allow get, list: if isAdmin();
-      allow create: if !isAdmin() &&
+
+      // "Suggest a course" form on a faculty profile (js/faculty.js).
+      // Students never hold a Firebase Auth session, so — same as
+      // faculty/{id} above — this validates fields instead of gating on
+      // request.auth: the submission must be tied to a real, verified,
+      // non-removed registration whose email matches the submitted email.
+      //
+      // Doc id is deterministic: `${facultyId}_${courseCode}_${regId}`.
+      // That means a second suggestion for the SAME course + faculty by
+      // the SAME student lands on the same doc id and is evaluated as an
+      // "update" (not allowed for non-admins) instead of a new "create" —
+      // the same one-per-pair trick facultyReviews/blogLikes already use
+      // in this file — so it fails closed with a clear, expected
+      // permission-denied rather than creating duplicate pending rows for
+      // the same suggestion. js/faculty.js reads that specific failure as
+      // "you already suggested this one."
+      allow create: if
+        id == (request.resource.data.facultyId + '_' + request.resource.data.courseCode + '_' + request.resource.data.submittedByRegId) &&
         request.resource.data.keys().hasAll([
-          'facultyId', 'facultyName', 'courseCode', 'status',
+          'facultyId', 'courseCode', 'status',
           'submittedByRegId', 'submittedByEmail', 'submittedByName'
         ]) &&
         request.resource.data.facultyId is string && request.resource.data.facultyId.size() > 0 &&
-        request.resource.data.facultyName is string && request.resource.data.facultyName.size() <= 160 &&
+        (!('facultyName' in request.resource.data) || request.resource.data.facultyName is string) &&
         request.resource.data.courseCode is string &&
-        request.resource.data.courseCode.size() > 0 && request.resource.data.courseCode.size() <= 20 &&
+        request.resource.data.courseCode.size() > 0 &&
+        request.resource.data.courseCode.size() <= 20 &&
         request.resource.data.status == 'pending' &&
         request.resource.data.submittedByRegId is string && request.resource.data.submittedByRegId.size() > 0 &&
-        request.resource.data.submittedByEmail is string && request.resource.data.submittedByEmail.size() > 0 &&
-        request.resource.data.submittedByEmail.size() <= 200 &&
+        request.resource.data.submittedByEmail is string &&
+        request.resource.data.submittedByEmail.size() > 0 && request.resource.data.submittedByEmail.size() <= 200 &&
         request.resource.data.submittedByName is string && request.resource.data.submittedByName.size() <= 160 &&
-        get(/databases/$(database)/documents/registrations/$(request.resource.data.submittedByRegId)).data.status == 'verified' &&
-        (!('removed' in get(/databases/$(database)/documents/registrations/$(request.resource.data.submittedByRegId)).data) || get(/databases/$(database)/documents/registrations/$(request.resource.data.submittedByRegId)).data.removed != true) &&
+        isVerifiedRegistration(request.resource.data.submittedByRegId) &&
         get(/databases/$(database)/documents/registrations/$(request.resource.data.submittedByRegId)).data.email == request.resource.data.submittedByEmail;
+
       allow update, delete: if isAdmin();
     }
 
