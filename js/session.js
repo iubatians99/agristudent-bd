@@ -306,8 +306,8 @@ function maybeShowPasswordSetupPopup(regId, reg) {
       <div class="modal-body">
         <h3>🔐 Set Up a Password</h3>
         <p class="modal-desc" style="max-height:none;">
-          Secure your account with a password so you can log in faster next time — just your
-          Student ID and this password, no email step needed.
+          Set a password so you can log in with just your email and this password next
+          time — no sign-in link needed.
         </p>
         <form id="pwd-setup-form" style="margin-top:1rem;">
           <div class="form-field">

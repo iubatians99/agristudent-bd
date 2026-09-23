@@ -63,19 +63,37 @@
       <p style="margin-top:1.6rem;color:var(--moss-600);font-size:.9rem;text-align:center;">
         Not registered yet? <a href="register.html" style="color:var(--leaf-500);font-weight:600;">Register here →</a>
       </p>
-      <p style="margin-top:.6rem;text-align:center;font-size:.88rem;">
-        <a href="#" id="id-step-forgot-link" style="color:var(--moss-600);text-decoration:underline;">Haven't set a password yet? Email me a login link →</a>
-      </p>
     </div>
 
     <!-- ============================================ -->
-    <!-- STEP 2 — password OR passwordless email link.
-         Accounts that have set a password use it here. Accounts that
-         haven't (every account registered before password login
-         existed, plus any fresh registration that hasn't finished
-         setup) tap "Email me a login link" instead — no password
-         needed, and js/session.js's site-wide popup offers to set one
-         right after signing in this way. -->
+    <!-- NEEDS-SETUP — shown instead of the password step for any
+         registered email that hasn't set a password yet: a brand-new
+         signup mid-setup, or (this update) any pre-existing account,
+         since every stored password/login credential was reset when
+         password-based login shipped. No password field here on
+         purpose — the account doesn't have a usable one to type. -->
+    <!-- ============================================ -->
+    <div id="needs-setup-step" class="hidden">
+      <h1>🔔 We've Updated Agri Core</h1>
+      <p style="color:var(--moss-600);margin-bottom:1rem;">
+        Account: <strong id="needs-setup-id"></strong> · <a href="#" id="needs-setup-back">change</a>
+      </p>
+      <p style="color:var(--moss-600);margin-bottom:1.6rem;">
+        You're already registered — as part of this update, we've reset stored
+        login credentials, so please set up a password to log in from now on.
+        We'll email you a secure sign-in link; once you're in, you'll be asked
+        to choose your new password.
+      </p>
+      <button type="button" id="needs-setup-send" style="width:100%;background:var(--moss-700);color:#fff;border:none;padding:.85rem;border-radius:8px;font-weight:600;font-size:1rem;cursor:pointer;">📧 Email me a sign-in link</button>
+      <div id="needs-setup-status" style="margin-top:.8rem;text-align:center;font-size:.9rem;min-height:1.2em;font-weight:600;"></div>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- STEP 2 — password. Only ever shown for an account that
+         checkLoginMethod (functions/index.js) has confirmed already has
+         a password set — an account without one goes to needs-setup-step
+         instead, never here. "Forgot password?" below still works from
+         here as the reset path if a student can't recall it. -->
     <!-- ============================================ -->
     <div id="password-step" class="hidden">
       <h1>🔐 Log In</h1>
@@ -95,8 +113,8 @@
         <span style="flex:1;height:1px;background:var(--line);"></span>OR<span style="flex:1;height:1px;background:var(--line);"></span>
       </div>
 
-      <button type="button" id="forgot-password-link" style="width:100%;background:#fff;border:1.5px solid var(--moss-700);color:var(--moss-700);padding:.8rem;border-radius:8px;font-weight:600;font-size:.92rem;cursor:pointer;">📧 Email me a login link</button>
-      <p style="margin-top:.6rem;text-align:center;font-size:.82rem;color:var(--moss-600);">No password set yet, or forgot it? This signs you in directly.</p>
+      <button type="button" id="forgot-password-link" style="width:100%;background:#fff;border:1.5px solid var(--moss-700);color:var(--moss-700);padding:.8rem;border-radius:8px;font-weight:600;font-size:.92rem;cursor:pointer;">📧 Forgot password? Email me a login link</button>
+      <p style="margin-top:.6rem;text-align:center;font-size:.82rem;color:var(--moss-600);">This signs you in directly so you can set a new password.</p>
     </div>
 
     <!-- ============================================ -->

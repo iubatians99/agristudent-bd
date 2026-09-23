@@ -1,5 +1,5 @@
 // ============================================
-// AGRI CORE — LOGIN (rebuilt)
+// AGRI CORE — LOGIN
 //
 // Identity model: Firebase Authentication is the sole source of truth
 // for "who is this". A student can get in two ways:
@@ -12,14 +12,20 @@
 // the matching `registrations` Firestore document (created at sign-up
 // — see js/registration.js) and starts the local session from it.
 //
-// This file was rewritten from scratch, but the identity system and
-// Firestore schema it talks to are unchanged, so every account created
-// by the previous login/registration code (or migrated in by
-// tools/migrate-existing-users.mjs) logs in here exactly as before —
-// no re-registration, no password reset, no data migration needed.
+// Before either path runs, the typed-in email is checked against
+// functions/index.js's checkLoginMethod callable so the UI can show the
+// right next step instead of guessing:
+//   - not registered            -> pointed at register.html
+//   - registered, no password   -> "needs-setup" step (this covers both
+//     a brand-new signup mid-setup AND every account that predates
+//     password login, since tools/reset-all-accounts.mjs clears
+//     passwordSet back to false for existing accounts as part of this
+//     rollout — see that script for why)
+//   - registered, password set  -> normal password step
 // ============================================
-import { db, auth } from "./firebase-config.js";
+import { db, auth, functions } from "./firebase-config.js";
 import { collection, query, where, getDocs, updateDoc, doc, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
 import { normalizeEmail } from "./identity.js";
 import { getSession, saveSession } from "./session.js";
 import {
@@ -29,8 +35,16 @@ import {
   signInWithEmailLink,
   getAdditionalUserInfo,
   sendPasswordResetEmail,
-  signOut
+  signOut,
+  GoogleAuthProvider,
+  signInWithPopup
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+// Tells us, for a typed-in email and BEFORE any password is guessed,
+// whether the account exists and already has a password set — see
+// functions/index.js for why this has to go through a Cloud Function
+// rather than a direct Firestore read.
+const checkLoginMethodFn = httpsCallable(functions, "checkLoginMethod");
 
 const LINK_EMAIL_KEY = "agri_login_link_email";
 const returnTo = new URLSearchParams(window.location.search).get("return");
@@ -42,6 +56,7 @@ function destinationAfterLogin() {
 // ---- DOM ----
 const steps = {
   id: document.getElementById("id-step"),
+  needsSetup: document.getElementById("needs-setup-step"),
   password: document.getElementById("password-step"),
   linkSent: document.getElementById("link-sent-step"),
   linkConfirm: document.getElementById("link-confirm-step")
@@ -50,6 +65,9 @@ const idForm = document.getElementById("id-form");
 const idInput = document.getElementById("id-studentId");
 const idStatus = document.getElementById("id-status");
 const idSubmit = document.getElementById("id-submit");
+const needsSetupId = document.getElementById("needs-setup-id");
+const needsSetupSend = document.getElementById("needs-setup-send");
+const needsSetupStatus = document.getElementById("needs-setup-status");
 const passwordForm = document.getElementById("password-form");
 const passwordInput = document.getElementById("login-password");
 const passwordStatus = document.getElementById("password-login-status");
@@ -60,6 +78,7 @@ const linkSentStatus = document.getElementById("link-sent-status");
 const linkConfirmForm = document.getElementById("link-confirm-form");
 const linkConfirmInput = document.getElementById("link-confirm-email");
 const linkConfirmStatus = document.getElementById("link-confirm-status");
+let pendingLoginEmail = ""; // the email the needs-setup step should send the link to
 
 function showStep(name) {
   Object.entries(steps).forEach(([key, el]) => el?.classList.toggle("hidden", key !== name));
@@ -94,11 +113,13 @@ function cleanUrl() {
 
 // ============================================
 // Firestore lookup — only ever runs AFTER Firebase Auth has confirmed
-// who the visitor is. firestore.rules requires an authenticated
-// session to read a `registrations` doc at all (see the "REGISTRATIONS"
-// section of firestore.rules), so there's no pre-login way to check
-// "does this email exist" without leaking account data — the UI below
-// is designed around that: it never tries to guess in advance.
+// who the visitor is. firestore.rules requires an authenticated session
+// to read a `registrations` doc at all (see the "REGISTRATIONS" section
+// of firestore.rules); the earlier "does this email exist / does it
+// have a password yet" check (STEP 1 below) goes through
+// checkLoginMethod instead, which is allowed to bypass that rule via
+// the Admin SDK because it only ever returns two booleans, never the
+// registration doc itself.
 // ============================================
 async function findOwnRegistration(email) {
   const snap = await getDocs(query(collection(db, "registrations"), where("email", "==", email)));
@@ -264,9 +285,11 @@ async function finishEmailLinkSignIn(email, statusEl) {
 }
 
 // ============================================
-// STEP 1 — enter the account email, move to the password step
+// STEP 1 — enter the account email. Before asking for a password at
+// all, ask the server which of three states this email is in, so the
+// student is never shown a password box that can't possibly work.
 // ============================================
-idForm?.addEventListener("submit", (e) => {
+idForm?.addEventListener("submit", async (e) => {
   e.preventDefault();
   const email = normalizeEmail(idInput.value);
   if (!email || !email.includes("@")) {
@@ -274,13 +297,49 @@ idForm?.addEventListener("submit", (e) => {
     return;
   }
   idStatus.classList.add("hidden");
-  emailStepId.textContent = email;
-  passwordForm.dataset.email = email;
-  showStep("password");
-  passwordInput.focus();
+
+  const restore = setBusy(idSubmit, "Checking…");
+  try {
+    const { data } = await checkLoginMethodFn({ email });
+
+    if (!data.exists) {
+      status(idStatus, "No Agri Core account found for that email. Please register instead.", true);
+      return;
+    }
+
+    pendingLoginEmail = email;
+
+    if (data.passwordSet) {
+      emailStepId.textContent = email;
+      passwordForm.dataset.email = email;
+      showStep("password");
+      passwordInput.focus();
+    } else {
+      needsSetupId.textContent = email;
+      status(needsSetupStatus, "");
+      needsSetupStatus.classList.add("hidden");
+      showStep("needsSetup");
+    }
+  } catch (err) {
+    console.error("[Login] checkLoginMethod failed:", err);
+    // Fail open rather than blocking login entirely: fall back to the
+    // old behavior of just asking for a password, with "Forgot
+    // password?" still available underneath as an escape hatch.
+    emailStepId.textContent = email;
+    passwordForm.dataset.email = email;
+    showStep("password");
+    passwordInput.focus();
+  } finally {
+    restore();
+  }
+});
+
+needsSetupSend?.addEventListener("click", async (e) => {
+  await sendLoginLink(pendingLoginEmail, e.currentTarget);
 });
 
 document.getElementById("password-step-back")?.addEventListener("click", e => { e.preventDefault(); showStep("id"); });
+document.getElementById("needs-setup-back")?.addEventListener("click", e => { e.preventDefault(); showStep("id"); });
 document.getElementById("link-sent-back")?.addEventListener("click", e => { e.preventDefault(); showStep(passwordForm.dataset.email ? "password" : "id"); });
 document.getElementById("link-confirm-back")?.addEventListener("click", e => { e.preventDefault(); showStep("id"); });
 
@@ -312,21 +371,13 @@ passwordForm?.addEventListener("submit", async (e) => {
   } catch (err) {
     console.error("[Login]", err);
     if (["auth/invalid-credential", "auth/wrong-password", "auth/user-not-found"].includes(err?.code)) {
-      status(passwordStatus, "Wrong email or password — or you haven't set a password yet. Try \"Email me a login link\" below.", true);
+      status(passwordStatus, "Wrong password. Try \"Forgot password?\" below to sign in with a link instead.", true);
     } else {
-      status(passwordStatus, "Unable to sign in. Check your email/password, or use \"Email me a login link\" below.", true);
+      status(passwordStatus, "Unable to sign in. Check your password, or use \"Forgot password?\" below.", true);
     }
   } finally {
     restore();
   }
-});
-
-document.getElementById("id-step-forgot-link")?.addEventListener("click", async e => {
-  e.preventDefault();
-  const email = idInput.value;
-  if (!normalizeEmail(email).includes("@")) { status(idStatus, "Enter your email address above first.", true); return; }
-  passwordForm.dataset.email = normalizeEmail(email);
-  await sendLoginLink(email, e.currentTarget);
 });
 
 document.getElementById("forgot-password-link")?.addEventListener("click", async e => {

@@ -29,6 +29,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore, FieldValue, Timestamp } from "firebase-admin/firestore";
+import { getAuth } from "firebase-admin/auth";
 import crypto from "node:crypto";
 
 initializeApp();
@@ -63,6 +64,25 @@ function docSafeId(raw) {
   return String(raw || "unknown").replace(/[^a-zA-Z0-9.:_@-]/g, "_").slice(0, 300) || "unknown";
 }
 
+// Shared per-IP cap used by every callable below that a client can hit
+// before it has any Firebase Auth session (requestRegistrationOtp,
+// checkLoginMethod) — one place instead of a copy of the same
+// transaction in each function.
+async function checkIpRateLimit(ip, logCollection, maxPerHour) {
+  await db.runTransaction(async (tx) => {
+    const ref = db.collection(logCollection).doc(ip);
+    const snap = await tx.get(ref);
+    const now = Date.now();
+    const sends = (snap.exists ? snap.data().sends : []) || [];
+    const recent = sends.filter((t) => now - t < 60 * 60 * 1000);
+    if (recent.length >= maxPerHour) {
+      throw new HttpsError("resource-exhausted", "Too many attempts from this network. Please try again later.");
+    }
+    recent.push(now);
+    tx.set(ref, { sends: recent, updatedAt: FieldValue.serverTimestamp() });
+  });
+}
+
 function hashCode(code, email) {
   return crypto.createHash("sha256").update(`${email}::${code}`).digest("hex");
 }
@@ -94,17 +114,7 @@ export const requestRegistrationOtp = onCall(
 
     // Per-IP cap, independent of email, so rotating through many made-up
     // addresses from one script still hits a wall.
-    await db.runTransaction(async (tx) => {
-      const ipRef = db.collection("otpSendLog").doc(ip);
-      const snap = await tx.get(ipRef);
-      const sends = (snap.exists ? snap.data().sends : []) || [];
-      const recent = sends.filter((t) => now - t < 60 * 60 * 1000);
-      if (recent.length >= MAX_SENDS_PER_IP_PER_HOUR) {
-        throw new HttpsError("resource-exhausted", "Too many verification codes requested from this network. Please try again later.");
-      }
-      recent.push(now);
-      tx.set(ipRef, { sends: recent, updatedAt: FieldValue.serverTimestamp() });
-    });
+    await checkIpRateLimit(ip, "otpSendLog", MAX_SENDS_PER_IP_PER_HOUR);
 
     const ref = db.collection("otpChallenges").doc(email);
     const { code } = await db.runTransaction(async (tx) => {
@@ -209,5 +219,64 @@ export const verifyRegistrationOtp = onCall(
     });
 
     return { ok: true };
+  }
+);
+
+// ============================================
+// checkLoginMethod({ email })
+// Runs BEFORE any Firebase Auth session exists, so it's the one place
+// allowed to bypass the "must be signed in to read a registration" rule
+// in firestore.rules — through the Admin SDK, never by loosening the
+// rules themselves. It tells js/login.js which of three screens to show
+// for a typed-in email:
+//   { exists: false }                     -> no account; offer to register
+//   { exists: true,  passwordSet: false } -> registered, but no password
+//                                            set yet (fresh signup, or an
+//                                            account reset by the
+//                                            tools/reset-all-accounts.mjs
+//                                            update) -> skip straight to
+//                                            "email me a sign-in link"
+//   { exists: true,  passwordSet: true }  -> normal password prompt
+//
+// This intentionally reveals whether an email is registered — a
+// deliberate trade-off for the clearer messaging the product wants, not
+// an oversight. Kept narrow (no name, no student ID, nothing else) and
+// rate-limited per IP so it can't be turned into a bulk address-list
+// scraper.
+// ============================================
+const MAX_LOGIN_CHECKS_PER_IP_PER_HOUR = 40;
+
+export const checkLoginMethod = onCall(
+  { enforceAppCheck: true, region: "us-central1" },
+  async (request) => {
+    const email = normalizeEmail(request.data?.email);
+    if (!email || !email.includes("@") || email.length > 320) {
+      throw new HttpsError("invalid-argument", "A valid email address is required.");
+    }
+
+    const ip = docSafeId(request.rawRequest?.ip);
+    await checkIpRateLimit(ip, "loginCheckLog", MAX_LOGIN_CHECKS_PER_IP_PER_HOUR);
+
+    let userRecord;
+    try {
+      userRecord = await getAuth().getUserByEmail(email);
+    } catch (err) {
+      if (err?.code === "auth/user-not-found") return { exists: false, passwordSet: false };
+      throw new HttpsError("internal", "Couldn't check that email right now. Please try again.");
+    }
+
+    const regSnap = await db.collection("registrations")
+      .where("authUid", "==", userRecord.uid)
+      .limit(1)
+      .get();
+
+    if (regSnap.empty) {
+      // A Firebase Auth user exists but has no registration doc yet —
+      // treat like "not registered" so the UI sends them to register.
+      return { exists: false, passwordSet: false };
+    }
+
+    const reg = regSnap.docs[0].data();
+    return { exists: true, passwordSet: reg.passwordSet === true };
   }
 );
