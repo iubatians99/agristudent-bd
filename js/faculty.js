@@ -680,7 +680,11 @@ async function openFacultyProfile(facultyId, allFaculty, allCourses) {
       setTimeout(() => { suggestForm.classList.add("hidden"); setStatus(""); }, 1800);
     } catch (err) {
       console.error("[Faculty] course suggestion failed:", err);
-      setStatus("Could not submit right now. Please try again.", true);
+      if (err && err.code === "permission-denied") {
+        setStatus("Submission blocked by the site's security rules — ask the admin to deploy the latest firestore.rules.", true);
+      } else {
+        setStatus("Could not submit right now. Please try again.", true);
+      }
     } finally {
       submitBtn.disabled = false;
     }
