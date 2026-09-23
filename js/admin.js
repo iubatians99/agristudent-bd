@@ -1,6 +1,6 @@
 import { db, auth, CLOUDINARY_UPLOAD_URL, CLOUDINARY_UPLOAD_PRESET } from "./firebase-config.js";
 import {
-  collection, getDocs, getDoc, doc, updateDoc, deleteDoc, addDoc, setDoc, orderBy, query, where, limit, Timestamp, writeBatch, serverTimestamp, increment
+  collection, getDocs, getDoc, doc, updateDoc, deleteDoc, addDoc, setDoc, orderBy, query, where, limit, Timestamp, writeBatch, serverTimestamp, increment, arrayUnion
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
   signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail
@@ -511,6 +511,7 @@ const coffeeRequestsList = document.getElementById("admin-coffee-requests-list")
 const folderAccessList = document.getElementById("admin-folder-access-list");
 const blogList = document.getElementById("admin-blog-list");
 const facultyList = document.getElementById("admin-faculty-list");
+const courseSuggestionsList = document.getElementById("admin-course-suggestions-list");
 const facultyReviewsList = document.getElementById("admin-faculty-reviews-list");
 
 // Caches of last-loaded docs, keyed by id — used to populate the "Edit any content" modal
@@ -2294,10 +2295,68 @@ function wireFacultyBulkUpload() {
   });
 }
 
+async function loadCourseSuggestions() {
+  if (!courseSuggestionsList) return;
+  courseSuggestionsList.innerHTML = `<p style="color:var(--moss-600);font-size:.82rem;">Loading…</p>`;
+  try {
+    const snap = await getDocs(query(collection(db, "courseSuggestions"), where("status", "==", "pending")));
+    if (snap.empty) {
+      courseSuggestionsList.innerHTML = `<p style="color:var(--moss-600);font-size:.82rem;">No pending course suggestions.</p>`;
+      return;
+    }
+    courseSuggestionsList.innerHTML = "";
+    snap.docs.forEach(d => {
+      const s = d.data();
+      const row = document.createElement("div");
+      row.className = "resource-row";
+      row.innerHTML = `
+        <div style="min-width:0;">
+          <strong>${esc(s.courseCode)}</strong> for <strong>${esc(s.facultyName || "Unknown faculty")}</strong>
+          <div style="font-size:.72rem;color:var(--moss-500);margin-top:.2rem;">Suggested by ${esc(s.submittedByName || "Registered user")}${s.submittedByEmail ? ` · ${esc(s.submittedByEmail)}` : ""}</div>
+        </div>
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap;justify-content:flex-end;">
+          <button type="button" class="course-suggestion-approve-btn" data-id="${d.id}" data-faculty-id="${esc(s.facultyId)}" data-code="${esc(s.courseCode)}" style="background:var(--leaf-500);color:#fff;border:none;padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">✅ Approve</button>
+          <button type="button" class="btn-danger course-suggestion-reject-btn" data-id="${d.id}" style="padding:.35rem .7rem;font-size:.78rem;">🗑 Reject</button>
+        </div>`;
+      courseSuggestionsList.appendChild(row);
+    });
+
+    courseSuggestionsList.querySelectorAll(".course-suggestion-approve-btn").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        btn.textContent = "Approving…";
+        try {
+          await updateDoc(doc(db, "faculty", btn.dataset.facultyId), { courseCodes: arrayUnion(btn.dataset.code) });
+          await deleteDoc(doc(db, "courseSuggestions", btn.dataset.id));
+          loadCourseSuggestions();
+          loadFaculty();
+        } catch (err) {
+          console.error("[AgriAdmin] approve course suggestion failed:", err);
+          alert("Could not approve: " + err.message);
+          btn.disabled = false;
+          btn.textContent = "✅ Approve";
+        }
+      });
+    });
+    courseSuggestionsList.querySelectorAll(".course-suggestion-reject-btn").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        if (!confirm("Reject and discard this course suggestion?")) return;
+        btn.disabled = true;
+        try { await deleteDoc(doc(db, "courseSuggestions", btn.dataset.id)); loadCourseSuggestions(); }
+        catch (err) { console.error(err); alert("Could not reject: " + err.message); btn.disabled = false; }
+      });
+    });
+  } catch (err) {
+    console.error("[AgriAdmin] loadCourseSuggestions failed:", err);
+    courseSuggestionsList.innerHTML = `<p style="color:var(--terracotta-500);font-size:.82rem;">Could not load course suggestions: ${esc(err.message)}</p>`;
+  }
+}
+
 async function loadFaculty() {
   if (!facultyList) return;
   wireFacultyForm();
   wireFacultyBulkUpload();
+  loadCourseSuggestions();
   facultyList.innerHTML = `<p style="color:var(--moss-600);">Loading…</p>`;
   try {
     // Do not rely on an orderBy index here. Admins need to see every

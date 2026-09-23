@@ -252,6 +252,37 @@ service cloud.firestore {
     }
 
     // ============================================
+    // COURSE SUGGESTIONS: student-suggested course codes for an
+    // existing faculty member, from the "Suggest a course" button on a
+    // faculty profile. Always lands as "pending" for admin review —
+    // admin approves by adding the code to the faculty's own
+    // courseCodes (in the faculty match block above) and then removes
+    // the suggestion doc; nothing here ever changes a faculty record
+    // directly.
+    // ============================================
+    match /courseSuggestions/{id} {
+      allow get, list: if isAdmin();
+      allow create: if !isAdmin() &&
+        request.resource.data.keys().hasAll([
+          'facultyId', 'facultyName', 'courseCode', 'status',
+          'submittedByRegId', 'submittedByEmail', 'submittedByName'
+        ]) &&
+        request.resource.data.facultyId is string && request.resource.data.facultyId.size() > 0 &&
+        request.resource.data.facultyName is string && request.resource.data.facultyName.size() <= 160 &&
+        request.resource.data.courseCode is string &&
+        request.resource.data.courseCode.size() > 0 && request.resource.data.courseCode.size() <= 20 &&
+        request.resource.data.status == 'pending' &&
+        request.resource.data.submittedByRegId is string && request.resource.data.submittedByRegId.size() > 0 &&
+        request.resource.data.submittedByEmail is string && request.resource.data.submittedByEmail.size() > 0 &&
+        request.resource.data.submittedByEmail.size() <= 200 &&
+        request.resource.data.submittedByName is string && request.resource.data.submittedByName.size() <= 160 &&
+        get(/databases/$(database)/documents/registrations/$(request.resource.data.submittedByRegId)).data.status == 'verified' &&
+        (!('removed' in get(/databases/$(database)/documents/registrations/$(request.resource.data.submittedByRegId)).data) || get(/databases/$(database)/documents/registrations/$(request.resource.data.submittedByRegId)).data.removed != true) &&
+        get(/databases/$(database)/documents/registrations/$(request.resource.data.submittedByRegId)).data.email == request.resource.data.submittedByEmail;
+      allow update, delete: if isAdmin();
+    }
+
+    // ============================================
     // FACULTY REVIEWS: Teacher Recommendation ratings
     // ============================================
     // Doc id = `${facultyId}_${reviewerRegId}` — same one-doc-per-pair

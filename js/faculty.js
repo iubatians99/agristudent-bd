@@ -182,7 +182,7 @@ function facultyPhotoUrl(f) {
 
 function avatarHtml(f) {
   const photoUrl = facultyPhotoUrl(f);
-  if (photoUrl) return `<img src="${esc(photoUrl)}" alt="" class="fc-avatar-img">`;
+  if (photoUrl) return `<img src="${esc(photoUrl)}" alt="" class="fc-avatar-img" width="64" height="64" loading="lazy">`;
   return `<div class="fc-avatar-fallback">${esc(initials(f.name))}</div>`;
 }
 
@@ -312,7 +312,7 @@ async function init() {
     if (!collage) return;
     const best10 = [...list].sort(recommendationSort).slice(0, 10);
     const tile = (f, i) => facultyPhotoUrl(f)
-      ? `<div class="tr-photo-tile tr-photo-tile-${i + 1}"><img src="${esc(facultyPhotoUrl(f))}" alt=""></div>`
+      ? `<div class="tr-photo-tile tr-photo-tile-${i + 1}"><img src="${esc(facultyPhotoUrl(f))}" alt="" width="67" height="67" loading="lazy"></div>`
       : `<div class="tr-photo-tile tr-photo-tile-${i + 1}"><div class="tr-photo-tile-fallback">${esc(initials(f.name))}</div></div>`;
     collage.innerHTML = `<div class="tr-photo-side tr-photo-side-left">${best10.slice(0,5).map(tile).join("")}</div><div class="tr-photo-side tr-photo-side-right">${best10.slice(5,10).map((f,i)=>tile(f,i+5)).join("")}</div>`;
   }
@@ -582,6 +582,18 @@ async function openFacultyProfile(facultyId, allFaculty, allCourses) {
       <p class="fp-filter-note">Course-specific rating, recommendation rate, and reviews update with the selected course.</p>
     ` : ""}
 
+    <div class="fp-suggest-course-wrap">
+      <button type="button" class="fp-suggest-course-btn" id="fp-suggest-course-btn">➕ Don't see a course here? Suggest one</button>
+      <form id="fp-suggest-course-form" class="fp-suggest-course-form hidden">
+        <div class="form-field">
+          <label for="fp-suggest-course-code">Course code</label>
+          <input id="fp-suggest-course-code" required maxlength="20" placeholder="e.g. AGR371">
+        </div>
+        <p id="fp-suggest-course-status" style="font-size:.78rem;min-height:1.1em;"></p>
+        <button type="submit" class="btn-primary" style="width:100%;">Submit for Admin Review</button>
+      </form>
+    </div>
+
     ${topTags.length ? `
       <h4 class="fp-subhead">Most mentioned</h4>
       <div class="fp-chip-row">${topTags.map(([key, n]) => `<span class="fp-chip fp-chip-tag">${esc((TAG_MAP[key] && TAG_MAP[key].emoji) || "✅")} ${esc((TAG_MAP[key] && TAG_MAP[key].label) || key)} · ${n}</span>`).join("")}</div>
@@ -618,6 +630,62 @@ async function openFacultyProfile(facultyId, allFaculty, allCourses) {
 
   renderCourseReviews("__all__");
   body.querySelector("#fp-course-filter")?.addEventListener("change", e => renderCourseReviews(e.target.value));
+  const suggestBtn = body.querySelector("#fp-suggest-course-btn");
+  const suggestForm = body.querySelector("#fp-suggest-course-form");
+  suggestBtn?.addEventListener("click", () => {
+    suggestForm.classList.toggle("hidden");
+    if (!suggestForm.classList.contains("hidden")) body.querySelector("#fp-suggest-course-code")?.focus();
+  });
+  suggestForm?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const suggestStatus = body.querySelector("#fp-suggest-course-status");
+    const codeInput = body.querySelector("#fp-suggest-course-code");
+    const submitBtn = suggestForm.querySelector("button[type=submit]");
+    const setStatus = (msg, isError) => {
+      suggestStatus.textContent = msg;
+      suggestStatus.style.color = isError ? "var(--terracotta-500)" : "var(--leaf-500)";
+    };
+
+    const session = requireSession();
+    if (!session) return;
+
+    const courseCode = codeInput.value.trim().toUpperCase().replace(/\s+/g, "");
+    if (!courseCode) { setStatus("Please enter a course code.", true); return; }
+    if ((faculty.courseCodes || []).map(c => String(c).trim().toUpperCase().replace(/\s+/g, "")).includes(courseCode)) {
+      setStatus("This course is already linked to this faculty.", true);
+      return;
+    }
+
+    submitBtn.disabled = true;
+    setStatus("Submitting…");
+    try {
+      const registration = await getVerifiedRegistration(session);
+      if (!registration) {
+        setStatus("Only a registered and verified account can suggest a course.", true);
+        submitBtn.disabled = false;
+        return;
+      }
+      await addDoc(collection(db, "courseSuggestions"), {
+        facultyId: faculty.id,
+        facultyName: faculty.name || "",
+        courseCode,
+        status: "pending",
+        submittedByRegId: registration.id,
+        submittedByEmail: String(registration.email || "").trim().toLowerCase(),
+        submittedByName: String(registration.fullName || session.fullName || "").trim().slice(0, 160),
+        createdAt: serverTimestamp()
+      });
+      setStatus("✅ Submitted. Admin will review and add it.");
+      suggestForm.reset();
+      setTimeout(() => { suggestForm.classList.add("hidden"); setStatus(""); }, 1800);
+    } catch (err) {
+      console.error("[Faculty] course suggestion failed:", err);
+      setStatus("Could not submit right now. Please try again.", true);
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+
   document.getElementById("fp-write-review-btn").addEventListener("click", () => {
     openReviewModal(faculty, allCourses);
   });
