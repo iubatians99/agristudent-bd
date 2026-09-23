@@ -932,6 +932,16 @@ if (handNotesGate && handNotesContent) {
   const hnRegisterLink = document.getElementById("hn-gate-register-link");
 
   window.hnOpenGate = function (fileId, folderKey = null, category = "hand_notes") {
+    // BUG FIX — "Unlock tapped from See All shows nothing until the ✕ is
+    // tapped": the gate section is inline (position:static) in the page,
+    // but "See All" (pdf-viewall-modal / image-viewall-modal) is a
+    // fullscreen fixed overlay on top of it. Opening the gate while one of
+    // those overlays is still open just un-hides it behind that overlay —
+    // closing the overlay is what makes it visible. Close both "See All"
+    // overlays here so the gate is visible immediately, from any entry point.
+    document.getElementById("pdf-viewall-modal")?.classList.add("hidden");
+    document.getElementById("image-viewall-modal")?.classList.add("hidden");
+
     hnGateTargetId = fileId || null;
     // Folder-wide unlocks are intentionally retired from the user-facing
     // resource flow. Every click targets exactly one file.
