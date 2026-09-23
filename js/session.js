@@ -15,7 +15,7 @@
 import { normalizeEmail, normalizeStudentId } from "./identity.js";
 import { db, auth } from "./firebase-config.js";
 import { doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { hashPassword, isPasswordValid } from "./password.js";
+import { isPasswordValid } from "./auth-core.js";
 import { fetchMessagesForUser } from "./inbox.js";
 
 const SESSION_KEY = "agri_session_v1";
@@ -361,7 +361,7 @@ function maybeShowPasswordSetupPopup(regId, reg) {
       if (!auth.currentUser) throw new Error("Your secure login session has expired. Please log in again.");
       const { updatePassword } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js");
       await updatePassword(auth.currentUser, password);
-      await updateDoc(doc(db, "registrations", regId), { authUid: auth.currentUser.uid, emailVerified: !!auth.currentUser.emailVerified, status: auth.currentUser.emailVerified ? "verified" : reg.status, passwordSet: true });
+      await updateDoc(doc(db, "registrations", regId), { authUid: auth.currentUser.uid, emailVerified: !!auth.currentUser.emailVerified, passwordSet: true });
       showStatus("✅ Password saved!");
       setTimeout(() => { overlay.remove(); window.__agriPasswordPopupOpen = false; }, 900);
     } catch (err) {

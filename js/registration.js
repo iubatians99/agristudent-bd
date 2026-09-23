@@ -1,21 +1,33 @@
+// ============================================
+// AGRI CORE — REGISTRATION (rebuilt)
+//
+// Flow: validate the form → server-verified email OTP (js/otp.js calls
+// functions/index.js; the code never touches the browser) → on
+// success, create the Firebase Auth identity → reserve the Student ID
+// → save the registration → sign the student in.
+//
+// The account created here (Firebase Auth user + a `registrations`
+// Firestore document, joined by `authUid`) uses the exact same schema
+// the previous registration code wrote, and the exact same schema
+// js/login.js reads — so this rebuild doesn't require any data
+// migration, and it doesn't change how already-registered students log
+// in.
+// ============================================
 import { db, auth, CLOUDINARY_UPLOAD_URL, CLOUDINARY_UPLOAD_PRESET } from "./firebase-config.js";
-import { collection, addDoc, getDocs, query, where, serverTimestamp, setDoc, doc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { collection, addDoc, serverTimestamp, setDoc, doc, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { normalizeEmail, normalizeStudentId } from "./identity.js";
 import { initEmailNotifications } from "./email-config.js";
 import { startOtp, verifyOtp, resendCooldownRemaining, clearOtp } from "./otp.js";
 import { saveSession } from "./session.js";
 import { createUserWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
-// Registration no longer collects a password on the form (see
-// register.html — the "Account Password" field was removed). Every new
-// account gets signed up with a random, throwaway password nobody
-// (including this code, after this call returns) ever needs to know —
-// exactly like tools/migrate-existing-users.mjs does for legacy
-// accounts. The student sets their REAL password right after, either
-// from the in-app popup (js/session.js) while already signed in, or via
-// the "set your password" email sent below. Both paths end the same
-// way: js/session.js and js/profile.js call Firebase's updatePassword()
-// on the live session, so the throwaway value here never matters again.
+// The form never collects a password (see register.html). Every new
+// account signs up with a random, throwaway password nobody —
+// including this code, once this call returns — ever needs to know.
+// The student sets their REAL password right after, either from the
+// site-wide popup (js/session.js) or the "set your password" email
+// sent below; both call Firebase's updatePassword() on the live
+// session, so this throwaway value never matters again.
 function generateThrowawayPassword() {
   const bytes = crypto.getRandomValues(new Uint8Array(24));
   const random = btoa(String.fromCharCode(...bytes)).replace(/[+/=]/g, "");
@@ -42,8 +54,8 @@ const otpBackBtn = document.getElementById("otp-back-btn");
 const otpResendBtn = document.getElementById("otp-resend-btn");
 
 // Holds the validated form data (and file) between "send code" and
-// "verify code" — nothing is written to Firestore/Cloudinary until the
-// email is confirmed.
+// "verify code" — nothing is written to Firestore/Cloudinary, and no
+// Firebase Auth account is created, until the email is confirmed.
 let pending = null;
 
 function setProgress(pct) {
@@ -52,7 +64,6 @@ function setProgress(pct) {
   progressText.textContent = pct + "%";
 }
 
-// Pre-submit validation errors — shown without the ring, nothing has started yet.
 function showError(message) {
   progressWrap.classList.add("hidden");
   statusBox.textContent = message;
@@ -60,8 +71,6 @@ function showError(message) {
   statusBox.classList.remove("hidden");
 }
 
-// In-progress / outcome messages — ring + label stay visible together,
-// including on failure, so errors are actually seen.
 function showStatus(message, isError = false) {
   progressWrap.classList.remove("hidden");
   statusBox.textContent = message;
@@ -81,15 +90,12 @@ function uploadToCloudinary(file, onProgress) {
     xhr.timeout = 120000; // 2 min
 
     xhr.upload.addEventListener("progress", (e) => {
-      if (e.lengthComputable && onProgress) {
-        onProgress(Math.round((e.loaded / e.total) * 100));
-      }
+      if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100));
     });
 
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
-        const json = JSON.parse(xhr.responseText);
-        resolve(json.secure_url);
+        resolve(JSON.parse(xhr.responseText).secure_url);
       } else {
         reject(new Error(`Cloudinary upload failed (server said: ${xhr.status})`));
       }
@@ -122,60 +128,44 @@ function showOtpStep(email) {
   otpInput.focus();
 }
 
-// ============================================
-// STEP 1 — validate details, send the OTP
-// ============================================
-form.addEventListener("submit", async (e) => {
-  e.preventDefault();
-
+function readForm() {
   const fullName = document.getElementById("fullName").value.trim();
   const email = normalizeEmail(document.getElementById("email").value);
   const genderInput = document.querySelector('input[name="gender"]:checked');
   const gender = genderInput ? genderInput.value : "";
   const studentIdNumber = normalizeStudentId(document.getElementById("studentIdNumber").value);
-  const idFile = document.getElementById("studentIdPhoto")?.files?.[0] || null;
+  return { fullName, email, gender, studentIdNumber };
+}
 
-  // Validation
-  if (!fullName) {
-    showError("Please enter your full name.");
-    return;
-  }
-  if (!email) {
-    showError("Please enter a valid email address.");
-    return;
-  }
-  if (!gender) {
-    showError("Please select your gender.");
-    return;
-  }
-  if (!studentIdNumber) {
-    showError("Student ID number is required.");
-    return;
-  }
+function validate({ fullName, email, gender, studentIdNumber }) {
+  if (!fullName) return "Please enter your full name.";
+  if (!email) return "Please enter a valid email address.";
+  if (!gender) return "Please select your gender.";
+  if (!studentIdNumber) return "Student ID number is required.";
+  return null;
+}
 
-  // File size check (5MB max for ID photo)
-  if (idFile && idFile.size > 5 * 1024 * 1024) {
-    showError("Student ID photo must be under 5MB.");
-    return;
-  }
+// ============================================
+// STEP 1 — validate details, request the server-side OTP
+// ============================================
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const details = readForm();
+  const error = validate(details);
+  if (error) { showError(error); return; }
 
   submitBtn.disabled = true;
-  submitBtn.textContent = "Checking…";
-  showStatus("Checking this email…");
-
-  // Firebase Authentication is the authoritative uniqueness check for email.
-  // Student-ID uniqueness is enforced by the Firestore studentIdLocks document
-  // after OTP verification, under an authenticated Firebase identity.
   submitBtn.textContent = "Sending code…";
   showStatus("Sending a verification code to your email…");
 
   try {
-    // The code is generated and emailed server-side now (see js/otp.js /
-    // functions/index.js) — it never passes through this browser.
-    await startOtp(email, fullName);
-
-    pending = { fullName, email, gender, studentIdNumber, idFile };
-    showOtpStep(email);
+    // Firebase Authentication is the authoritative uniqueness check for
+    // email (see the OTP-verified createUserWithEmailAndPassword call
+    // below); Student-ID uniqueness is enforced by the
+    // studentIdLocks/{lockId} document after the code is verified.
+    await startOtp(details.email, details.fullName);
+    pending = details;
+    showOtpStep(details.email);
   } catch (err) {
     console.error(err);
     showStatus("Couldn't send the verification code. (" + err.message + ")", true);
@@ -185,40 +175,112 @@ form.addEventListener("submit", async (e) => {
   }
 });
 
-// ============================================
-// STEP 2 — verify the code, then create the account + auto-login
-// ============================================
-otpInput.addEventListener("input", () => {
-  otpInput.value = otpInput.value.replace(/\D/g, "").slice(0, 6);
-});
 
-otpInput.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") {
-    e.preventDefault();
-    otpVerifyBtn.click();
+// ============================================
+// GOOGLE REGISTRATION
+// Google supplies the verified email and display name. The remaining
+// profile details are completed from My Profile, so Google signup never
+// forces the student through the old registration/ID-card flow.
+// ============================================
+import { GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+const googleRegisterBtn = document.getElementById("google-register-btn");
+const googleRegisterStatus = document.getElementById("google-register-status");
+
+function googleStatus(msg, error = false) {
+  if (!googleRegisterStatus) return;
+  googleRegisterStatus.textContent = msg;
+  googleRegisterStatus.style.color = error ? "var(--terracotta-500)" : "var(--moss-600)";
+  googleRegisterStatus.classList.remove("hidden");
+}
+
+googleRegisterBtn?.addEventListener("click", async () => {
+  googleRegisterBtn.disabled = true;
+  googleRegisterBtn.textContent = "Connecting to Google…";
+  googleStatus("Opening Google sign-in…");
+  try {
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: "select_account" });
+    const result = await signInWithPopup(auth, provider);
+    const user = result.user;
+    const email = normalizeEmail(user.email);
+    if (!email) throw new Error("Google did not return an email address.");
+
+    const existing = await getDocs(query(collection(db, "registrations"), where("authUid", "==", user.uid)));
+    if (!existing.empty) {
+      const d = existing.docs[0];
+      const reg = d.data();
+      saveSession({
+        regId: d.id, fullName: reg.fullName, email: reg.email,
+        studentIdNumber: reg.studentIdNumber || "", gender: reg.gender || "",
+        avatarUrl: reg.avatarUrl || user.photoURL || "", status: reg.status || "incomplete"
+      });
+      window.location.href = "profile.html";
+      return;
+    }
+
+    // A Google account is already verified by Firebase/Google, so no email
+    // OTP or ID-card verification is needed here.
+    const docData = {
+      fullName: user.displayName?.trim() || "",
+      email,
+      gender: "",
+      avatarUrl: user.photoURL || "",
+      status: "incomplete",
+      profileComplete: false,
+      profileCompletionPercent: user.displayName?.trim() ? 50 : 25,
+      emailVerified: !!user.emailVerified,
+      authUid: user.uid,
+      passwordSet: false,
+      registrationCredits: 5,
+      submittedAt: serverTimestamp(),
+      authProvider: "google"
+    };
+    const docRef = await addDoc(collection(db, "registrations"), docData);
+    saveSession({
+      regId: docRef.id, fullName: docData.fullName, email,
+      studentIdNumber: "", gender: "", avatarUrl: docData.avatarUrl,
+      status: "incomplete", profileComplete: false, profileCompletionPercent: docData.profileCompletionPercent
+    });
+    window.location.href = "profile.html";
+  } catch (err) {
+    console.error("[Registration] Google signup failed:", err);
+    googleStatus(
+      err?.code === "auth/popup-closed-by-user"
+        ? "Google sign-in was cancelled."
+        : "Google registration failed. Please try again.",
+      true
+    );
+  } finally {
+    googleRegisterBtn.disabled = false;
+    googleRegisterBtn.textContent = "Continue with Google";
   }
 });
 
+otpInput.addEventListener("input", () => {
+  otpInput.value = otpInput.value.replace(/\D/g, "").slice(0, 6);
+});
+otpInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); otpVerifyBtn.click(); }
+});
+
+// ============================================
+// STEP 2 — verify the code, then create the account + auto-login
+// ============================================
 otpVerifyBtn.addEventListener("click", async () => {
   if (!pending) { showFormStep(); return; }
 
   const code = otpInput.value.trim();
-  if (!/^\d{6}$/.test(code)) {
-    showOtpStatus("Enter the 6-digit code from your email.", true);
-    return;
-  }
+  if (!/^\d{6}$/.test(code)) { showOtpStatus("Enter the 6-digit code from your email.", true); return; }
 
   const result = await verifyOtp(pending.email, code);
   if (!result.ok) {
-    if (result.reason === "expired") {
-      showOtpStatus("That code expired. Please request a new one.", true);
-    } else if (result.reason === "locked") {
-      showOtpStatus("Too many incorrect attempts. Please request a new code.", true);
-    } else if (result.reason === "mismatch") {
-      showOtpStatus(`Incorrect code. ${result.attemptsLeft} attempt(s) left.`, true);
-    } else {
-      showOtpStatus("Please request a new code.", true);
-    }
+    const messages = {
+      expired: "That code expired. Please request a new one.",
+      locked: "Too many incorrect attempts. Please request a new code.",
+      mismatch: `Incorrect code. ${result.attemptsLeft} attempt(s) left.`
+    };
+    showOtpStatus(messages[result.reason] || "Please request a new code.", true);
     return;
   }
 
@@ -227,11 +289,11 @@ otpVerifyBtn.addEventListener("click", async () => {
   showOtpStatus("Verified! Creating your account…");
 
   try {
-    const { fullName, email, gender, studentIdNumber, idFile } = pending;
+    const { fullName, email, gender, studentIdNumber } = pending;
 
-    // Establish a real Firebase Authentication identity before any protected
-    // Firestore write, using a throwaway password the student never sees or
-    // needs — see generateThrowawayPassword() above.
+    // Establish a real Firebase Authentication identity before any
+    // protected Firestore write, using a throwaway password the
+    // student never sees or needs.
     let credential;
     try {
       credential = await createUserWithEmailAndPassword(auth, email, generateThrowawayPassword());
@@ -243,7 +305,7 @@ otpVerifyBtn.addEventListener("click", async () => {
     }
     await sendEmailVerification(credential.user);
 
-    const lockId = normalizeStudentId(studentIdNumber).replace(/[^A-Za-z0-9_-]/g, "_");
+    const lockId = studentIdNumber.replace(/[^A-Za-z0-9_-]/g, "_");
     try {
       await setDoc(doc(db, "studentIdLocks", lockId), { studentIdNumber, email, authUid: credential.user.uid, createdAt: serverTimestamp() });
     } catch (lockErr) {
@@ -254,11 +316,6 @@ otpVerifyBtn.addEventListener("click", async () => {
       throw lockErr;
     }
 
-    let studentIdUrl = null;
-    if (idFile) {
-      showOtpStatus("Uploading Student ID photo…");
-      studentIdUrl = await uploadToCloudinary(idFile, () => {});
-    }
     showOtpStatus("Saving your registration…");
 
     const docData = {
@@ -267,27 +324,27 @@ otpVerifyBtn.addEventListener("click", async () => {
       gender,
       avatarUrl: gender === "female" ? "assets/avatar-female.svg" : "assets/avatar-male.svg",
       studentIdNumber,
-      status: "pending",
+      status: "incomplete",
+      profileComplete: true,
+      profileCompletionPercent: 100,
       emailVerified: false,
       authUid: credential.user.uid,
-      // No password was collected at signup (see generateThrowawayPassword()
-      // above) — same as an account migrated in by
-      // tools/migrate-existing-users.mjs. js/session.js's site-wide popup
-      // (and js/profile.js's own setup card) prompt the student to choose
-      // a real one on their next page load, and it flips true the moment
-      // they do — see js/session.js and js/login.js.
+      // No password is collected at signup — js/session.js's site-wide
+      // popup (and js/profile.js's own setup card) prompt the student to
+      // choose a real one on their next page load, flipping this true
+      // the moment they do.
       passwordSet: false,
       studentIdLockId: lockId,
       registrationCredits: 5,
       submittedAt: serverTimestamp()
     };
-    if (studentIdUrl) docData.studentIdUrl = studentIdUrl;
 
     const docRef = await addDoc(collection(db, "registrations"), docData);
     clearOtp();
 
-    // Keep the local session for the existing UI. Protected Firestore access
-    // remains unavailable until the Firebase verification link is completed.
+    // Local session for the existing UI. Protected Firestore access
+    // stays limited to this account's own doc until the Firebase
+    // verification link is completed.
     saveSession({
       regId: docRef.id,
       fullName,
@@ -295,12 +352,14 @@ otpVerifyBtn.addEventListener("click", async () => {
       studentIdNumber,
       gender,
       avatarUrl: docData.avatarUrl,
-      status: docData.status
+      status: docData.status,
+      profileComplete: true,
+      profileCompletionPercent: 100
     });
 
-    // Fire-and-forget "set your password" link, as a backup way to finish
-    // setup if the student closes the tab before the in-app popup catches
-    // them (see js/session.js). Never blocks account creation on failure.
+    // Fire-and-forget "set your password" link, as a backup way to
+    // finish setup if the student closes the tab before the in-app
+    // popup catches them. Never blocks account creation on failure.
     sendPasswordResetEmail(auth, email).catch(err => console.warn("[Registration] set-password email failed:", err));
 
     otpPanel.classList.add("hidden");
@@ -320,19 +379,15 @@ otpVerifyBtn.addEventListener("click", async () => {
   }
 });
 
-otpBackBtn.addEventListener("click", () => {
-  showFormStep();
-});
+otpBackBtn.addEventListener("click", showFormStep);
 
 otpResendBtn.addEventListener("click", async () => {
   if (!pending) return;
-
   const remaining = resendCooldownRemaining();
   if (remaining > 0) {
     showOtpStatus(`Please wait ${Math.ceil(remaining / 1000)}s before resending.`, true);
     return;
   }
-
   otpResendBtn.disabled = true;
   showOtpStatus("Resending code…");
   try {

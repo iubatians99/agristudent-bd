@@ -41,9 +41,8 @@
     <h1>📝 Register</h1>
     <p style="color:var(--moss-600);margin-bottom:2rem;">
       Join the Agri Core community to unlock uploads and future premium resources.
-      We'll send a 6-digit code to your email to confirm it's really you, then log you in right away — no password needed to register.
-      Right after, you'll be asked to set a password for next time (and we'll email a link too, just in case).
-      Only one account is allowed per email address.
+      You can register with Google for a faster start. After registration, complete your profile from My Profile — a profile reaches 100% when all required details are filled in.
+      An admin can then mark the profile as verified.
     </p>
     <p id="register-existing-login-link" class="hidden" style="margin-top:-1.2rem;margin-bottom:1.5rem;font-size:.9rem;">
       Already have an account? <a href="login.html" style="color:var(--leaf-500);font-weight:700;">Log in here →</a>
@@ -79,12 +78,15 @@
         <label for="studentIdNumber" style="display:block;font-size:.88rem;margin-bottom:.3rem;">Student ID Number *</label>
         <input type="text" id="studentIdNumber" required placeholder="e.g. 24209150 " style="width:100%;padding:.6rem .8rem;border:1px solid var(--line);border-radius:8px;font-family:var(--font-body);font-size:.92rem;margin-bottom:.9rem;">
 
-        <label for="studentIdPhoto" style="display:block;font-size:.88rem;margin-bottom:.3rem;">Student ID Card Photo (optional)</label>
-        <input type="file" id="studentIdPhoto" accept="image/*" style="width:100%;font-size:.85rem;">
-        <p style="font-size:.8rem;color:var(--moss-600);margin-top:.4rem;">Optional, but recommended — an admin reviews it and marks your profile with a verified ✅ badge once confirmed.</p>
+        <p style="font-size:.8rem;color:var(--moss-600);margin-top:.4rem;">Your Student ID number is part of your profile. No separate ID-card verification is required.</p>
       </div>
 
-      <button type="submit" id="submit-btn" style="background:var(--moss-700);color:#fff;border:none;padding:.85rem;border-radius:8px;font-weight:600;font-size:1rem;cursor:pointer;">Register</button>
+      <button type="submit" id="submit-btn" style="background:var(--moss-700);color:#fff;border:none;padding:.85rem;border-radius:8px;font-weight:600;font-size:1rem;cursor:pointer;">Register with Email</button>
+      <div style="display:flex;align-items:center;gap:.7rem;margin:.15rem 0;color:var(--moss-600);font-size:.82rem;">
+        <span style="flex:1;height:1px;background:var(--line);"></span>OR<span style="flex:1;height:1px;background:var(--line);"></span>
+      </div>
+      <button type="button" id="google-register-btn" style="width:100%;background:#fff;color:var(--moss-900);border:1.5px solid var(--line);padding:.82rem;border-radius:8px;font-weight:700;font-size:.95rem;cursor:pointer;">Continue with Google</button>
+      <div id="google-register-status" class="hidden" style="text-align:center;font-size:.88rem;font-weight:600;"></div>
 
       <div id="upload-progress-wrap" class="upload-progress-wrap hidden">
         <div class="progress-ring-box">

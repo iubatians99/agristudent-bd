@@ -85,8 +85,14 @@ service cloud.firestore {
         request.resource.data.email == request.auth.token.email &&
         request.resource.data.studentIdNumber is string &&
         request.resource.data.studentIdNumber.size() > 0 &&
-        exists(/databases/$(database)/documents/otpVerifications/$(request.auth.token.email)) &&
-        get(/databases/$(database)/documents/otpVerifications/$(request.auth.token.email)).data.expiresAt > request.time;
+        (
+          (
+            exists(/databases/$(database)/documents/otpVerifications/$(request.auth.token.email)) &&
+            get(/databases/$(database)/documents/otpVerifications/$(request.auth.token.email)).data.expiresAt > request.time
+          )
+          ||
+          request.auth.token.firebase.sign_in_provider == "google.com"
+        );
       allow get: if isAdmin() || (request.auth != null && resource.data.authUid == request.auth.uid);
       allow list: if isAdmin();
       allow update, delete: if isAdmin();
@@ -108,22 +114,40 @@ service cloud.firestore {
       // verified identity by simply setting status:"verified".
       allow create: if
         request.auth != null &&
-        request.resource.data.keys().hasAll(['studentIdNumber','email','status','authUid','studentIdLockId']) &&
-        request.resource.data.status == "pending" &&
-        request.resource.data.authUid == request.auth.uid &&
-        request.resource.data.email == request.auth.token.email &&
-        exists(/databases/$(database)/documents/studentIdLocks/$(request.resource.data.studentIdLockId)) &&
-        get(/databases/$(database)/documents/studentIdLocks/$(request.resource.data.studentIdLockId)).data.authUid == request.auth.uid &&
-        request.resource.data.studentIdNumber is string &&
-        request.resource.data.studentIdNumber.size() > 0 &&
-        request.resource.data.studentIdNumber.size() < 50 &&
-        request.resource.data.registrationCredits == 5 &&
-        // Same server-verified-OTP requirement as studentIdLocks above —
-        // belt-and-suspenders in case a lock doc is ever created by a
-        // trusted backend path (e.g. tools/migrate-existing-users.mjs)
-        // without one.
-        exists(/databases/$(database)/documents/otpVerifications/$(request.auth.token.email)) &&
-        get(/databases/$(database)/documents/otpVerifications/$(request.auth.token.email)).data.expiresAt > request.time;
+        (
+          // Existing email/OTP registration flow.
+          (
+            request.resource.data.keys().hasAll(['studentIdNumber','email','status','authUid','studentIdLockId']) &&
+            request.resource.data.status == "incomplete" &&
+            request.resource.data.authUid == request.auth.uid &&
+            request.resource.data.email == request.auth.token.email &&
+            exists(/databases/$(database)/documents/studentIdLocks/$(request.resource.data.studentIdLockId)) &&
+            get(/databases/$(database)/documents/studentIdLocks/$(request.resource.data.studentIdLockId)).data.authUid == request.auth.uid &&
+            request.resource.data.studentIdNumber is string &&
+            request.resource.data.studentIdNumber.size() > 0 &&
+            request.resource.data.studentIdNumber.size() < 50 &&
+            request.resource.data.registrationCredits == 5 &&
+            exists(/databases/$(database)/documents/otpVerifications/$(request.auth.token.email)) &&
+            get(/databases/$(database)/documents/otpVerifications/$(request.auth.token.email)).data.expiresAt > request.time
+          )
+          ||
+          // Google registration: Google/Firebase has already verified the
+          // email, so the student can create an incomplete profile and
+          // finish the missing fields from My Profile.
+          (
+            request.resource.data.keys().hasAll(['email','status','authUid','profileComplete','profileCompletionPercent']) &&
+            request.resource.data.status == "incomplete" &&
+            request.resource.data.authUid == request.auth.uid &&
+            request.resource.data.email == request.auth.token.email &&
+            request.auth.token.firebase.sign_in_provider == "google.com" &&
+            request.auth.token.email_verified == true &&
+            request.resource.data.profileComplete == false &&
+            request.resource.data.profileCompletionPercent is int &&
+            request.resource.data.profileCompletionPercent >= 0 &&
+            request.resource.data.profileCompletionPercent <= 100 &&
+            request.resource.data.registrationCredits == 5
+          )
+        );
 
       // Students may only read their own registration. Admins retain full
       // access. Login no longer relies on a public registration directory.
@@ -143,14 +167,36 @@ service cloud.firestore {
         resource.data.authUid == request.auth.uid &&
         request.resource.data.authUid == request.auth.uid &&
         request.resource.data.email == resource.data.email &&
+        request.resource.data.status == resource.data.status &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'fullName','gender','avatarUrl','status','emailVerified','authUid','passwordSet',
+          'fullName','gender','studentIdNumber','avatarUrl','emailVerified','authUid','passwordSet',
+          'profileComplete','profileCompletionPercent','profileUpdatedAt',
+          'profileUpdateRequested','profileUpdateRequestedAt','profileUpdateApproved',
           'accessUntil','restricted','restrictedUntil','lastAccessSyncAt',
           'approvedFileCount','pendingActiveCount','creditsResetAt','accountRestrictedUntil','accountRestrictedReason','accountRestrictedAt'
         ]) &&
         (
-          request.resource.data.status == resource.data.status ||
-          (request.resource.data.status == 'verified' && request.auth.token.email_verified == true)
+          (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['studentIdNumber']) ||
+            (
+              exists(/databases/$(database)/documents/studentIdLocks/$(request.resource.data.studentIdNumber)) &&
+              get(/databases/$(database)/documents/studentIdLocks/$(request.resource.data.studentIdNumber)).data.authUid == request.auth.uid
+            )
+          ) &&
+          (
+            // A non-verified profile may fill/repair its own profile.
+            resource.data.status != 'verified'
+            ||
+            // A verified profile may only change details after it has
+            // explicitly requested an update.
+            resource.data.profileUpdateRequested == true
+            ||
+            // A verified student may submit the request itself.
+            (
+              request.resource.data.profileUpdateRequested == true &&
+              resource.data.profileUpdateRequested != true
+            )
+          )
         )
       );
       allow delete: if isAdmin();
