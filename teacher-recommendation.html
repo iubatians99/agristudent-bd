@@ -268,7 +268,34 @@
     <div class="tr-add-row">
       <button type="button" class="tr-action-btn tr-add-btn" id="add-faculty-btn">➕ Add a New Faculty</button>
       <button type="button" class="tr-action-btn tr-review-btn" id="search-faculty-review-btn">🔎 Search Faculty to Review</button>
+      <button type="button" class="tr-action-btn" id="tr-share-btn">🔗 Share this page</button>
     </div>
+    <script>
+      (function () {
+        const btn = document.getElementById("tr-share-btn");
+        if (!btn) return;
+        btn.addEventListener("click", async () => {
+          const shareData = {
+            title: document.title,
+            text: "Find IUBAT Agriculture faculty and student recommendations on Agri Core.",
+            url: window.location.href
+          };
+          try {
+            if (navigator.share) {
+              await navigator.share(shareData);
+              return;
+            }
+            await navigator.clipboard.writeText(shareData.url);
+          } catch (err) {
+            // Share sheet cancelled, or clipboard unavailable — no-op.
+            return;
+          }
+          const original = btn.textContent;
+          btn.textContent = "✅ Link copied";
+          setTimeout(() => { btn.textContent = original; }, 2000);
+        });
+      })();
+    </script>
 
     <div class="tr-search-wrap">
       <form id="faculty-search-form" class="tr-search-form">

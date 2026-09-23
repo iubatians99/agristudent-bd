@@ -20,8 +20,9 @@ import {
 // failure mode across the board.
 const STAT_SOURCES = {
   "stat-users": async () => {
-    const docsSnap = await getDocs(collection(db, "registrations"));
-    return { data: () => ({ count: docsSnap.size }) };
+    // Registration profiles are private now. Keep the public stat slot
+    // non-sensitive rather than querying the private collection.
+    return { data: () => ({ count: 0 }) };
   },
 
   "stat-resources": async () => {
@@ -45,12 +46,7 @@ const STAT_SOURCES = {
     return { data: () => ({ count: total }) };
   },
 
-  "stat-pending": async () => {
-    const docsSnap = await getDocs(
-      query(collection(db, "resources"), where("status", "==", "pending"))
-    );
-    return { data: () => ({ count: docsSnap.size }) };
-  },
+  "stat-pending": async () => ({ data: () => ({ count: 0 }) }),
 
   "stat-terms": async () => {
     const docsSnap = await getDocs(

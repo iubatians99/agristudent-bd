@@ -13,7 +13,7 @@
 // single JSON blob under SESSION_KEY.
 // ============================================
 import { normalizeEmail, normalizeStudentId } from "./identity.js";
-import { db } from "./firebase-config.js";
+import { db, auth } from "./firebase-config.js";
 import { doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { hashPassword, isPasswordValid } from "./password.js";
 import { fetchMessagesForUser } from "./inbox.js";
@@ -77,6 +77,7 @@ export function saveSession({ regId, fullName, email, studentIdNumber, gender, a
 
 export function clearSession() {
   localStorage.removeItem(SESSION_KEY);
+  auth.signOut().catch(() => {});
   try {
     sessionStorage.removeItem("agri_student_id");
     localStorage.removeItem("agri_handnotes_user_email");
@@ -281,7 +282,7 @@ function pwdPopupDismissKey(regId) {
 function maybeShowPasswordSetupPopup(regId, reg) {
   // Profile has its own first-time setup modal; never create a second global popup there.
   if (/\/?profile\.html$/.test(window.location.pathname)) return;
-  if (!regId || reg.passwordHash) return;
+  if (!regId || auth.currentUser) return;
   if (window.__agriPasswordPopupOpen || document.getElementById("pwd-setup-overlay")) return;
   window.__agriPasswordPopupOpen = true;
   try {
@@ -348,8 +349,10 @@ function maybeShowPasswordSetupPopup(regId, reg) {
     showStatus("Saving your password…");
 
     try {
-      const passwordHash = await hashPassword(password, reg.email);
-      await updateDoc(doc(db, "registrations", regId), { passwordHash });
+      if (!auth.currentUser) throw new Error("Your secure login session has expired. Please log in again.");
+      const { updatePassword } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js");
+      await updatePassword(auth.currentUser, password);
+      await updateDoc(doc(db, "registrations", regId), { authUid: auth.currentUser.uid, emailVerified: !!auth.currentUser.emailVerified, status: auth.currentUser.emailVerified ? "verified" : reg.status });
       showStatus("✅ Password saved!");
       setTimeout(() => { overlay.remove(); window.__agriPasswordPopupOpen = false; }, 900);
     } catch (err) {

@@ -1,9 +1,10 @@
-import { db, CLOUDINARY_UPLOAD_URL, CLOUDINARY_UPLOAD_PRESET } from "./firebase-config.js";
-import { collection, addDoc, getDocs, query, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { db, auth, CLOUDINARY_UPLOAD_URL, CLOUDINARY_UPLOAD_PRESET } from "./firebase-config.js";
+import { collection, addDoc, getDocs, query, where, serverTimestamp, setDoc, doc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { normalizeEmail, normalizeStudentId } from "./identity.js";
 import { initEmailNotifications, sendOtpEmail } from "./email-config.js";
 import { startOtp, verifyOtp, resendCooldownRemaining, clearOtp } from "./otp.js";
 import { saveSession } from "./session.js";
+import { createUserWithEmailAndPassword, sendEmailVerification } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 initEmailNotifications();
 
@@ -117,6 +118,7 @@ form.addEventListener("submit", async (e) => {
   const gender = genderInput ? genderInput.value : "";
   const studentIdNumber = normalizeStudentId(document.getElementById("studentIdNumber").value);
   const idFile = document.getElementById("studentIdPhoto")?.files?.[0] || null;
+  const password = document.getElementById("accountPassword")?.value || "";
 
   // Validation
   if (!fullName) {
@@ -135,6 +137,10 @@ form.addEventListener("submit", async (e) => {
     showError("Student ID number is required.");
     return;
   }
+  if (password.length < 8) {
+    showError("Password must be at least 8 characters.");
+    return;
+  }
 
   // File size check (5MB max for ID photo)
   if (idFile && idFile.size > 5 * 1024 * 1024) {
@@ -146,35 +152,9 @@ form.addEventListener("submit", async (e) => {
   submitBtn.textContent = "Checking…";
   showStatus("Checking this email…");
 
-  try {
-    // One account per email OR per Student ID — either match sends them
-    // to Login instead of creating a duplicate (previously only email was
-    // checked, so the same student could register twice under two emails
-    // with the same Student ID, or vice versa).
-    const [emailSnap, idSnap] = await Promise.all([
-      getDocs(query(collection(db, "registrations"), where("email", "==", email))),
-      getDocs(query(collection(db, "registrations"), where("studentIdNumber", "==", studentIdNumber)))
-    ]);
-    if (!emailSnap.empty || !idSnap.empty) {
-      showError(
-        !emailSnap.empty
-          ? "An account already exists for this email. Please log in instead."
-          : "An account already exists for this Student ID. Please log in instead."
-      );
-      submitBtn.disabled = false;
-      submitBtn.textContent = "Register";
-      const loginLink = document.getElementById("register-existing-login-link");
-      if (loginLink) loginLink.classList.remove("hidden");
-      return;
-    }
-  } catch (err) {
-    console.error("[Registration] duplicate check failed:", err);
-    showError("Couldn't verify this email/Student ID right now. Please try again.");
-    submitBtn.disabled = false;
-    submitBtn.textContent = "Register";
-    return;
-  }
-
+  // Firebase Authentication is the authoritative uniqueness check for email.
+  // Student-ID uniqueness is enforced by the Firestore studentIdLocks document
+  // after OTP verification, under an authenticated Firebase identity.
   submitBtn.textContent = "Sending code…";
   showStatus("Sending a verification code to your email…");
 
@@ -182,7 +162,7 @@ form.addEventListener("submit", async (e) => {
     const { code } = startOtp(email);
     await sendOtpEmail({ toEmail: email, toName: fullName, otpCode: code });
 
-    pending = { fullName, email, gender, studentIdNumber, idFile };
+    pending = { fullName, email, gender, studentIdNumber, idFile, password };
     showOtpStep(email);
   } catch (err) {
     console.error(err);
@@ -235,7 +215,31 @@ otpVerifyBtn.addEventListener("click", async () => {
   showOtpStatus("Verified! Creating your account…");
 
   try {
-    const { fullName, email, gender, studentIdNumber, idFile } = pending;
+    const { fullName, email, gender, studentIdNumber, idFile, password } = pending;
+
+    // Establish a real Firebase Authentication identity before any protected
+    // Firestore write. The database never receives the password.
+    let credential;
+    try {
+      credential = await createUserWithEmailAndPassword(auth, email, password);
+    } catch (authErr) {
+      if (authErr?.code === "auth/email-already-in-use") {
+        throw new Error("An authentication account already exists for this email. Please use Login instead.");
+      }
+      throw authErr;
+    }
+    await sendEmailVerification(credential.user);
+
+    const lockId = normalizeStudentId(studentIdNumber).replace(/[^A-Za-z0-9_-]/g, "_");
+    try {
+      await setDoc(doc(db, "studentIdLocks", lockId), { studentIdNumber, email, authUid: credential.user.uid, createdAt: serverTimestamp() });
+    } catch (lockErr) {
+      await credential.user.delete().catch(() => {});
+      if (lockErr?.code === "permission-denied" || /already exists/i.test(lockErr?.message || "")) {
+        throw new Error("An account already exists for this Student ID. Please use Login instead.");
+      }
+      throw lockErr;
+    }
 
     let studentIdUrl = null;
     if (idFile) {
@@ -250,8 +254,10 @@ otpVerifyBtn.addEventListener("click", async () => {
       gender,
       avatarUrl: gender === "female" ? "assets/avatar-female.svg" : "assets/avatar-male.svg",
       studentIdNumber,
-      status: "verified", // OTP verification is the only registration approval step now
-      emailVerified: true,
+      status: "pending",
+      emailVerified: false,
+      authUid: credential.user.uid,
+      studentIdLockId: lockId,
       registrationCredits: 5,
       submittedAt: serverTimestamp()
     };
@@ -260,8 +266,8 @@ otpVerifyBtn.addEventListener("click", async () => {
     const docRef = await addDoc(collection(db, "registrations"), docData);
     clearOtp();
 
-    // Auto-login: the email is confirmed, so start the session right away
-    // instead of sending the student to log in manually.
+    // Keep the local session for the existing UI. Protected Firestore access
+    // remains unavailable until the Firebase verification link is completed.
     saveSession({
       regId: docRef.id,
       fullName,
@@ -274,7 +280,7 @@ otpVerifyBtn.addEventListener("click", async () => {
 
     otpPanel.classList.add("hidden");
     successBox.classList.remove("hidden");
-    document.getElementById("form-success-msg").textContent = "Email verified — logging you in…";
+    document.getElementById("form-success-msg").textContent = "OTP verified. Check your email for the Firebase verification link, then log in.";
 
     setTimeout(() => {
       const returnTo = new URLSearchParams(window.location.search).get("return");

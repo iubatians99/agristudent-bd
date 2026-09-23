@@ -45,12 +45,12 @@
     <!-- ============================================ -->
     <div id="id-step">
       <h1>🔐 Log In</h1>
-      <p style="color:var(--moss-600);margin-bottom:2rem;">Enter your Student ID to continue.</p>
+      <p style="color:var(--moss-600);margin-bottom:2rem;">Enter the email address used for your Agri Core account.</p>
 
       <form id="id-form" style="display:flex;flex-direction:column;gap:1.1rem;">
         <div>
           <label for="id-studentId" style="display:block;font-weight:600;margin-bottom:.3rem;">Student ID Number *</label>
-          <input type="text" id="id-studentId" required placeholder="e.g. 24209150" autocomplete="username"
+          <input type="email" id="id-studentId" required placeholder="you@example.com" autocomplete="username"
                  style="width:100%;padding:.7rem .9rem;border:1px solid var(--line);border-radius:8px;font-family:var(--font-body);font-size:.95rem;">
         </div>
         <button type="submit" id="id-submit" style="background:var(--moss-700);color:#fff;border:none;padding:.85rem;border-radius:8px;font-weight:600;font-size:1rem;cursor:pointer;">Continue</button>
@@ -92,7 +92,7 @@
     <!-- ============================================ -->
     <div id="password-step" class="hidden">
       <h1>🔐 Log In</h1>
-      <p style="color:var(--moss-600);margin-bottom:1.4rem;">Student ID: <strong id="password-step-id"></strong> · <a href="#" id="password-step-back">change</a></p>
+      <p style="color:var(--moss-600);margin-bottom:1.4rem;">Account: <strong id="password-step-id"></strong> · <a href="#" id="password-step-back">change</a></p>
 
       <form id="password-form" style="display:flex;flex-direction:column;gap:1.1rem;">
         <div>
@@ -117,11 +117,11 @@
     <!-- ============================================ -->
     <div id="reset-request-step" class="uc-panel hidden" style="border-color:var(--moss-600);">
       <h3 style="margin-bottom:.4rem;">🔑 Reset your password</h3>
-      <p id="reset-request-msg" style="color:var(--moss-600);font-size:.92rem;margin-bottom:1rem;">Enter your Student ID or the email on your account. We'll send a verification code to your email.</p>
-      <label for="reset-lookup-input" style="display:block;font-weight:600;margin-bottom:.3rem;font-size:.9rem;">Student ID or Email</label>
-      <input type="text" id="reset-lookup-input" autocomplete="username" placeholder="e.g. 24209150 or you@example.com"
+      <p id="reset-request-msg" style="color:var(--moss-600);font-size:.92rem;margin-bottom:1rem;">Enter the email address on your account. We'll send a secure Firebase password-reset link.</p>
+      <label for="reset-lookup-input" style="display:block;font-weight:600;margin-bottom:.3rem;font-size:.9rem;">Email Address</label>
+      <input type="text" id="reset-lookup-input" autocomplete="username" placeholder="you@example.com"
         style="width:100%;padding:.7rem .9rem;border:1px solid var(--line);border-radius:8px;font-family:var(--font-body);font-size:.95rem;margin-bottom:1rem;">
-      <button type="button" id="reset-request-btn" style="width:100%;background:var(--moss-700);color:#fff;border:none;padding:.85rem;border-radius:8px;font-weight:600;font-size:1rem;cursor:pointer;">Send Code</button>
+      <button type="button" id="reset-request-btn" style="width:100%;background:var(--moss-700);color:#fff;border:none;padding:.85rem;border-radius:8px;font-weight:600;font-size:1rem;cursor:pointer;">Send Reset Link</button>
       <div id="reset-request-status" style="margin-top:.8rem;font-size:.9rem;min-height:1.2em;"></div>
       <p style="margin-top:1rem;text-align:center;font-size:.85rem;">
         <a href="#" id="reset-back-to-login" style="color:var(--moss-600);text-decoration:underline;">← Back to log in</a>

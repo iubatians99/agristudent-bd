@@ -42,6 +42,22 @@ service cloud.firestore {
       return reg.status == 'verified' && (!('removed' in reg) || reg.removed != true);
     }
 
+    // Unique Student ID reservation. This prevents duplicate Student IDs
+    // without exposing the registration collection to unauthenticated clients.
+    match /studentIdLocks/{lockId} {
+      allow create: if request.auth != null &&
+        request.resource.data.keys().hasAll(['studentIdNumber','email','authUid']) &&
+        request.resource.data.authUid == request.auth.uid &&
+        request.resource.data.email == request.auth.token.email &&
+        exists(/databases/$(database)/documents/studentIdLocks/$(request.resource.data.studentIdLockId)) &&
+        get(/databases/$(database)/documents/studentIdLocks/$(request.resource.data.studentIdLockId)).data.authUid == request.auth.uid &&
+        request.resource.data.studentIdNumber is string &&
+        request.resource.data.studentIdNumber.size() > 0;
+      allow get: if isAdmin() || (request.auth != null && resource.data.authUid == request.auth.uid);
+      allow list: if isAdmin();
+      allow update, delete: if isAdmin();
+    }
+
     // ============================================
     // REGISTRATIONS: Student signup + OTP verification
     // ============================================
@@ -52,46 +68,50 @@ service cloud.firestore {
     // The live registration counter and resource lookups run unauthenticated,
     // so list access remains public.
     match /registrations/{id} {
+      // New accounts are created only by a real Firebase Auth session. The
+      // first record is intentionally "pending" until the user verifies the
+      // Firebase email. This prevents arbitrary clients from creating a
+      // verified identity by simply setting status:"verified".
       allow create: if
-        request.resource.data.keys().hasAll(['studentIdNumber', 'email', 'status']) &&
-        request.resource.data.status == "verified" &&
+        request.auth != null &&
+        request.resource.data.keys().hasAll(['studentIdNumber','email','status','authUid','studentIdLockId']) &&
+        request.resource.data.status == "pending" &&
+        request.resource.data.authUid == request.auth.uid &&
+        request.resource.data.email == request.auth.token.email &&
+        exists(/databases/$(database)/documents/studentIdLocks/$(request.resource.data.studentIdLockId)) &&
+        get(/databases/$(database)/documents/studentIdLocks/$(request.resource.data.studentIdLockId)).data.authUid == request.auth.uid &&
         request.resource.data.studentIdNumber is string &&
         request.resource.data.studentIdNumber.size() > 0 &&
         request.resource.data.studentIdNumber.size() < 50 &&
-        request.resource.data.email is string &&
-        request.resource.data.email.size() > 0 &&
         request.resource.data.registrationCredits == 5;
 
-      allow list: if true;
+      // Students may only read their own registration. Admins retain full
+      // access. Login no longer relies on a public registration directory.
+      allow get: if isAdmin() || (
+        request.auth != null &&
+        resource.data.authUid == request.auth.uid
+      );
+      allow list: if isAdmin() || (
+        request.auth != null &&
+        resource.data.authUid == request.auth.uid
+      );
 
-      // Individual get is scoped the same as list (already public above) —
-      // gating it further on status caused false "Missing or insufficient
-      // permissions" errors for accounts whose status wasn't the exact
-      // string "verified" (e.g. legacy records), even though the SAME data
-      // is already readable via the list query. No real security is lost:
-      // list already exposes every field on every registration.
-      allow get: if true;
-
-      // Admin panel only (js/admin.js approve/reject + generic edit modal),
-      // OR a student updating just their own profile photo, OR a student
-      // setting/resetting their own login password (js/login.js reset flow,
-      // js/profile.js password section). Students never hold a Firebase
-      // Auth session (same trust model as the rest of this file), so this
-      // can't verify "your own" doc beyond knowing its ID — consistent
-      // with the public-write-with-field-validation model used for
-      // blogPosts/resources elsewhere in this file. Each branch is scoped
-      // tightly so it can ONLY ever touch its one field, with the shape
-      // that field must have (a real Cloudinary URL, or a 64-character
-      // SHA-256 hex hash — never the plaintext password itself, which
-      // never travels to Firestore at all).
+      // Admins can manage accounts. A student can only update their own
+      // profile-safe fields, and password hashes are no longer stored here.
       allow update: if isAdmin() || (
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['avatarUrl']) &&
-        request.resource.data.avatarUrl is string &&
-        request.resource.data.avatarUrl.matches('^https://res[.]cloudinary[.]com/.*')
-      ) || (
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['passwordHash']) &&
-        request.resource.data.passwordHash is string &&
-        request.resource.data.passwordHash.size() == 64
+        request.auth != null &&
+        resource.data.authUid == request.auth.uid &&
+        request.resource.data.authUid == request.auth.uid &&
+        request.resource.data.email == resource.data.email &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'fullName','gender','avatarUrl','status','emailVerified','authUid',
+          'accessUntil','restricted','restrictedUntil','lastAccessSyncAt',
+          'approvedFileCount','pendingActiveCount','creditsResetAt','accountRestrictedUntil','accountRestrictedReason','accountRestrictedAt'
+        ]) &&
+        (
+          request.resource.data.status == resource.data.status ||
+          (request.resource.data.status == 'verified' && request.auth.token.email_verified == true)
+        )
       );
       allow delete: if isAdmin();
     }
@@ -105,6 +125,8 @@ service cloud.firestore {
     // as "pending" with a valid resourceType and at least one file.
     match /resources/{id} {
       allow create: if
+        request.auth != null && request.auth.token.email_verified == true &&
+        request.resource.data.uploaderEmail == request.auth.token.email &&
         request.resource.data.keys().hasAll(['status', 'resourceType', 'courseCode', 'fileUrls']) &&
         request.resource.data.status == "pending" &&
         request.resource.data.resourceType in ["slides_notes", "previous_questions"] &&
@@ -133,7 +155,7 @@ service cloud.firestore {
       // "credit not showing" bug. The resources.html/knowledge-hub.html
       // browsing views already filter to approved-only in their own
       // queries, so this doesn't change what visitors normally see.
-      allow list: if true;
+      allow list: if resource.data.status == "approved" || isAdmin() || (request.auth != null && resource.data.uploaderEmail == request.auth.token.email);
 
       // Admin panel only (approve/reject/edit in js/admin.js)
       allow update, delete: if isAdmin();
@@ -152,7 +174,7 @@ service cloud.firestore {
         request.resource.data.name is string &&
         request.resource.data.name.size() > 0 &&
         (
-          (request.resource.data.status == "pending" && request.auth == null) ||
+          (request.resource.data.status == "pending" && request.auth != null && request.auth.token.email_verified == true && request.resource.data.uploaderEmail == request.auth.token.email) ||
           (request.resource.data.status == "approved" && isAdmin())
         );
 
@@ -163,7 +185,7 @@ service cloud.firestore {
       // See the matching comment on /resources/{id} above — same fix,
       // same reason (students' own pending/rejected contributions need
       // to be listable by uploaderEmail on their profile page).
-      allow list: if true;
+      allow list: if resource.data.status == "approved" || isAdmin() || (request.auth != null && resource.data.uploaderEmail == request.auth.token.email);
 
       allow update, delete: if isAdmin();
     }
@@ -179,6 +201,7 @@ service cloud.firestore {
     match /courses/{id} {
       allow read: if true;
       allow create: if
+        request.auth != null &&
         request.resource.data.keys().hasAll(['courseCode', 'courseName']) &&
         request.resource.data.courseCode is string &&
         request.resource.data.courseCode.size() > 0;
@@ -292,6 +315,7 @@ service cloud.firestore {
       // the same suggestion. js/faculty.js reads that specific failure as
       // "you already suggested this one."
       allow create: if
+        request.auth != null && request.auth.token.email_verified == true &&
         id == (request.resource.data.facultyId + '_' + request.resource.data.courseCode + '_' + request.resource.data.submittedByRegId) &&
         request.resource.data.keys().hasAll([
           'facultyId', 'courseCode', 'status',
@@ -308,7 +332,8 @@ service cloud.firestore {
         request.resource.data.submittedByEmail.size() > 0 && request.resource.data.submittedByEmail.size() <= 200 &&
         request.resource.data.submittedByName is string && request.resource.data.submittedByName.size() <= 160 &&
         isVerifiedRegistration(request.resource.data.submittedByRegId) &&
-        get(/databases/$(database)/documents/registrations/$(request.resource.data.submittedByRegId)).data.email == request.resource.data.submittedByEmail;
+        get(/databases/$(database)/documents/registrations/$(request.resource.data.submittedByRegId)).data.email == request.resource.data.submittedByEmail &&
+        request.resource.data.submittedByEmail == request.auth.token.email;
 
       allow update, delete: if isAdmin();
     }
@@ -336,10 +361,12 @@ service cloud.firestore {
     // Reviews" admin tab (js/admin.js loadFacultyReviews).
     match /facultyReviews/{id} {
       allow create: if
+        request.auth != null &&
         request.resource.data.keys().hasAll(['facultyId', 'reviewerRegId', 'rating', 'recommended', 'tags', 'isAnonymous', 'status', 'submittedAt']) &&
         id == (request.resource.data.facultyId + '_' + request.resource.data.reviewerRegId) &&
         request.resource.data.facultyId is string && request.resource.data.facultyId.size() > 0 &&
         request.resource.data.reviewerRegId is string && request.resource.data.reviewerRegId.size() > 0 &&
+        get(/databases/$(database)/documents/registrations/$(request.resource.data.reviewerRegId)).data.authUid == request.auth.uid &&
         request.resource.data.rating is int && request.resource.data.rating >= 1 && request.resource.data.rating <= 5 &&
         request.resource.data.recommended is bool &&
         request.resource.data.tags is list &&
@@ -356,7 +383,7 @@ service cloud.firestore {
 
       // Public read — js/faculty.js filters to status == "approved" for
       // the public page; admin's moderation queue reads every status.
-      allow read: if true;
+      allow read: if isAdmin() || resource.data.status == "approved";
 
       // Approve / reject / delete: admin only (js/admin.js).
       allow update, delete: if isAdmin();
@@ -398,6 +425,8 @@ service cloud.firestore {
     // stays public + validated; only the admin panel can read/manage them.
     match /classroomCodes/{id} {
       allow create: if
+        request.auth != null && request.auth.token.email_verified == true &&
+        request.resource.data.fromEmail == request.auth.token.email &&
         request.resource.data.keys().hasAll(['classroomCode', 'status']) &&
         request.resource.data.classroomCode is string &&
         request.resource.data.classroomCode.size() > 0 &&
@@ -412,7 +441,7 @@ service cloud.firestore {
       // Firebase Auth session (see the trust-model note at the top of
       // this file), so both need list/get open the same way
       // resources/blogPosts/messages already are.
-      allow list, get: if true;
+      allow list, get: if isAdmin() || (request.auth != null && resource.data.fromEmail == request.auth.token.email);
 
       // Admin panel only (js/admin.js loadClassroomCodes / moderation).
       allow update, delete: if isAdmin();
@@ -429,6 +458,8 @@ service cloud.firestore {
     // file, the "ad" kind, and a watchedSeconds count that isn't 0/negative).
     match /adUnlocks/{id} {
       allow create: if
+        request.auth != null && request.auth.token.email_verified == true &&
+        request.resource.data.fromEmail == request.auth.token.email &&
         request.resource.data.keys().hasAll(['targetFileId', 'kind', 'watchedSeconds']) &&
         request.resource.data.kind == "ad" &&
         request.resource.data.targetFileId is string &&
@@ -440,7 +471,7 @@ service cloud.firestore {
       // js/resources.js reads a student's own ad-unlock history (no
       // Firebase Auth session, same trust model as classroomCodes/
       // resources above) to compute their remaining per-file access time.
-      allow list, get: if true;
+      allow list, get: if isAdmin() || (request.auth != null && resource.data.fromEmail == request.auth.token.email);
 
       // Admin panel only — reviewing/deleting for abuse monitoring.
       allow update, delete: if isAdmin();
@@ -461,7 +492,7 @@ service cloud.firestore {
         request.resource.data.unlockType in ["all_resources","hand_notes","class_slides","images"] &&
         request.resource.data.days is number && request.resource.data.days >= 1 &&
         request.resource.data.durationMs is number && request.resource.data.durationMs >= 86400000;
-      allow list, get: if true;
+      allow list, get: if isAdmin() || (request.auth != null && resource.data.fromEmail == request.auth.token.email);
       allow update, delete: if isAdmin();
     }
 
@@ -469,6 +500,8 @@ service cloud.firestore {
     // FILE UNLOCK CREDITS — one uploaded Hand Note file = one credit.
     match /fileUnlocks/{id} {
       allow create: if
+        request.auth != null && request.auth.token.email_verified == true &&
+        request.resource.data.fromEmail == request.auth.token.email &&
         request.resource.data.keys().hasAll(['kind','fromEmail','targetFileId','sourceResourceId']) &&
         request.resource.data.kind == "file_unlock" &&
         request.resource.data.fromEmail is string && request.resource.data.fromEmail.size() > 0 &&
@@ -486,7 +519,7 @@ service cloud.firestore {
           (request.resource.data.durationMs is number &&
            request.resource.data.durationMs > 0 &&
            request.resource.data.durationMs <= 172800000));
-      allow list, get: if true;
+      allow list, get: if isAdmin() || (request.auth != null && resource.data.fromEmail == request.auth.token.email);
       allow update, delete: if isAdmin();
     }
 
@@ -494,13 +527,14 @@ service cloud.firestore {
     // FOLDER LIFETIME UNLOCKS — Class Slides / Images. Admin can revoke.
     match /folderUnlocks/{id} {
       allow create: if
+        isAdmin() &&
         request.resource.data.keys().hasAll(['kind','fromEmail','targetFileId','category','revoked']) &&
         request.resource.data.kind == "folder_lifetime" &&
         request.resource.data.fromEmail is string && request.resource.data.fromEmail.size() > 0 &&
         request.resource.data.targetFileId is string && request.resource.data.targetFileId.size() > 0 &&
         request.resource.data.category in ["hand_notes","class_slides","images"] &&
         request.resource.data.revoked == false;
-      allow list, get: if true;
+      allow list, get: if isAdmin() || (request.auth != null && resource.data.fromEmail == request.auth.token.email);
       allow update, delete: if isAdmin();
     }
 
@@ -508,13 +542,15 @@ service cloud.firestore {
     // COFFEE SUPPORT REQUESTS — student submits payment proof; admin reviews.
     match /coffeeRequests/{id} {
       allow create: if
+        request.auth != null && request.auth.token.email_verified == true &&
+        request.resource.data.fromEmail == request.auth.token.email &&
         request.resource.data.keys().hasAll(['fromEmail','fromName','senderNumber','transactionId','amount','status','submittedAt']) &&
         request.resource.data.fromEmail is string && request.resource.data.fromEmail.size() > 0 &&
         request.resource.data.senderNumber is string && request.resource.data.senderNumber.size() > 0 &&
         request.resource.data.transactionId is string && request.resource.data.transactionId.size() > 0 &&
         request.resource.data.amount is number && request.resource.data.amount > 0 &&
         request.resource.data.status == "pending";
-      allow list, get: if true;
+      allow list, get: if isAdmin() || (request.auth != null && resource.data.fromEmail == request.auth.token.email);
       allow update, delete: if isAdmin();
     }
 
@@ -559,16 +595,16 @@ service cloud.firestore {
         request.resource.data.body.size() > 0 && request.resource.data.body.size() <= 5000 &&
         request.resource.data.read == false;
 
-      // Public list/get so the recipient (no auth session) can query their
-      // own inbox by regId — same pattern as classroomCodes/adUnlocks above.
-      allow list, get: if true;
+      allow list, get: if isAdmin() || (request.auth != null && resource.data.toEmail == request.auth.token.email);
 
       // A student may only ever mark their own received message as read
       // (read:false -> true, plus readAt) — every other field is frozen.
       // The admin panel can do anything (delete, edit) via its own auth.
       allow update: if isAdmin() || (
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'readAt']) &&
-        request.resource.data.read == true
+        request.resource.data.read == true &&
+        request.auth != null &&
+        resource.data.toEmail == request.auth.token.email
       );
 
       allow delete: if isAdmin();
@@ -590,6 +626,8 @@ service cloud.firestore {
     // js/blog.js chooses to hide "rejected" posts client-side instead.
     match /blogPosts/{id} {
       allow create: if
+        request.auth != null && request.auth.token.email_verified == true &&
+        request.resource.data.authorEmail == request.auth.token.email &&
         request.resource.data.keys().hasAll(['title', 'content', 'authorEmail', 'authorRegId', 'status', 'likesCount', 'commentsCount', 'sharesCount', 'views']) &&
         request.resource.data.status == "pending" &&
         request.resource.data.title is string &&
@@ -606,7 +644,7 @@ service cloud.firestore {
       // Public read is retained because student accounts are not Firebase-authenticated.
       // js/blog.js enforces the visibility rule: approved posts are public; pending/rejected
       // posts are rendered only when their author email matches the current session.
-      allow read: if true;
+      allow read: if isAdmin() || resource.data.status == "approved" || (request.auth != null && resource.data.authorEmail == request.auth.token.email);
 
       // Engagement counters (like/unlike, view, share) are bumped by
       // anonymous-but-registered visitors with no auth token, so they're
@@ -617,17 +655,21 @@ service cloud.firestore {
       // negative, even from a client bug, so a bad "unlike" caps out at
       // 0 instead of quietly going negative forever.
       allow update: if isAdmin() || (
+        request.auth != null && request.auth.token.email_verified == true &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likesCount']) &&
         request.resource.data.likesCount >= 0 &&
         (request.resource.data.likesCount == resource.data.likesCount + 1 ||
          request.resource.data.likesCount == resource.data.likesCount - 1)
       ) || (
+        request.auth != null && request.auth.token.email_verified == true &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['views']) &&
         request.resource.data.views == resource.data.views + 1
       ) || (
+        request.auth != null && request.auth.token.email_verified == true &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['sharesCount']) &&
         request.resource.data.sharesCount == resource.data.sharesCount + 1
       ) || (
+        request.auth != null && request.auth.token.email_verified == true &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['commentsCount']) &&
         (request.resource.data.commentsCount == resource.data.commentsCount + 1 ||
          request.resource.data.commentsCount == resource.data.commentsCount - 1)
@@ -648,6 +690,8 @@ service cloud.firestore {
       // creates a new one, and it goes back through admin review exactly
       // like a brand-new post did.
       allow update: if
+        request.auth != null &&
+        resource.data.authorEmail == request.auth.token.email &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'content', 'imageUrls', 'status', 'editedAt', 'editedBy']) &&
         request.resource.data.status == "pending_edit" &&
         request.resource.data.title is string &&
@@ -676,7 +720,7 @@ service cloud.firestore {
       // — which covers the legitimate "student deletes their own draft"
       // case. Deleting an approved post now requires an admin session.
       allow delete: if isAdmin() ||
-        resource.data.status in ["pending", "pending_edit", "rejected"];
+        (request.auth != null && resource.data.authorEmail == request.auth.token.email && resource.data.status in ["pending", "pending_edit", "rejected"]);
     }
 
     // ============================================
@@ -684,6 +728,8 @@ service cloud.firestore {
     // ============================================
     match /blogComments/{id} {
       allow create: if
+        request.auth != null && request.auth.token.email_verified == true &&
+        request.resource.data.authorEmail == request.auth.token.email &&
         request.resource.data.keys().hasAll(['postId', 'text', 'authorEmail', 'authorRegId']) &&
         request.resource.data.postId is string && request.resource.data.postId.size() > 0 &&
         request.resource.data.text is string &&
@@ -709,13 +755,15 @@ service cloud.firestore {
     // rest of this file already makes for every unauthenticated write.
     match /blogLikes/{id} {
       allow create: if
+        request.auth != null && request.auth.token.email_verified == true &&
+        request.resource.data.email == request.auth.token.email &&
         request.resource.data.keys().hasAll(['postId', 'email']) &&
         request.resource.data.postId is string && request.resource.data.postId.size() > 0 &&
         request.resource.data.email is string && request.resource.data.email.size() > 0 &&
         id == (request.resource.data.postId + '_' + request.resource.data.email);
 
-      allow read: if true;
-      allow delete: if true;
+      allow read: if isAdmin() || (request.auth != null && resource.data.email == request.auth.token.email);
+      allow delete: if isAdmin() || (request.auth != null && resource.data.email == request.auth.token.email);
       allow update: if false;
     }
   }

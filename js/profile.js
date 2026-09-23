@@ -1,4 +1,4 @@
-import { db, CLOUDINARY_UPLOAD_URL, CLOUDINARY_UPLOAD_PRESET } from "./firebase-config.js";
+import { db, auth, CLOUDINARY_UPLOAD_URL, CLOUDINARY_UPLOAD_PRESET } from "./firebase-config.js";
 import {
   doc, getDoc, updateDoc, deleteDoc, collection, query, where, getDocs, serverTimestamp, Timestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
@@ -6,6 +6,7 @@ import { normalizeEmail } from "./identity.js";
 import { getSession, saveSession, clearSession } from "./session.js";
 import { initEmailNotifications } from "./email-config.js";
 import { hashPassword, isPasswordValid } from "./password.js";
+import { updatePassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { computeResourceAccessStatus, maybeSendAccessReminder, renderAccessBadge, renderAccessScale, formatDate, formatRemaining, DAY_MS } from "./access.js";
 import { fetchMessagesForUser, markMessageRead, formatMessageDateTime } from "./inbox.js";
 import { computeCreditWallet } from "./credits.js";
@@ -236,7 +237,7 @@ function renderIdentity(reg) {
 function renderPasswordSection(regId, reg) {
   const noPasswordBlock = document.getElementById("password-section-no-password");
   const hasPasswordBlock = document.getElementById("password-section-has-password");
-  const hasPassword = !!reg.passwordHash;
+  const hasPassword = !!auth.currentUser;
   const cardCopy = document.getElementById("password-card-copy");
   const openBtn = document.getElementById("profile-password-open-btn");
   const modal = document.getElementById("profile-password-modal");
@@ -295,9 +296,9 @@ function renderPasswordSection(regId, reg) {
     statusEl.textContent = "Saving your password…";
     statusEl.style.color = "var(--moss-600)";
     try {
-      const passwordHash = await hashPassword(password, reg.email);
-      await updateDoc(doc(db, "registrations", regId), { passwordHash });
-      reg.passwordHash = passwordHash;
+      if (!auth.currentUser) throw new Error("Your secure login session has expired. Please log in again.");
+      await updatePassword(auth.currentUser, password);
+      await updateDoc(doc(db, "registrations", regId), { authUid: auth.currentUser.uid, emailVerified: !!auth.currentUser.emailVerified });
       statusEl.textContent = successText;
       statusEl.style.color = "var(--moss-600)";
       onSuccess?.();
