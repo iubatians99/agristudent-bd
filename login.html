@@ -5,7 +5,7 @@
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="X-Frame-Options" content="SAMEORIGIN">
   <meta name="referrer" content="strict-origin-when-cross-origin">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdnjs.cloudflare.com https://www.googletagmanager.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://res.cloudinary.com https://lh3.googleusercontent.com; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://api.cloudinary.com https://api.emailjs.com; frame-src 'none'; object-src 'none'; base-uri 'self';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdnjs.cloudflare.com https://www.googletagmanager.com https://cdn.jsdelivr.net https://www.google.com https://www.recaptcha.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://res.cloudinary.com https://lh3.googleusercontent.com; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://*.cloudfunctions.net https://api.cloudinary.com https://api.emailjs.com https://www.google.com; frame-src https://www.google.com https://www.recaptcha.net; object-src 'none'; base-uri 'self';">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
 <link rel="manifest" href="manifest.json">
@@ -39,17 +39,7 @@
     <div class="crumb"><a href="index.html">Home</a> / Login</div>
 
     <!-- ============================================ -->
-    <!-- STEP 1 — Email address. Every account (new registrations and
-         accounts migrated in by tools/migrate-existing-users.mjs) has a
-         real Firebase Auth password, so this always continues to the
-         password step below. The old "no password yet" email-only
-         screen that used to live here has been removed: it can't be
-         made to work safely (firestore.rules won't let us look up an
-         account before sign-in — see the comment in js/login.js), and
-         "type an email, get in with nothing else" would let anyone log
-         in as anyone. Migrated accounts get in via "Forgot password?"
-         below instead — that flow is what hands them their first real,
-         known password. -->
+    <!-- STEP 1 — Email address -->
     <!-- ============================================ -->
     <div id="id-step">
       <h1>🔐 Log In</h1>
@@ -69,12 +59,18 @@
         Not registered yet? <a href="register.html" style="color:var(--leaf-500);font-weight:600;">Register here →</a>
       </p>
       <p style="margin-top:.6rem;text-align:center;font-size:.88rem;">
-        <a href="#" id="id-step-forgot-link" style="color:var(--moss-600);text-decoration:underline;">Forgot password, or never set one?</a>
+        <a href="#" id="id-step-forgot-link" style="color:var(--moss-600);text-decoration:underline;">Haven't set a password yet? Email me a login link →</a>
       </p>
     </div>
 
     <!-- ============================================ -->
-    <!-- STEP 2 — password login -->
+    <!-- STEP 2 — password OR passwordless email link.
+         Accounts that have set a password use it here. Accounts that
+         haven't (every account registered before password login
+         existed, plus any fresh registration that hasn't finished
+         setup) tap "Email me a login link" instead — no password
+         needed, and js/session.js's site-wide popup offers to set one
+         right after signing in this way. -->
     <!-- ============================================ -->
     <div id="password-step" class="hidden">
       <h1>🔐 Log In</h1>
@@ -82,85 +78,58 @@
 
       <form id="password-form" style="display:flex;flex-direction:column;gap:1.1rem;">
         <div>
-          <label for="login-password" style="display:block;font-weight:600;margin-bottom:.3rem;">Password *</label>
-          <input type="password" id="login-password" required autocomplete="current-password"
+          <label for="login-password" style="display:block;font-weight:600;margin-bottom:.3rem;">Password</label>
+          <input type="password" id="login-password" autocomplete="current-password"
                  style="width:100%;padding:.7rem .9rem;border:1px solid var(--line);border-radius:8px;font-family:var(--font-body);font-size:.95rem;">
         </div>
         <button type="submit" id="password-submit" style="background:var(--moss-700);color:#fff;border:none;padding:.85rem;border-radius:8px;font-weight:600;font-size:1rem;cursor:pointer;">Log In</button>
         <div id="password-login-status" class="hidden" style="text-align:center;font-size:.9rem;font-weight:600;"></div>
       </form>
 
-      <p style="margin-top:1.2rem;text-align:center;font-size:.88rem;">
-        <a href="#" id="forgot-password-link" style="color:var(--leaf-500);font-weight:600;">Forgot password, or never set one?</a>
-      </p>
+      <div style="display:flex;align-items:center;gap:.7rem;margin:1.3rem 0;color:var(--moss-600);font-size:.82rem;">
+        <span style="flex:1;height:1px;background:var(--line);"></span>OR<span style="flex:1;height:1px;background:var(--line);"></span>
+      </div>
+
+      <button type="button" id="forgot-password-link" style="width:100%;background:#fff;border:1.5px solid var(--moss-700);color:var(--moss-700);padding:.8rem;border-radius:8px;font-weight:600;font-size:.92rem;cursor:pointer;">📧 Email me a login link</button>
+      <p style="margin-top:.6rem;text-align:center;font-size:.82rem;color:var(--moss-600);">No password set yet, or forgot it? This signs you in directly.</p>
     </div>
 
     <!-- ============================================ -->
-    <!-- FORGOT PASSWORD — lookup + request step
-         Reachable for EVERY account (whether or not a password has been
-         set yet), and looks the account up by either Student ID or
-         email — whichever the student remembers. -->
+    <!-- LINK SENT — confirmation, and where the page lands again once
+         the student taps the emailed link (same URL, Firebase appends
+         its own sign-in parameters). -->
     <!-- ============================================ -->
-    <div id="reset-request-step" class="uc-panel hidden" style="border-color:var(--moss-600);">
-      <h3 style="margin-bottom:.4rem;">🔑 Set or reset your password</h3>
-      <p id="reset-request-msg" style="color:var(--moss-600);font-size:.92rem;margin-bottom:1rem;">Enter the email address on your account. We'll send a secure link to set your password — whether you forgot it or this is the first time you're setting one.</p>
-      <label for="reset-lookup-input" style="display:block;font-weight:600;margin-bottom:.3rem;font-size:.9rem;">Email Address</label>
-      <input type="text" id="reset-lookup-input" autocomplete="username" placeholder="you@example.com"
-        style="width:100%;padding:.7rem .9rem;border:1px solid var(--line);border-radius:8px;font-family:var(--font-body);font-size:.95rem;margin-bottom:1rem;">
-      <button type="button" id="reset-request-btn" style="width:100%;background:var(--moss-700);color:#fff;border:none;padding:.85rem;border-radius:8px;font-weight:600;font-size:1rem;cursor:pointer;">Send Reset Link</button>
-      <div id="reset-request-status" style="margin-top:.8rem;font-size:.9rem;min-height:1.2em;"></div>
-      <p style="margin-top:1rem;text-align:center;font-size:.85rem;">
-        <a href="#" id="reset-back-to-login" style="color:var(--moss-600);text-decoration:underline;">← Back to log in</a>
-      </p>
-    </div>
-
-    <!-- ============================================ -->
-    <!-- FORGOT PASSWORD — OTP step -->
-    <!-- ============================================ -->
-    <div id="reset-otp-step" class="uc-panel hidden" style="border-color:var(--moss-600);">
+    <div id="link-sent-step" class="uc-panel hidden" style="border-color:var(--moss-600);">
       <h3 style="margin-bottom:.4rem;">📧 Check your email</h3>
-      <p id="reset-otp-sent-to" style="color:var(--moss-600);font-size:.92rem;margin-bottom:.6rem;"></p>
+      <p id="link-sent-to" style="color:var(--moss-600);font-size:.92rem;margin-bottom:.6rem;"></p>
       <p style="background:rgba(214,171,74,.15);color:var(--wheat-400,#a3791f);border-radius:8px;padding:.6rem .8rem;font-size:.85rem;margin-bottom:1rem;">
-        📩 Don't see it? Please also check your <strong>Spam</strong> or <strong>Junk</strong> folder.
+        📩 Don't see it? Please also check your <strong>Spam</strong> or <strong>Junk</strong> folder. Open the link on this same device/browser for the smoothest sign-in.
       </p>
-      <label for="reset-otp-code" style="display:block;font-weight:600;margin-bottom:.3rem;font-size:.9rem;">6-digit code</label>
-      <input type="text" id="reset-otp-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••"
-        style="width:100%;padding:.8rem .9rem;border:1px solid var(--line);border-radius:8px;font-family:var(--font-mono, monospace);font-size:1.4rem;letter-spacing:.4rem;text-align:center;margin-bottom:1rem;">
-      <button type="button" id="reset-otp-verify-btn" style="width:100%;background:var(--moss-700);color:#fff;border:none;padding:.85rem;border-radius:8px;font-weight:600;font-size:1rem;cursor:pointer;">Verify Code</button>
-      <div id="reset-otp-status" style="margin-top:.8rem;font-size:.9rem;min-height:1.2em;"></div>
-      <div style="margin-top:1rem;display:flex;justify-content:space-between;font-size:.85rem;">
-        <a href="#" id="reset-otp-back" style="color:var(--moss-600);text-decoration:underline;">← Back</a>
-        <button type="button" id="reset-otp-resend-btn" style="background:none;border:none;color:var(--moss-600);cursor:pointer;text-decoration:underline;padding:0;">Resend code</button>
-      </div>
+      <div id="link-sent-status" style="margin-top:.4rem;font-size:.9rem;min-height:1.2em;"></div>
+      <p style="margin-top:1rem;text-align:center;font-size:.85rem;">
+        <a href="#" id="link-sent-back" style="color:var(--moss-600);text-decoration:underline;">← Back to log in</a>
+      </p>
     </div>
 
     <!-- ============================================ -->
-    <!-- FORGOT PASSWORD — new password step -->
+    <!-- LINK CONFIRM — only shown if the sign-in link is opened on a
+         browser/device that doesn't have the email stashed locally
+         (e.g. clicked from a different browser than it was requested
+         in). Firebase's link itself already proves ownership of the
+         inbox; this just re-collects which address that was. -->
     <!-- ============================================ -->
-    <div id="reset-password-step" class="uc-panel hidden" style="border-color:var(--moss-600);">
-      <h3 style="margin-bottom:.4rem;">🔑 Set your new password</h3>
-      <label for="reset-new-password" style="display:block;font-weight:600;margin-bottom:.3rem;font-size:.9rem;">Password (min. 6 characters)</label>
-      <input type="password" id="reset-new-password" autocomplete="new-password" minlength="6"
-        style="width:100%;padding:.7rem .9rem;border:1px solid var(--line);border-radius:8px;font-family:var(--font-body);font-size:.95rem;margin-bottom:.9rem;">
-      <label for="reset-new-password-confirm" style="display:block;font-weight:600;margin-bottom:.3rem;font-size:.9rem;">Confirm password</label>
-      <input type="password" id="reset-new-password-confirm" autocomplete="new-password" minlength="6"
-        style="width:100%;padding:.7rem .9rem;border:1px solid var(--line);border-radius:8px;font-family:var(--font-body);font-size:.95rem;margin-bottom:1rem;">
-      <button type="button" id="reset-password-submit-btn" style="width:100%;background:var(--moss-700);color:#fff;border:none;padding:.85rem;border-radius:8px;font-weight:600;font-size:1rem;cursor:pointer;">Save Password &amp; Log In</button>
-      <div id="reset-password-status" style="margin-top:.8rem;font-size:.9rem;min-height:1.2em;"></div>
-    </div>
-
-    <!-- ============================================ -->
-    <!-- FORGOT PASSWORD — confirmation -->
-    <!-- ============================================ -->
-    <div id="reset-done-step" class="uc-panel hidden" style="border-color:var(--leaf-500);background:rgba(107,155,94,.06);">
-      <span class="badge" style="background:var(--leaf-500);">✅ Password Set</span>
-      <h3>Save your login details</h3>
-      <p style="color:var(--moss-600);font-size:.9rem;margin-bottom:1rem;">Use these to log in next time. We've also emailed a copy to you.</p>
-      <div style="background:#fff;border:1px solid var(--line);border-radius:8px;padding:1rem;font-family:var(--font-mono,monospace);font-size:.92rem;line-height:1.9;">
-        Your ID: <strong id="reset-done-id"></strong><br>
-        Your pass: <strong id="reset-done-pass"></strong>
-      </div>
-      <p style="margin-top:1rem;color:var(--moss-600);font-size:.88rem;">Redirecting you now…</p>
+    <div id="link-confirm-step" class="uc-panel hidden" style="border-color:var(--moss-600);">
+      <h3 style="margin-bottom:.4rem;">🔑 Confirm your email</h3>
+      <p style="color:var(--moss-600);font-size:.92rem;margin-bottom:1rem;">Enter the email address you requested the login link for, to finish signing in.</p>
+      <form id="link-confirm-form" style="display:flex;flex-direction:column;gap:1rem;">
+        <input type="email" id="link-confirm-email" required placeholder="you@example.com" autocomplete="username"
+          style="width:100%;padding:.7rem .9rem;border:1px solid var(--line);border-radius:8px;font-family:var(--font-body);font-size:.95rem;">
+        <button type="submit" style="width:100%;background:var(--moss-700);color:#fff;border:none;padding:.85rem;border-radius:8px;font-weight:600;font-size:1rem;cursor:pointer;">Continue</button>
+      </form>
+      <div id="link-confirm-status" style="margin-top:.8rem;font-size:.9rem;min-height:1.2em;"></div>
+      <p style="margin-top:1rem;text-align:center;font-size:.85rem;">
+        <a href="#" id="link-confirm-back" style="color:var(--moss-600);text-decoration:underline;">← Back to log in</a>
+      </p>
     </div>
   </div>
 </section>

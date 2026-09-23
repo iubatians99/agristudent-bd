@@ -237,7 +237,14 @@ function renderIdentity(reg) {
 function renderPasswordSection(regId, reg) {
   const noPasswordBlock = document.getElementById("password-section-no-password");
   const hasPasswordBlock = document.getElementById("password-section-has-password");
-  const hasPassword = !!auth.currentUser;
+  // BUG FIX: this used to check `!!auth.currentUser`, which is true for
+  // every signed-in visitor on this page (you can't reach profile.html
+  // without a session) — so the "no password yet" card/popup could never
+  // actually show. Whether a real password has been set is tracked by
+  // the registration record's `passwordSet` flag instead (see
+  // js/registration.js, js/login.js and js/session.js, which all read
+  // and write this same flag).
+  const hasPassword = reg.passwordSet === true;
   const cardCopy = document.getElementById("password-card-copy");
   const openBtn = document.getElementById("profile-password-open-btn");
   const modal = document.getElementById("profile-password-modal");
@@ -298,7 +305,12 @@ function renderPasswordSection(regId, reg) {
     try {
       if (!auth.currentUser) throw new Error("Your secure login session has expired. Please log in again.");
       await updatePassword(auth.currentUser, password);
-      await updateDoc(doc(db, "registrations", regId), { authUid: auth.currentUser.uid, emailVerified: !!auth.currentUser.emailVerified });
+      // BUG FIX: this never wrote passwordSet:true, so a student who set
+      // their first password here kept getting re-nagged forever by both
+      // this card and js/session.js's site-wide popup (see hasPassword
+      // above and js/session.js's maybeShowPasswordSetupPopup).
+      await updateDoc(doc(db, "registrations", regId), { authUid: auth.currentUser.uid, emailVerified: !!auth.currentUser.emailVerified, passwordSet: true });
+      reg.passwordSet = true;
       statusEl.textContent = successText;
       statusEl.style.color = "var(--moss-600)";
       onSuccess?.();
@@ -370,7 +382,18 @@ function renderPasswordSection(regId, reg) {
     });
   }
 
-  if (hasPassword) closeModal();
+  if (hasPassword) {
+    closeModal();
+  } else if (modal && !window.__agriProfilePwdAutoOpened) {
+    // Auto-open on arrival (e.g. straight after registration, or after a
+    // passwordless email-link login) so setting a password doesn't
+    // require noticing and clicking the card first. Only once per tab —
+    // a dismissed modal shouldn't reopen itself every time renderPasswordSection
+    // re-runs (e.g. after other profile data refreshes).
+    window.__agriProfilePwdAutoOpened = true;
+    modal.classList.remove("hidden");
+    modal.setAttribute("aria-hidden", "false");
+  }
 }
 
 // ============================================

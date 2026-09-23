@@ -1,10 +1,26 @@
 import { db, auth, CLOUDINARY_UPLOAD_URL, CLOUDINARY_UPLOAD_PRESET } from "./firebase-config.js";
 import { collection, addDoc, getDocs, query, where, serverTimestamp, setDoc, doc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { normalizeEmail, normalizeStudentId } from "./identity.js";
-import { initEmailNotifications, sendOtpEmail } from "./email-config.js";
+import { initEmailNotifications } from "./email-config.js";
 import { startOtp, verifyOtp, resendCooldownRemaining, clearOtp } from "./otp.js";
 import { saveSession } from "./session.js";
-import { createUserWithEmailAndPassword, sendEmailVerification } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { createUserWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+// Registration no longer collects a password on the form (see
+// register.html — the "Account Password" field was removed). Every new
+// account gets signed up with a random, throwaway password nobody
+// (including this code, after this call returns) ever needs to know —
+// exactly like tools/migrate-existing-users.mjs does for legacy
+// accounts. The student sets their REAL password right after, either
+// from the in-app popup (js/session.js) while already signed in, or via
+// the "set your password" email sent below. Both paths end the same
+// way: js/session.js and js/profile.js call Firebase's updatePassword()
+// on the live session, so the throwaway value here never matters again.
+function generateThrowawayPassword() {
+  const bytes = crypto.getRandomValues(new Uint8Array(24));
+  const random = btoa(String.fromCharCode(...bytes)).replace(/[+/=]/g, "");
+  return random + "Aa1!"; // guarantees upper/lower/digit/symbol regardless of policy
+}
 
 initEmailNotifications();
 
@@ -118,7 +134,6 @@ form.addEventListener("submit", async (e) => {
   const gender = genderInput ? genderInput.value : "";
   const studentIdNumber = normalizeStudentId(document.getElementById("studentIdNumber").value);
   const idFile = document.getElementById("studentIdPhoto")?.files?.[0] || null;
-  const password = document.getElementById("accountPassword")?.value || "";
 
   // Validation
   if (!fullName) {
@@ -135,10 +150,6 @@ form.addEventListener("submit", async (e) => {
   }
   if (!studentIdNumber) {
     showError("Student ID number is required.");
-    return;
-  }
-  if (password.length < 8) {
-    showError("Password must be at least 8 characters.");
     return;
   }
 
@@ -159,10 +170,11 @@ form.addEventListener("submit", async (e) => {
   showStatus("Sending a verification code to your email…");
 
   try {
-    const { code } = startOtp(email);
-    await sendOtpEmail({ toEmail: email, toName: fullName, otpCode: code });
+    // The code is generated and emailed server-side now (see js/otp.js /
+    // functions/index.js) — it never passes through this browser.
+    await startOtp(email, fullName);
 
-    pending = { fullName, email, gender, studentIdNumber, idFile, password };
+    pending = { fullName, email, gender, studentIdNumber, idFile };
     showOtpStep(email);
   } catch (err) {
     console.error(err);
@@ -196,7 +208,7 @@ otpVerifyBtn.addEventListener("click", async () => {
     return;
   }
 
-  const result = verifyOtp(pending.email, code);
+  const result = await verifyOtp(pending.email, code);
   if (!result.ok) {
     if (result.reason === "expired") {
       showOtpStatus("That code expired. Please request a new one.", true);
@@ -215,13 +227,14 @@ otpVerifyBtn.addEventListener("click", async () => {
   showOtpStatus("Verified! Creating your account…");
 
   try {
-    const { fullName, email, gender, studentIdNumber, idFile, password } = pending;
+    const { fullName, email, gender, studentIdNumber, idFile } = pending;
 
     // Establish a real Firebase Authentication identity before any protected
-    // Firestore write. The database never receives the password.
+    // Firestore write, using a throwaway password the student never sees or
+    // needs — see generateThrowawayPassword() above.
     let credential;
     try {
-      credential = await createUserWithEmailAndPassword(auth, email, password);
+      credential = await createUserWithEmailAndPassword(auth, email, generateThrowawayPassword());
     } catch (authErr) {
       if (authErr?.code === "auth/email-already-in-use") {
         throw new Error("An authentication account already exists for this email. Please use Login instead.");
@@ -257,12 +270,13 @@ otpVerifyBtn.addEventListener("click", async () => {
       status: "pending",
       emailVerified: false,
       authUid: credential.user.uid,
-      // This account was created through this form, so the student chose
-      // and knows this password — distinct from an account migrated in by
-      // tools/migrate-existing-users.mjs, which sets this false because it
-      // assigns a random password nobody knows. See js/session.js and
-      // js/login.js for how this flag is used.
-      passwordSet: true,
+      // No password was collected at signup (see generateThrowawayPassword()
+      // above) — same as an account migrated in by
+      // tools/migrate-existing-users.mjs. js/session.js's site-wide popup
+      // (and js/profile.js's own setup card) prompt the student to choose
+      // a real one on their next page load, and it flips true the moment
+      // they do — see js/session.js and js/login.js.
+      passwordSet: false,
       studentIdLockId: lockId,
       registrationCredits: 5,
       submittedAt: serverTimestamp()
@@ -284,9 +298,14 @@ otpVerifyBtn.addEventListener("click", async () => {
       status: docData.status
     });
 
+    // Fire-and-forget "set your password" link, as a backup way to finish
+    // setup if the student closes the tab before the in-app popup catches
+    // them (see js/session.js). Never blocks account creation on failure.
+    sendPasswordResetEmail(auth, email).catch(err => console.warn("[Registration] set-password email failed:", err));
+
     otpPanel.classList.add("hidden");
     successBox.classList.remove("hidden");
-    document.getElementById("form-success-msg").textContent = "OTP verified. Check your email for the Firebase verification link, then log in.";
+    document.getElementById("form-success-msg").textContent = "OTP verified — you're logged in! We've also emailed a link to set your password. Redirecting…";
 
     setTimeout(() => {
       const returnTo = new URLSearchParams(window.location.search).get("return");
@@ -308,7 +327,7 @@ otpBackBtn.addEventListener("click", () => {
 otpResendBtn.addEventListener("click", async () => {
   if (!pending) return;
 
-  const remaining = resendCooldownRemaining(pending.email);
+  const remaining = resendCooldownRemaining();
   if (remaining > 0) {
     showOtpStatus(`Please wait ${Math.ceil(remaining / 1000)}s before resending.`, true);
     return;
@@ -317,8 +336,7 @@ otpResendBtn.addEventListener("click", async () => {
   otpResendBtn.disabled = true;
   showOtpStatus("Resending code…");
   try {
-    const { code } = startOtp(pending.email);
-    await sendOtpEmail({ toEmail: pending.email, toName: pending.fullName, otpCode: code });
+    await startOtp(pending.email, pending.fullName);
     showOtpStatus("A new code has been sent.");
   } catch (err) {
     console.error(err);

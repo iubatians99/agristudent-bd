@@ -5,7 +5,7 @@
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="X-Frame-Options" content="SAMEORIGIN">
   <meta name="referrer" content="strict-origin-when-cross-origin">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://www.googletagmanager.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://res.cloudinary.com https://lh3.googleusercontent.com; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://api.cloudinary.com https://api.emailjs.com; frame-src 'none'; object-src 'none'; base-uri 'self';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://www.googletagmanager.com https://www.google.com https://www.recaptcha.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://res.cloudinary.com https://lh3.googleusercontent.com; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://*.cloudfunctions.net https://api.cloudinary.com https://api.emailjs.com https://www.google.com; frame-src https://www.google.com https://www.recaptcha.net; object-src 'none'; base-uri 'self';">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
 <link rel="manifest" href="manifest.json">
@@ -41,8 +41,8 @@
     <h1>📝 Register</h1>
     <p style="color:var(--moss-600);margin-bottom:2rem;">
       Join the Agri Core community to unlock uploads and future premium resources.
-      We'll send a 6-digit code to your email to confirm it's really you, then log you in right away.
-      After you verify the OTP, your account is ready immediately — no admin approval is required for registration.
+      We'll send a 6-digit code to your email to confirm it's really you, then log you in right away — no password needed to register.
+      Right after, you'll be asked to set a password for next time (and we'll email a link too, just in case).
       Only one account is allowed per email address.
     </p>
     <p id="register-existing-login-link" class="hidden" style="margin-top:-1.2rem;margin-bottom:1.5rem;font-size:.9rem;">
@@ -71,12 +71,6 @@
             <input type="radio" name="gender" value="male" required> Male
           </label>
         </div>
-      </div>
-
-      <div>
-        <label for="accountPassword" style="display:block;font-weight:600;margin-bottom:.3rem;">Account Password *</label>
-        <input type="password" id="accountPassword" required minlength="8" autocomplete="new-password" placeholder="At least 8 characters" style="width:100%;padding:.7rem .9rem;border:1px solid var(--line);border-radius:8px;font-family:var(--font-body);font-size:.95rem;">
-        <p style="font-size:.8rem;color:var(--moss-600);margin-top:.35rem;">Your password is protected by Firebase Authentication and is never stored in the Agri Core database.</p>
       </div>
 
       <div style="border:1.5px dashed var(--moss-600);border-radius:8px;padding:1rem;background:#fff;">

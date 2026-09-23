@@ -1,115 +1,84 @@
 // ============================================
-// REGISTRATION EMAIL OTP — generate / store / verify
+// REGISTRATION EMAIL OTP — client wrapper around the server-side Cloud
+// Functions (functions/index.js: requestRegistrationOtp,
+// verifyRegistrationOtp).
 //
-// Same trust model as the rest of this site (see js/session.js): there is
-// no backend server, so the code is generated and checked in the browser
-// and held in sessionStorage for the duration of the registration attempt
-// only. This proves the student can read mail sent to the address they
-// typed — it is not meant to withstand a determined attacker with dev
-// tools open, only to stop typos and someone registering with an email
-// they don't own.
+// SECURITY FIX: this used to generate the 6-digit code in the browser,
+// store it in sessionStorage, and check it in the browser too — anyone
+// with DevTools open could read the real code and skip ever receiving
+// the email, and the EmailJS send could be triggered directly (to any
+// address) from the console. Both the generation/check and the actual
+// email send now happen in functions/index.js, where the code and the
+// EmailJS private key never reach the browser. This file just calls
+// those two functions and reports back the same { ok, reason, ... }
+// shape the rest of the app already expects, so registration.js needed
+// no changes to its logic beyond awaiting these calls.
 // ============================================
+import { functions } from "./firebase-config.js";
+import { httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
 
-const OTP_KEY = "agri_register_otp_v1";
-const OTP_TTL_MS = 10 * 60 * 1000;      // code valid for 10 minutes
-const RESEND_COOLDOWN_MS = 45 * 1000;   // 45s between sends
-const MAX_ATTEMPTS = 5;                 // wrong-code guesses allowed per code
-const MAX_SENDS = 5;                    // resend cap per registration attempt
+const requestOtpFn = httpsCallable(functions, "requestRegistrationOtp");
+const verifyOtpFn = httpsCallable(functions, "verifyRegistrationOtp");
 
-function readState() {
-  try {
-    const raw = sessionStorage.getItem(OTP_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch (err) {
-    return null;
-  }
-}
+// Local-only bookkeeping so the UI can grey out "resend" between server
+// round-trips — NOT the security boundary anymore (the Cloud Function
+// enforces the real cooldown/attempt/send limits server-side no matter
+// what this says).
+let lastSentAt = 0;
+const RESEND_COOLDOWN_MS = 45 * 1000;
 
-function writeState(state) {
-  try {
-    sessionStorage.setItem(OTP_KEY, JSON.stringify(state));
-  } catch (err) {
-    // sessionStorage unavailable — OTP simply won't persist across reloads
-  }
-}
-
-function generateCode() {
-  return String(Math.floor(100000 + Math.random() * 900000)); // 6 digits
+function friendlyError(err) {
+  const msg = err?.message || "";
+  if (err?.code === "functions/resource-exhausted") return msg || "Too many attempts. Please wait a bit and try again.";
+  if (err?.code === "functions/invalid-argument") return msg || "Please check the details you entered.";
+  return "Something went wrong. Please try again.";
 }
 
 /**
- * Starts (or restarts) an OTP challenge for the given email.
- * Returns { code } on success, or throws with a friendly message if the
- * student is sending too frequently / too many times.
+ * Requests a fresh code be sent to `email`. Throws with a friendly
+ * message on cooldown/rate-limit/send failure (matches the old
+ * startOtp() contract that registration.js already expects to catch).
  */
-export function startOtp(email) {
+export async function startOtp(email, toName) {
   const now = Date.now();
-  const existing = readState();
-  const sameEmail = existing && existing.email === email;
-
-  // A stale challenge (created 30+ min ago) shouldn't count against the
-  // resend cap forever — treat it as a brand new attempt instead of
-  // permanently locking the student out after 5 sends.
-  const isStale = sameEmail && (now - existing.firstSentAt > 30 * 60 * 1000);
-
-  if (sameEmail && !isStale) {
-    if (now - existing.lastSentAt < RESEND_COOLDOWN_MS) {
-      const waitSec = Math.ceil((RESEND_COOLDOWN_MS - (now - existing.lastSentAt)) / 1000);
-      throw new Error(`Please wait ${waitSec}s before requesting another code.`);
-    }
-    if (existing.sendCount >= MAX_SENDS) {
-      throw new Error("Too many codes requested. Please wait a bit and try again.");
-    }
+  if (now - lastSentAt < RESEND_COOLDOWN_MS) {
+    const waitSec = Math.ceil((RESEND_COOLDOWN_MS - (now - lastSentAt)) / 1000);
+    throw new Error(`Please wait ${waitSec}s before requesting another code.`);
   }
-
-  const code = generateCode();
-  const state = {
-    email,
-    code,
-    createdAt: now,
-    firstSentAt: sameEmail && !isStale ? existing.firstSentAt : now,
-    lastSentAt: now,
-    sendCount: sameEmail && !isStale ? existing.sendCount + 1 : 1,
-    attempts: 0
-  };
-  writeState(state);
-  return { code };
+  try {
+    await requestOtpFn({ email, toName });
+    lastSentAt = now;
+  } catch (err) {
+    console.error("[otp] requestRegistrationOtp failed:", err);
+    throw new Error(friendlyError(err));
+  }
+  // No code is returned to the browser — it only ever exists in the
+  // email and in the Cloud Function's hashed Firestore record.
+  return {};
 }
 
 /** How many ms remain before a resend is allowed (0 if allowed now). */
-export function resendCooldownRemaining(email) {
-  const state = readState();
-  if (!state || state.email !== email) return 0;
-  const remaining = RESEND_COOLDOWN_MS - (Date.now() - state.lastSentAt);
+export function resendCooldownRemaining() {
+  const remaining = RESEND_COOLDOWN_MS - (Date.now() - lastSentAt);
   return remaining > 0 ? remaining : 0;
 }
 
 /**
- * Checks a student-entered code against the stored one.
- * Returns { ok: true } or { ok: false, reason: "expired"|"mismatch"|"locked"|"none" }.
+ * Checks a student-entered code against the server-held one.
+ * Returns { ok: true } or { ok: false, reason: "expired"|"mismatch"|"locked"|"none", attemptsLeft? }.
  */
-export function verifyOtp(email, inputCode) {
-  const state = readState();
-  if (!state || state.email !== email) return { ok: false, reason: "none" };
-
-  if (Date.now() - state.createdAt > OTP_TTL_MS) {
-    return { ok: false, reason: "expired" };
+export async function verifyOtp(email, inputCode) {
+  try {
+    const result = await verifyOtpFn({ email, code: inputCode });
+    return result.data;
+  } catch (err) {
+    console.error("[otp] verifyRegistrationOtp failed:", err);
+    return { ok: false, reason: "none", message: friendlyError(err) };
   }
-  if (state.attempts >= MAX_ATTEMPTS) {
-    return { ok: false, reason: "locked" };
-  }
-
-  const normalized = String(inputCode || "").trim();
-  if (normalized === state.code) {
-    return { ok: true };
-  }
-
-  state.attempts += 1;
-  writeState(state);
-  return { ok: false, reason: "mismatch", attemptsLeft: MAX_ATTEMPTS - state.attempts };
 }
 
-/** Clears the OTP challenge (call once registration succeeds, or if the student edits the email). */
+/** Kept for callers that reset local UI state between attempts — the
+ * server-side record is cleared automatically on success/expiry. */
 export function clearOtp() {
-  try { sessionStorage.removeItem(OTP_KEY); } catch (err) { /* non-fatal */ }
+  lastSentAt = 0;
 }

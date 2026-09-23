@@ -42,17 +42,51 @@ service cloud.firestore {
       return reg.status == 'verified' && (!('removed' in reg) || reg.removed != true);
     }
 
+    // Proof that functions/index.js's verifyRegistrationOtp callable
+    // confirmed this Firebase Auth session's email via a real, server-
+    // generated OTP. Written ONLY by that Cloud Function through the
+    // Admin SDK, which bypasses these rules entirely — no client write
+    // rule exists for this collection, so nothing here can be faked by
+    // a browser/script. studentIdLocks and registrations creation below
+    // both require a fresh (unexpired) doc here for request.auth.token.email
+    // before they'll allow a write.
+    match /otpVerifications/{email} {
+      allow read, write: if false;
+    }
+    // Per-email / per-IP OTP send-and-attempt bookkeeping, also Cloud-
+    // Function-only. Never needs to be read or written by a client.
+    match /otpChallenges/{email} {
+      allow read, write: if false;
+    }
+    match /otpSendLog/{ip} {
+      allow read, write: if false;
+    }
+
     // Unique Student ID reservation. This prevents duplicate Student IDs
     // without exposing the registration collection to unauthenticated clients.
+    //
+    // BUG FIX: this previously required
+    // `exists(.../studentIdLocks/$(request.resource.data.studentIdLockId))`
+    // — but a studentIdLocks write never contains a `studentIdLockId`
+    // field (that field only exists on `registrations` docs; this looks
+    // like a copy/paste from that rule below). Reading an undefined field
+    // errors out rule evaluation, so this condition could never actually
+    // pass — every single registration attempt would fail right here,
+    // at the very first Firestore write of the whole flow. Uniqueness
+    // doesn't need a self-referential check anyway: Firestore only
+    // triggers `allow create` when the document ID doesn't already
+    // exist, and `allow update` below requires admin, so a second
+    // registration attempt for the same Student ID is already rejected
+    // without this.
     match /studentIdLocks/{lockId} {
       allow create: if request.auth != null &&
         request.resource.data.keys().hasAll(['studentIdNumber','email','authUid']) &&
         request.resource.data.authUid == request.auth.uid &&
         request.resource.data.email == request.auth.token.email &&
-        exists(/databases/$(database)/documents/studentIdLocks/$(request.resource.data.studentIdLockId)) &&
-        get(/databases/$(database)/documents/studentIdLocks/$(request.resource.data.studentIdLockId)).data.authUid == request.auth.uid &&
         request.resource.data.studentIdNumber is string &&
-        request.resource.data.studentIdNumber.size() > 0;
+        request.resource.data.studentIdNumber.size() > 0 &&
+        exists(/databases/$(database)/documents/otpVerifications/$(request.auth.token.email)) &&
+        get(/databases/$(database)/documents/otpVerifications/$(request.auth.token.email)).data.expiresAt > request.time;
       allow get: if isAdmin() || (request.auth != null && resource.data.authUid == request.auth.uid);
       allow list: if isAdmin();
       allow update, delete: if isAdmin();
@@ -83,7 +117,13 @@ service cloud.firestore {
         request.resource.data.studentIdNumber is string &&
         request.resource.data.studentIdNumber.size() > 0 &&
         request.resource.data.studentIdNumber.size() < 50 &&
-        request.resource.data.registrationCredits == 5;
+        request.resource.data.registrationCredits == 5 &&
+        // Same server-verified-OTP requirement as studentIdLocks above —
+        // belt-and-suspenders in case a lock doc is ever created by a
+        // trusted backend path (e.g. tools/migrate-existing-users.mjs)
+        // without one.
+        exists(/databases/$(database)/documents/otpVerifications/$(request.auth.token.email)) &&
+        get(/databases/$(database)/documents/otpVerifications/$(request.auth.token.email)).data.expiresAt > request.time;
 
       // Students may only read their own registration. Admins retain full
       // access. Login no longer relies on a public registration directory.
