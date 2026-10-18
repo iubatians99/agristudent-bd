@@ -1,119 +1,128 @@
 /* ============================================
    AGRI CORE — CGPA Planner (scoped to .cgpa-app)
-   Everything is prefixed so it cannot leak into
-   the rest of the site's styles.
+   Uses the site's own palette: moss, leaf, wheat,
+   terracotta and paper, with Fraunces / Work Sans.
    ============================================ */
 .cgpa-app{
-  --bg1:#f5f7fd; --bg2:#e8ecfa; --card:rgba(255,255,255,.9);
-  --text:#121a33; --muted:#6a7390; --line:#e1e5f3;
-  --a1:#4f46e5; --a2:#8b80f9; --g1:#10b981; --g2:#6ee7b7;
-  --gold:#f59e0b; --bad:#e11d48; --ok:#059669;
-  --sh:0 12px 32px rgba(40,50,110,.10);
-  font-family:'Inter',system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --card:#fff; --text:var(--moss-900); --muted:var(--moss-600);
+  --a1:var(--moss-700); --a2:var(--leaf-500);
+  --gold:var(--terracotta-500); --bad:#B3261E; --ok:#2F7D4A;
+  --sh:0 2px 8px rgba(31,46,34,.06);
+  font-family:var(--font-body);
   color:var(--text);
-  background:linear-gradient(160deg,var(--bg1),var(--bg2));
-  line-height:1.45;
-  padding:2.2rem 0 3.5rem;
+  background:var(--paper-50);
+  line-height:1.5;
+  padding:3rem 0 4rem;
   min-height:70vh;
 }
 .cgpa-app *{ box-sizing:border-box; }
 .cgpa-app [hidden]{ display:none !important; }
-.cgpa-app .cg-wrap{ max-width:820px; margin:0 auto; padding:0 16px; }
-.cgpa-app .crumb{ font-family:var(--font-mono); font-size:.78rem; color:var(--moss-600); margin-bottom:1.1rem; }
+.cgpa-app .cg-wrap{ max-width:820px; margin:0 auto; padding:0 1.25rem; }
+.cgpa-app .crumb{ font-family:var(--font-mono); font-size:.78rem; color:var(--moss-600); margin-bottom:1.5rem; }
 .cgpa-app .crumb a{ color:var(--leaf-500); }
-.cgpa-app header{ margin-bottom:20px; }
-.cgpa-app .eyebrow{ font-size:.72rem; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); font-weight:600; }
-.cgpa-app h1{ font-family:inherit; font-size:2.1rem; margin:4px 0 6px; font-weight:800; letter-spacing:-.02em; color:var(--text); }
-.cgpa-app h1 span{ background:linear-gradient(90deg,var(--a1),var(--a2)); -webkit-background-clip:text; background-clip:text; color:transparent; }
-.cgpa-app header p{ margin:0; color:var(--muted); font-size:.95rem; max-width:520px; }
-.cgpa-app .card{ background:var(--card); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); border:1px solid var(--line); border-radius:20px; padding:18px; margin-bottom:16px; box-shadow:var(--sh); }
-.cgpa-app .step{ display:flex; align-items:center; gap:10px; font-weight:700; margin-bottom:14px; }
-.cgpa-app .step b{ width:26px; height:26px; border-radius:50%; display:grid; place-items:center; font-size:.8rem; color:#fff; background:linear-gradient(135deg,var(--a1),var(--a2)); }
-.cgpa-app .fl{ font-size:.8rem; color:var(--muted); font-weight:600; margin-bottom:6px; display:block; }
-.cgpa-app select, .cgpa-app input[type=number]{ font:inherit; color:var(--text); background:var(--bg1); border:1px solid var(--line); border-radius:12px; padding:10px 12px; outline:none; transition:border-color .15s, box-shadow .15s; }
+.cgpa-app header{ margin-bottom:1.6rem; }
+.cgpa-app .eyebrow{ font-family:var(--font-mono); font-size:.75rem; letter-spacing:.12em; text-transform:uppercase; color:var(--terracotta-500); margin-bottom:.4rem; }
+.cgpa-app h1{ font-family:var(--font-display); font-size:2.3rem; margin:0 0 .5rem; font-weight:600; letter-spacing:-.01em; color:var(--moss-900); }
+.cgpa-app h1 span{ color:var(--leaf-500); }
+.cgpa-app header p{ margin:0; color:var(--moss-600); font-size:1rem; max-width:540px; }
+.cgpa-app .card{ background:#fff; border:1.5px solid var(--line); border-radius:14px; padding:1.3rem; margin-bottom:1rem; box-shadow:var(--sh); }
+.cgpa-app .step{ display:flex; align-items:center; gap:.7rem; font-family:var(--font-display); font-weight:600; font-size:1.1rem; margin-bottom:1rem; color:var(--moss-900); }
+.cgpa-app .step b{ width:28px; height:28px; border-radius:50%; display:grid; place-items:center; font-family:var(--font-mono); font-size:.8rem; color:#fff; background:linear-gradient(135deg,var(--moss-700),var(--leaf-500)); }
+.cgpa-app .fl{ font-size:.82rem; color:var(--moss-600); font-weight:600; margin-bottom:.4rem; display:block; }
+.cgpa-app select, .cgpa-app input[type=number]{ font:inherit; color:var(--moss-900); background:var(--paper-50); border:1.5px solid var(--line); border-radius:10px; padding:.65rem .75rem; outline:none; transition:border-color .15s, box-shadow .15s; }
 .cgpa-app select{ width:100%; }
-.cgpa-app select:focus, .cgpa-app input:focus{ border-color:var(--a1); box-shadow:0 0 0 3px color-mix(in srgb,var(--a1) 22%,transparent); }
-.cgpa-app .ins{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+.cgpa-app select:focus, .cgpa-app input:focus{ border-color:var(--leaf-500); box-shadow:0 0 0 3px rgba(107,155,94,.22); }
+.cgpa-app .ins{ display:grid; grid-template-columns:repeat(3,1fr); gap:.65rem; }
 @media(min-width:560px){ .cgpa-app .ins{ grid-template-columns:repeat(6,1fr); } }
 .cgpa-app .ins div{ text-align:center; }
-.cgpa-app .ins label{ display:block; font-size:.72rem; color:var(--muted); font-weight:600; margin-bottom:4px; }
-.cgpa-app .ins input{ width:100%; text-align:center; font-weight:700; padding:10px 4px; }
-.cgpa-app .err{ color:var(--bad); font-size:.85rem; min-height:1.2em; margin:10px 0 2px; }
-.cgpa-app button{ font:inherit; cursor:pointer; border-radius:12px; border:1px solid var(--line); background:var(--bg1); color:var(--text); padding:10px 16px; font-weight:600; }
-.cgpa-app .primary{ width:100%; border:0; color:#fff; background:linear-gradient(135deg,var(--a1),var(--a2)); box-shadow:0 8px 20px color-mix(in srgb,var(--a1) 35%,transparent); padding:13px; }
-.cgpa-app .lockbar{ display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:16px; font-size:.85rem; color:var(--muted); }
-.cgpa-app .lockbar b{ color:var(--text); }
-.cgpa-app .lockbar button{ padding:6px 12px; font-size:.8rem; }
+.cgpa-app .ins label{ display:block; font-family:var(--font-mono); font-size:.72rem; color:var(--moss-600); font-weight:600; margin-bottom:.3rem; }
+.cgpa-app .ins input{ width:100%; text-align:center; font-family:var(--font-mono); font-weight:700; padding:.65rem .25rem; }
+.cgpa-app .err{ color:var(--bad); font-size:.85rem; min-height:1.2em; margin:.6rem 0 .2rem; }
+.cgpa-app button{ font:inherit; cursor:pointer; border-radius:10px; border:1.5px solid var(--line); background:#fff; color:var(--moss-900); padding:.6rem 1rem; font-weight:600; transition:background .2s, border-color .2s, transform .2s; }
+.cgpa-app button:hover{ border-color:var(--leaf-500); background:var(--paper-50); }
+.cgpa-app .primary{ width:100%; border:0; color:#fff; background:linear-gradient(135deg,var(--moss-900),var(--moss-700)); box-shadow:0 8px 20px rgba(31,46,34,.22); padding:.9rem; font-weight:600; }
+.cgpa-app .primary:hover{ background:linear-gradient(135deg,var(--moss-700),var(--leaf-500)); border:0; transform:translateY(-1px); }
+.cgpa-app .lockbar{ display:flex; justify-content:space-between; align-items:center; gap:.7rem; margin-bottom:1rem; font-size:.88rem; color:var(--moss-600); }
+.cgpa-app .lockbar b{ color:var(--moss-900); }
+.cgpa-app .lockbar button{ padding:.35rem .8rem; font-size:.8rem; }
 .cgpa-app .trow{ display:flex; align-items:baseline; justify-content:space-between; }
-.cgpa-app .tval{ font-size:2rem; font-weight:800; color:var(--a1); }
-.cgpa-app input[type=range]{ width:100%; accent-color:var(--a1); margin:8px 0 12px; }
-.cgpa-app .chips{ display:flex; gap:8px; flex-wrap:wrap; }
-.cgpa-app .chips button{ padding:6px 14px; border-radius:999px; font-size:.85rem; }
-.cgpa-app .chips button.on{ background:var(--a1); border-color:var(--a1); color:#fff; }
-.cgpa-app .tiles{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:16px; }
-.cgpa-app .tile{ background:var(--card); border:1px solid var(--line); border-radius:16px; padding:12px; box-shadow:var(--sh); }
-.cgpa-app .tile small{ display:block; color:var(--muted); font-size:.7rem; font-weight:600; text-transform:uppercase; letter-spacing:.06em; }
-.cgpa-app .tile strong{ display:block; font-size:1.5rem; font-weight:800; margin:2px 0; }
-.cgpa-app .tile span{ font-size:.72rem; color:var(--muted); }
+.cgpa-app .tval{ font-family:var(--font-mono); font-size:2rem; font-weight:700; color:var(--moss-700); }
+.cgpa-app input[type=range]{ width:100%; accent-color:var(--moss-700); margin:.5rem 0 .8rem; }
+.cgpa-app .chips{ display:flex; gap:.5rem; flex-wrap:wrap; }
+.cgpa-app .chips button{ padding:.35rem .9rem; border-radius:999px; font-family:var(--font-mono); font-size:.82rem; }
+.cgpa-app .chips button.on{ background:var(--moss-700); border-color:var(--moss-700); color:#fff; }
+.cgpa-app .tiles{ display:grid; grid-template-columns:repeat(3,1fr); gap:.65rem; margin-bottom:1rem; }
+.cgpa-app .tile{ background:#fff; border:1.5px solid var(--line); border-radius:14px; padding:.8rem; box-shadow:var(--sh); }
+.cgpa-app .tile small{ display:block; font-family:var(--font-mono); color:var(--terracotta-500); font-size:.68rem; font-weight:600; text-transform:uppercase; letter-spacing:.08em; }
+.cgpa-app .tile strong{ display:block; font-family:var(--font-mono); font-size:1.5rem; font-weight:700; margin:.15rem 0; color:var(--moss-900); }
+.cgpa-app .tile span{ font-size:.72rem; color:var(--moss-600); }
 @media(max-width:420px){ .cgpa-app .tile strong{ font-size:1.2rem; } .cgpa-app .tile span{ display:none; } }
 .cgpa-app .chart{ overflow-x:auto; margin:0 -6px; }
 .cgpa-app svg{ display:block; width:100%; min-width:600px; height:auto; }
-.cgpa-app .legend{ display:flex; flex-wrap:wrap; gap:6px 16px; font-size:.74rem; color:var(--muted); margin-top:8px; }
-.cgpa-app .legend i{ display:inline-block; width:11px; height:11px; border-radius:3px; margin-right:6px; vertical-align:-1px; }
-.cgpa-app .box{ text-align:center; border:1.5px solid color-mix(in srgb,var(--a1) 55%,transparent); background:linear-gradient(160deg,color-mix(in srgb,var(--a1) 10%,#fff),#fff); }
-.cgpa-app .box .lbl{ font-size:.78rem; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); font-weight:700; }
-.cgpa-app .box .num{ font-size:3.6rem; font-weight:800; line-height:1.05; letter-spacing:-.03em; background:linear-gradient(90deg,var(--a1),var(--a2)); -webkit-background-clip:text; background-clip:text; color:transparent; }
-.cgpa-app .box .sub{ color:var(--muted); font-size:.85rem; }
-.cgpa-app .box .msg{ margin-top:10px; font-weight:700; }
+.cgpa-app .legend{ display:flex; flex-wrap:wrap; gap:.4rem 1rem; font-size:.76rem; color:var(--moss-600); margin-top:.6rem; }
+.cgpa-app .legend i{ display:inline-block; width:11px; height:11px; border-radius:3px; margin-right:.4rem; vertical-align:-1px; }
+/* result box — same dark moss look as the home page stats strip */
+.cgpa-app .box{ text-align:center; border:0; background:linear-gradient(135deg,var(--moss-900),var(--moss-700)); color:var(--paper-100); padding:1.6rem 1.3rem; }
+.cgpa-app .box .lbl{ font-family:var(--font-mono); font-size:.75rem; letter-spacing:.12em; text-transform:uppercase; color:var(--paper-100); opacity:.8; }
+.cgpa-app .box .num{ font-family:var(--font-mono); font-size:3.6rem; font-weight:700; line-height:1.1; color:var(--wheat-400); }
+.cgpa-app .box .sub{ color:var(--paper-100); opacity:.8; font-size:.86rem; }
+.cgpa-app .box .msg{ margin-top:.7rem; font-weight:700; color:#fff; }
+.cgpa-app .box .msg.ok{ color:#B7E0A8; }
+.cgpa-app .box .msg.bad{ color:#FFB4A8; }
 .cgpa-app .ok{ color:var(--ok); }
 .cgpa-app .bad{ color:var(--bad); }
 
 /* ---- Intro / guide page ---- */
-.cgpa-app .intro-hero{ margin-bottom:8px; }
-.cgpa-app .intro .lead{ font-size:1.05rem; color:var(--muted); max-width:620px; margin:0 0 1rem; }
-.cgpa-app .pills{ list-style:none; display:flex; flex-wrap:wrap; gap:8px; padding:0; margin:0 0 .5rem; }
-.cgpa-app .pills li{ font-size:.78rem; font-weight:700; color:var(--a1); background:color-mix(in srgb,var(--a1) 10%,#fff); border:1px solid color-mix(in srgb,var(--a1) 25%,#fff); padding:.3rem .75rem; border-radius:999px; }
-.cgpa-app .sec-title{ font-family:inherit; font-size:1.3rem; font-weight:800; color:var(--text); margin:1.8rem 0 1rem; }
+.cgpa-app .intro-hero{ margin-bottom:.5rem; }
+.cgpa-app .intro .lead{ font-size:1.05rem; color:var(--moss-600); max-width:620px; margin:0 0 1rem; }
+.cgpa-app .pills{ list-style:none; display:flex; flex-wrap:wrap; gap:.5rem; padding:0; margin:0 0 .5rem; }
+.cgpa-app .pills li{ font-family:var(--font-mono); font-size:.74rem; font-weight:600; color:var(--moss-700); background:rgba(107,155,94,.12); border:1px solid rgba(107,155,94,.28); padding:.3rem .75rem; border-radius:999px; }
+.cgpa-app .sec-title{ font-family:var(--font-display); font-size:1.5rem; font-weight:600; color:var(--moss-900); margin:2rem 0 1rem; }
 
-.cgpa-app .feature{ display:grid; grid-template-columns:1fr; gap:18px; align-items:center; background:var(--card); border:1px solid var(--line); border-radius:24px; padding:22px; margin-bottom:18px; box-shadow:var(--sh); }
+.cgpa-app .feature{ display:grid; grid-template-columns:1fr; gap:1.2rem; align-items:center; background:#fff; border:1.5px solid var(--line); border-radius:14px; padding:1.4rem; margin-bottom:1.1rem; box-shadow:var(--sh); transition:box-shadow .3s, border-color .3s; }
+.cgpa-app .feature:hover{ border-color:var(--leaf-500); box-shadow:0 12px 30px rgba(31,46,34,.1); }
 @media(min-width:900px){
-  .cgpa-app .intro{ margin:0 -90px; }
-  .cgpa-app .intro-hero, .cgpa-app .intro .sec-title, .cgpa-app .intro .goodtoknow, .cgpa-app .intro .startbar{ margin-left:90px; margin-right:90px; }
-  .cgpa-app .feature{ grid-template-columns:5fr 7fr; gap:32px; padding:28px; }
+  .cgpa-app .feature{ grid-template-columns:5fr 7fr; gap:2rem; padding:1.8rem; }
   .cgpa-app .feature.rev .ftext{ order:2; }
   .cgpa-app .feature.rev{ grid-template-columns:7fr 5fr; }
   .cgpa-app .feature.rev .fmedia{ order:1; }
+  .cgpa-app .feature.wide{ grid-template-columns:1fr; gap:1.2rem; }
 }
-.cgpa-app .fnum{ width:38px; height:38px; border-radius:50%; display:grid; place-items:center; font-weight:800; color:#fff; background:linear-gradient(135deg,var(--a1),var(--a2)); box-shadow:0 6px 14px color-mix(in srgb,var(--a1) 35%,transparent); margin-bottom:12px; }
-.cgpa-app .ftext h3{ font-family:inherit; font-size:1.3rem; font-weight:800; color:var(--text); margin:0 0 8px; letter-spacing:-.01em; }
-.cgpa-app .ftext p{ margin:0; color:var(--muted); font-size:.97rem; line-height:1.6; }
-.cgpa-app .ftext p b{ color:var(--text); }
+.cgpa-app .fnum{ width:38px; height:38px; border-radius:50%; display:grid; place-items:center; font-family:var(--font-mono); font-weight:700; color:#fff; background:linear-gradient(135deg,var(--moss-700),var(--leaf-500)); box-shadow:0 6px 14px rgba(45,74,53,.28); margin-bottom:.8rem; }
+.cgpa-app .ftext h3{ font-family:var(--font-display); font-size:1.35rem; font-weight:600; color:var(--moss-900); margin:0 0 .5rem; }
+.cgpa-app .ftext p{ margin:0; color:var(--moss-600); font-size:.97rem; line-height:1.6; }
+.cgpa-app .ftext p b{ color:var(--moss-900); }
 .cgpa-app .fmedia{ min-width:0; }
-.cgpa-app .fmedia.duo{ display:grid; grid-template-columns:1fr; gap:14px; }
+.cgpa-app .fmedia.duo{ display:grid; grid-template-columns:1fr; gap:.9rem; align-items:start; }
 @media(min-width:560px){ .cgpa-app .fmedia.duo{ grid-template-columns:1fr 1fr; } }
 
-@media(min-width:900px){ .cgpa-app .feature.wide{ grid-template-columns:1fr; gap:20px; } }
-.cgpa-app .fmedia.duo{ align-items:start; }
-
 /* browser-window frame around every screenshot */
-.cgpa-app .frame{ margin:0; border-radius:14px; overflow:hidden; background:#fff; border:1px solid #d9deef; box-shadow:0 18px 40px rgba(40,50,110,.16), 0 2px 6px rgba(40,50,110,.08); }
-.cgpa-app .frame-bar{ display:flex; align-items:center; gap:6px; padding:9px 12px; background:linear-gradient(#f4f6fc,#e9edf8); border-bottom:1px solid #d9deef; }
-.cgpa-app .frame-bar i{ width:10px; height:10px; border-radius:50%; background:#ff6058; }
-.cgpa-app .frame-bar i:nth-child(2){ background:#ffbd2e; }
-.cgpa-app .frame-bar i:nth-child(3){ background:#28c940; }
-.cgpa-app .frame-bar span{ flex:1; margin-left:8px; font-size:.68rem; color:var(--muted); background:#fff; border:1px solid #dde2f2; border-radius:999px; padding:3px 12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.cgpa-app .frame{ margin:0; border-radius:12px; overflow:hidden; background:#fff; border:1.5px solid var(--line); box-shadow:0 14px 34px rgba(31,46,34,.14), 0 2px 6px rgba(31,46,34,.06); }
+.cgpa-app .frame-bar{ display:flex; align-items:center; gap:6px; padding:.55rem .75rem; background:var(--paper-100); border-bottom:1px solid var(--line); }
+.cgpa-app .frame-bar i{ width:10px; height:10px; border-radius:50%; background:var(--terracotta-400); }
+.cgpa-app .frame-bar i:nth-child(2){ background:var(--wheat-400); }
+.cgpa-app .frame-bar i:nth-child(3){ background:var(--leaf-500); }
+.cgpa-app .frame-bar span{ flex:1; margin-left:8px; font-family:var(--font-mono); font-size:.66rem; color:var(--moss-600); background:#fff; border:1px solid var(--line); border-radius:999px; padding:3px 12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .cgpa-app .frame img{ width:100%; height:auto; display:block; cursor:zoom-in; }
-.cgpa-app .frame figcaption{ padding:8px 12px; font-size:.78rem; font-weight:600; color:var(--muted); background:#fafbff; border-top:1px solid #eceffa; text-align:center; }
+.cgpa-app .frame figcaption{ padding:.5rem .75rem; font-family:var(--font-mono); font-size:.74rem; font-weight:600; color:var(--moss-600); background:var(--paper-50); border-top:1px solid var(--line); text-align:center; }
 
-.cgpa-app .goodtoknow{ border:1.5px dashed color-mix(in srgb,var(--a1) 45%,#fff); background:color-mix(in srgb,var(--a1) 5%,#fff); border-radius:20px; padding:18px 22px; margin-bottom:18px; }
-.cgpa-app .goodtoknow h3{ font-family:inherit; font-size:1.05rem; font-weight:800; margin:0 0 8px; color:var(--text); }
-.cgpa-app .goodtoknow ul{ margin:0; padding-left:1.1rem; color:var(--text); font-size:.92rem; }
+.cgpa-app .goodtoknow{ border:1.5px dashed var(--terracotta-400); border-radius:14px; background:repeating-linear-gradient(135deg, rgba(181,101,29,.04), rgba(181,101,29,.04) 10px, transparent 10px, transparent 20px); padding:1.2rem 1.4rem; margin-bottom:1.1rem; }
+.cgpa-app .goodtoknow h3{ font-family:var(--font-display); font-size:1.15rem; font-weight:600; margin:0 0 .5rem; color:var(--moss-900); }
+.cgpa-app .goodtoknow ul{ margin:0; padding-left:1.1rem; color:var(--moss-900); font-size:.92rem; }
 .cgpa-app .goodtoknow li{ margin-bottom:.35rem; }
 .cgpa-app .startbar{ margin-top:1.2rem; }
-.cgpa-app .startbar .primary{ font-size:1.05rem; padding:16px; border-radius:16px; }
-.cgpa-app .backlink{ background:none; border:0; padding:0; color:var(--a1); font-size:.85rem; margin-bottom:14px; box-shadow:none; }
+.cgpa-app .startbar .primary{ font-size:1.05rem; padding:1rem; border-radius:12px; }
+.cgpa-app .backlink{ background:none; border:0; padding:0; color:var(--leaf-500); font-family:var(--font-mono); font-size:.8rem; margin-bottom:1rem; box-shadow:none; }
+.cgpa-app .backlink:hover{ background:none; color:var(--moss-700); }
 
 /* click-to-zoom */
-.cgpa-app .lightbox{ position:fixed; inset:0; z-index:2000; background:rgba(12,16,36,.82); display:flex; align-items:center; justify-content:center; padding:20px; cursor:zoom-out; }
+.cgpa-app .lightbox{ position:fixed; inset:0; z-index:2000; background:rgba(31,46,34,.85); display:flex; align-items:center; justify-content:center; padding:20px; cursor:zoom-out; }
 .cgpa-app .lightbox img{ max-width:100%; max-height:100%; border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,.5); background:#fff; }
 .cgpa-app .lightbox button{ position:absolute; top:14px; right:14px; width:40px; height:40px; padding:0; border-radius:50%; background:#fff; font-size:1rem; }
+
+/* ---- "How to use it" toggle ---- */
+.cgpa-app .startbar{ margin:1.2rem 0 1rem; }
+.cgpa-app .howto-toggle{ width:100%; display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:1rem 1.3rem; background:#fff; border:1.5px solid var(--line); border-radius:14px; box-shadow:var(--sh); font-family:var(--font-display); font-size:1.2rem; font-weight:600; color:var(--moss-900); margin-bottom:1rem; }
+.cgpa-app .howto-toggle:hover{ border-color:var(--leaf-500); background:#fff; }
+.cgpa-app .howto-toggle .chev{ display:grid; place-items:center; width:30px; height:30px; border-radius:50%; background:var(--paper-100); color:var(--moss-700); font-size:1rem; transition:transform .25s ease; }
+.cgpa-app .howto-toggle[aria-expanded="true"] .chev{ transform:rotate(180deg); }

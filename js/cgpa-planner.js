@@ -82,38 +82,38 @@
     var Y = function (v) { return T0 + (hi - Math.max(v, lo)) / (hi - lo) * (H - T0 - B); };
     var y0 = H - B, bw = (W - L - R) / TOTAL, w = bw * 0.6;
     var defs = el('defs', {});
-    [['gF', '#8b80f9', '#4f46e5'], ['gP', '#6ee7b7', '#10b981']].forEach(function (g) {
+    [['gF', '#88B379', '#2D4A35'], ['gP', '#E9C987', '#D4A24C']].forEach(function (g) {
       var lg = el('linearGradient', { id: g[0], x1: 0, y1: 0, x2: 0, y2: 1 });
       lg.appendChild(el('stop', { offset: '0%', 'stop-color': g[1] }));
       lg.appendChild(el('stop', { offset: '100%', 'stop-color': g[2] })); defs.appendChild(lg);
     });
     svg.appendChild(defs);
     for (var g = lo; g <= 4.0001; g += step) {
-      svg.appendChild(el('line', { x1: L, x2: W - R, y1: Y(g), y2: Y(g), stroke: '#e1e5f3' }));
-      svg.appendChild(el('text', { x: L - 8, y: Y(g) + 4, 'text-anchor': 'end', 'font-size': 11, fill: '#6a7390' }, g.toFixed(1)));
+      svg.appendChild(el('line', { x1: L, x2: W - R, y1: Y(g), y2: Y(g), stroke: '#DCD5C3' }));
+      svg.appendChild(el('text', { x: L - 8, y: Y(g) + 4, 'text-anchor': 'end', 'font-size': 11, fill: '#3C5C44' }, g.toFixed(1)));
     }
     items.forEach(function (it, i) {
       var x = L + i * bw + (bw - w) / 2, cx = L + i * bw + bw / 2;
-      svg.appendChild(el('text', { x: cx, y: H - 14, 'text-anchor': 'middle', 'font-size': 11.5, fill: '#6a7390' }, ORD[i]));
+      svg.appendChild(el('text', { x: cx, y: H - 14, 'text-anchor': 'middle', 'font-size': 11.5, fill: '#3C5C44' }, ORD[i]));
       if (it.t === 'n') return;
       var y = Y(it.v), h = Math.max(y0 - y, 2);
       if (it.t === 'g') {
-        svg.appendChild(el('path', { d: rb(x, y, w, h, 8), fill: 'none', 'stroke-width': 1.6, 'stroke-dasharray': '5 4', stroke: it.bad ? '#e11d48' : '#6a7390' }));
+        svg.appendChild(el('path', { d: rb(x, y, w, h, 8), fill: 'none', 'stroke-width': 1.6, 'stroke-dasharray': '5 4', stroke: it.bad ? '#B3261E' : '#3C5C44' }));
         // required value above the dashed bar
-        svg.appendChild(el('text', { x: cx, y: y - 7, 'text-anchor': 'middle', 'font-size': 12, 'font-weight': 500, fill: it.bad ? '#e11d48' : '#6a7390', style: HALO }, it.lab));
+        svg.appendChild(el('text', { x: cx, y: y - 7, 'text-anchor': 'middle', 'font-size': 12, 'font-weight': 500, fill: it.bad ? '#B3261E' : '#3C5C44', style: HALO }, it.lab));
       } else {
         svg.appendChild(el('path', { d: rb(x, y, w, h, 8), fill: it.t === 'k' ? 'url(#gF)' : 'url(#gP)' }));
         // value sits inside the bar, near its base, so it never collides with the target line or gold trend line
-        svg.appendChild(el('text', { x: cx, y: y0 - 10, 'text-anchor': 'middle', 'font-size': 12, 'font-weight': 700, fill: '#fff' }, it.lab));
+        svg.appendChild(el('text', { x: cx, y: y0 - 10, 'text-anchor': 'middle', 'font-size': 12, 'font-weight': 700, fill: it.t === 'k' ? '#fff' : '#1F2E22' }, it.lab));
       }
     });
-    svg.appendChild(el('line', { x1: L, x2: W - R, y1: Y(T), y2: Y(T), 'stroke-width': 1.6, 'stroke-dasharray': '2 5', stroke: '#f59e0b' }));
+    svg.appendChild(el('line', { x1: L, x2: W - R, y1: Y(T), y2: Y(T), 'stroke-width': 1.6, 'stroke-dasharray': '2 5', stroke: '#B5651D' }));
     // target label lives in the right margin, clear of every bar
-    svg.appendChild(el('text', { x: W - R + 6, y: Y(T) - 4, 'text-anchor': 'start', 'font-size': 11, 'font-weight': 600, fill: '#d97706' }, 'Target'));
-    svg.appendChild(el('text', { x: W - R + 6, y: Y(T) + 10, 'text-anchor': 'start', 'font-size': 11, 'font-weight': 700, fill: '#d97706' }, T.toFixed(2)));
+    svg.appendChild(el('text', { x: W - R + 6, y: Y(T) - 4, 'text-anchor': 'start', 'font-size': 11, 'font-weight': 600, fill: '#B5651D' }, 'Target'));
+    svg.appendChild(el('text', { x: W - R + 6, y: Y(T) + 10, 'text-anchor': 'start', 'font-size': 11, 'font-weight': 700, fill: '#B5651D' }, T.toFixed(2)));
     if (cum.length) {
-      svg.appendChild(el('polyline', { points: cum.map(function (p) { return (L + p[0] * bw + bw / 2) + ',' + Y(p[1]); }).join(' '), fill: 'none', 'stroke-width': 2.4, 'stroke-linejoin': 'round', stroke: '#f59e0b' }));
-      cum.forEach(function (p) { svg.appendChild(el('circle', { cx: L + p[0] * bw + bw / 2, cy: Y(p[1]), r: 4.2, 'stroke-width': 2, fill: '#f59e0b', stroke: '#fff' })); });
+      svg.appendChild(el('polyline', { points: cum.map(function (p) { return (L + p[0] * bw + bw / 2) + ',' + Y(p[1]); }).join(' '), fill: 'none', 'stroke-width': 2.4, 'stroke-linejoin': 'round', stroke: '#B5651D' }));
+      cum.forEach(function (p) { svg.appendChild(el('circle', { cx: L + p[0] * bw + bw / 2, cy: Y(p[1]), r: 4.2, 'stroke-width': 2, fill: '#B5651D', stroke: '#fff' })); });
     }
   }
 
@@ -155,6 +155,12 @@
   }
   $('startPlan').onclick = function () { openApp(true); };
   $('backIntro').onclick = function () { openApp(false); };
+  // "How to use it" open / close
+  $('howToggle').onclick = function () {
+    var open = this.getAttribute('aria-expanded') !== 'true';
+    this.setAttribute('aria-expanded', open ? 'true' : 'false');
+    $('howBody').hidden = !open;
+  };
   // Click a screenshot to see it bigger
   var lb = $('lightbox');
   Array.prototype.forEach.call(document.querySelectorAll('img[data-zoom]'), function (im) {

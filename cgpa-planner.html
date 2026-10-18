@@ -25,7 +25,7 @@
 <meta name="twitter:image" content="https://agristudent-bd.web.app/assets/icon-512.png">
 <script src="js/auth-guard.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Work+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Work+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 <link rel="stylesheet" href="css/cgpa-planner.css">
 </head>
@@ -46,7 +46,13 @@
 <ul class="pills"><li>Free</li><li>Works on phone</li><li>Takes 1 minute</li></ul>
 </header>
 
-<h2 class="sec-title">How to use it</h2>
+<div class="startbar">
+<button class="primary" id="startPlan" type="button">Click to plan CGPA</button>
+</div>
+
+<section class="howto">
+<button class="howto-toggle" id="howToggle" type="button" aria-expanded="false" aria-controls="howBody"><span>How to use it</span><span class="chev" aria-hidden="true">▾</span></button>
+<div id="howBody" hidden>
 
 <article class="feature wide">
 <div class="ftext">
@@ -75,7 +81,7 @@
 <div class="ftext">
 <span class="fnum">3</span>
 <h3>Look at the chart</h3>
-<p>Each bar is one semester. A <b>dark bar</b> is a result you locked. A <b>green bar</b> is a result you expect. A <b>dashed empty bar</b> is what you need in that semester. The orange dotted line is your target.</p>
+<p>Each bar is one semester. A <b>dark bar</b> is a result you locked. A <b>gold bar</b> is a result you expect. A <b>dashed empty bar</b> is what you need in that semester. The brown dotted line is your target.</p>
 </div>
 <div class="fmedia">
 <figure class="frame"><div class="frame-bar"><i></i><i></i><i></i><span>agristudent-bd.web.app / cgpa-planner</span></div><img src="assets/cgpa/step3-chart.webp" alt="SGPA bar chart" loading="lazy" data-zoom><figcaption>See every semester at a glance</figcaption></figure>
@@ -102,7 +108,8 @@
 </ul>
 </section>
 
-<div class="startbar"><button class="primary" id="startPlan" type="button">Click to plan CGPA</button></div>
+</div>
+</section>
 </section>
 
 <div class="lightbox" id="lightbox" hidden><button type="button" id="lbClose" aria-label="Close">✕</button><img id="lbImg" alt=""></div>
@@ -145,10 +152,10 @@
 <div class="step"><b>3</b>SGPA overview</div>
 <div class="chart"><svg id="chart" viewBox="0 0 720 380" role="img" aria-label="SGPA bar chart"></svg></div>
 <div class="legend">
-<span><i style="background:#4f46e5"></i>Locked SGPA</span>
-<span><i style="background:#10b981"></i>Expected SGPA</span>
-<span><i style="border:1.5px dashed #6a7390"></i>Required</span>
-<span><i style="background:#f59e0b;border-radius:50%"></i>Achieved target</span>
+<span><i style="background:#2D4A35"></i>Locked SGPA</span>
+<span><i style="background:#D4A24C"></i>Expected SGPA</span>
+<span><i style="border:1.5px dashed #3C5C44"></i>Required</span>
+<span><i style="background:#B5651D;border-radius:50%"></i>Achieved target</span>
 </div>
 </section>
 
