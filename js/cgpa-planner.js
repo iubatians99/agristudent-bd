@@ -148,5 +148,20 @@
     else if (need > 4) { m.textContent = 'Target ' + T.toFixed(2) + ' can not be reached by the 12th semester'; m.className = 'msg bad'; }
     else { m.textContent = 'Need average SGPA ' + need.toFixed(2) + ' in the remaining ' + left + ' semester' + (left > 1 ? 's' : ''); m.className = 'msg ' + (need > 3.95 ? 'bad' : 'ok'); }
   }
+  // Intro guide first; returning users with locked results go straight to the planner
+  function openApp(on) {
+    $('intro').hidden = on; $('app').hidden = !on;
+    window.scrollTo({ top: 0 });
+  }
+  $('startPlan').onclick = function () { openApp(true); };
+  $('backIntro').onclick = function () { openApp(false); };
+  // Click a screenshot to see it bigger
+  var lb = $('lightbox');
+  Array.prototype.forEach.call(document.querySelectorAll('img[data-zoom]'), function (im) {
+    im.onclick = function () { $('lbImg').src = im.src; $('lbImg').alt = im.alt; lb.hidden = false; };
+  });
+  lb.onclick = function () { lb.hidden = true; };
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') lb.hidden = true; });
+  if (S.locked) { $('intro').hidden = true; $('app').hidden = false; }
   show();
 })();

@@ -38,6 +38,77 @@
 <main class="cgpa-app">
 <div class="cg-wrap">
 <div class="crumb"><a href="index.html">Home</a> / CGPA Planner</div>
+<section class="intro" id="intro">
+<header class="intro-hero">
+<div class="eyebrow">Academic planner</div>
+<h1>CGPA <span>Planner</span></h1>
+<p class="lead">Want a good CGPA? This tool tells you what SGPA you need in each next semester to reach it. Add your past results, pick a target, and see the answer on a simple chart.</p>
+<ul class="pills"><li>Free</li><li>Works on phone</li><li>Takes 1 minute</li></ul>
+</header>
+
+<h2 class="sec-title">How to use it</h2>
+
+<article class="feature wide">
+<div class="ftext">
+<span class="fnum">1</span>
+<h3>Add your results</h3>
+<p>Choose the semester you are in now. Then type your SGPA for each past semester (from 0 to 4, like <b>3.90</b>). Press <b>"Lock results &amp; continue"</b>.</p>
+</div>
+<div class="fmedia duo">
+<figure class="frame"><div class="frame-bar"><i></i><i></i><i></i><span>agristudent-bd.web.app / cgpa-planner</span></div><img src="assets/cgpa/step1-empty.webp" alt="Choose your current semester and see the SGPA boxes" loading="lazy" data-zoom><figcaption>Pick your semester</figcaption></figure>
+<figure class="frame"><div class="frame-bar"><i></i><i></i><i></i><span>agristudent-bd.web.app / cgpa-planner</span></div><img src="assets/cgpa/step1-filled.webp" alt="Example with SGPA typed for 1st and 2nd semester" loading="lazy" data-zoom><figcaption>Type your SGPA and lock</figcaption></figure>
+</div>
+</article>
+
+<article class="feature rev">
+<div class="ftext">
+<span class="fnum">2</span>
+<h3>Pick your target CGPA</h3>
+<p>Move the slider or tap a button like 3.80. Three small cards will show: <b>Locked CGPA</b> (your CGPA now), <b>Target</b> (your goal), and <b>Need SGPA</b> (the average SGPA you need in the next semesters).</p>
+</div>
+<div class="fmedia">
+<figure class="frame"><div class="frame-bar"><i></i><i></i><i></i><span>agristudent-bd.web.app / cgpa-planner</span></div><img src="assets/cgpa/step2-target.webp" alt="Target CGPA slider and three info cards" loading="lazy" data-zoom><figcaption>Set your goal</figcaption></figure>
+</div>
+</article>
+
+<article class="feature">
+<div class="ftext">
+<span class="fnum">3</span>
+<h3>Look at the chart</h3>
+<p>Each bar is one semester. A <b>dark bar</b> is a result you locked. A <b>green bar</b> is a result you expect. A <b>dashed empty bar</b> is what you need in that semester. The orange dotted line is your target.</p>
+</div>
+<div class="fmedia">
+<figure class="frame"><div class="frame-bar"><i></i><i></i><i></i><span>agristudent-bd.web.app / cgpa-planner</span></div><img src="assets/cgpa/step3-chart.webp" alt="SGPA bar chart" loading="lazy" data-zoom><figcaption>See every semester at a glance</figcaption></figure>
+</div>
+</article>
+
+<article class="feature rev">
+<div class="ftext">
+<span class="fnum">4</span>
+<h3>Try your own numbers</h3>
+<p>Type the SGPA you hope to get in the next semesters. Leave a box empty to see what you need there. The big box at the bottom shows your CGPA and a short message.</p>
+</div>
+<div class="fmedia">
+<figure class="frame"><div class="frame-bar"><i></i><i></i><i></i><span>agristudent-bd.web.app / cgpa-planner</span></div><img src="assets/cgpa/step4-expected.webp" alt="Expected SGPA boxes and CGPA result box" loading="lazy" data-zoom><figcaption>Test what-if results</figcaption></figure>
+</div>
+</article>
+
+<section class="goodtoknow">
+<h3>Good to know</h3>
+<ul>
+<li>The tool counts 12 semesters. Every semester has the same weight.</li>
+<li>Your numbers stay in your own browser. We do not send them anywhere.</li>
+<li>To change your results, press the <b>Edit</b> button.</li>
+</ul>
+</section>
+
+<div class="startbar"><button class="primary" id="startPlan" type="button">Click to plan CGPA</button></div>
+</section>
+
+<div class="lightbox" id="lightbox" hidden><button type="button" id="lbClose" aria-label="Close">✕</button><img id="lbImg" alt=""></div>
+
+<div id="app" hidden>
+<button class="backlink" id="backIntro" type="button">← How to use</button>
 <header>
 <div class="eyebrow">Academic planner</div>
 <h1>CGPA <span>Planner</span></h1>
@@ -93,6 +164,7 @@
 <div class="sub" id="bs"></div>
 <div class="msg" id="msg"></div>
 </section>
+</div>
 </div>
 </div>
 </main>
