@@ -1,7 +1,7 @@
 {
   "name": "Agri Core",
   "short_name": "Agri Core",
-  "description": "Slides, previous questions, academic timelines, agriculture terms, and calculators — a free academic companion built by and for agriculture students in Bangladesh.",
+  "description": "Slides, previous questions, academic timelines, agriculture terms, and a CGPA planner — a free academic companion built by and for agriculture students in Bangladesh.",
   "start_url": "index.html",
   "scope": "./",
   "display": "standalone",

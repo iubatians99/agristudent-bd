@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+  <meta http-equiv="X-Content-Type-Options" content="nosniff">
+  <meta http-equiv="X-Frame-Options" content="SAMEORIGIN">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdnjs.cloudflare.com https://www.googletagmanager.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://res.cloudinary.com https://lh3.googleusercontent.com; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://api.cloudinary.com; frame-src 'none'; object-src 'none'; base-uri 'self';">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<link rel="manifest" href="manifest.json">
+<title>CGPA Planner — Agri Core</title>
+<meta name="description" content="Free CGPA planner for agriculture students — lock your SGPA results, pick a target CGPA, and see the SGPA needed in every remaining semester.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://agristudent-bd.web.app/cgpa-planner.html">
+<meta property="og:title" content="CGPA Planner — Agri Core">
+<meta property="og:description" content="Free CGPA planner for agriculture students — lock your SGPA results, pick a target CGPA, and see the SGPA needed in every remaining semester.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://agristudent-bd.web.app/cgpa-planner.html">
+<meta property="og:image" content="https://agristudent-bd.web.app/assets/icon-512.png">
+<meta property="og:locale" content="en_US">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="CGPA Planner — Agri Core">
+<meta name="twitter:description" content="Free CGPA planner for agriculture students — lock your SGPA results, pick a target CGPA, and see the SGPA needed in every remaining semester.">
+<meta name="twitter:image" content="https://agristudent-bd.web.app/assets/icon-512.png">
+<script src="js/auth-guard.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Work+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/cgpa-planner.css">
+</head>
+<body>
+
+<!-- ANNOUNCEMENT BAR -->
+<div id="navbar-placeholder"></div>
+<script src="js/navbar-loader.js"></script>
+
+<main class="cgpa-app">
+<div class="cg-wrap">
+<div class="crumb"><a href="index.html">Home</a> / CGPA Planner</div>
+<header>
+<div class="eyebrow">Academic planner</div>
+<h1>CGPA <span>Planner</span></h1>
+<p>Lock your results, pick a target, and see exactly what each upcoming semester needs.</p>
+</header>
+
+<section class="card" id="setup">
+<div class="step"><b>1</b>Your current semester</div>
+<label class="fl" for="cur">Currently enrolled in</label>
+<select id="cur"></select>
+<div class="fl" style="margin-top:18px" id="sgl"></div>
+<div class="ins" id="known"></div>
+<div class="err" id="err" role="alert"></div>
+<button class="primary" id="lock" type="button">Lock results &amp; continue</button>
+</section>
+
+<div id="dash" hidden>
+<div class="lockbar"><span>🔒 Locked: <b id="lk"></b></span><button id="edit" type="button">Edit</button></div>
+
+<section class="card">
+<div class="step"><b>2</b>Choose your target CGPA</div>
+<div class="trow"><span class="fl" style="margin:0">Target</span><span class="tval" id="tv"></span></div>
+<input id="tg" type="range" min="3" max="4" step="0.05" aria-label="Target CGPA">
+<div class="chips" id="chips"></div>
+</section>
+
+<div class="tiles">
+<div class="tile"><small>Locked CGPA</small><strong id="t1"></strong><span id="t1s"></span></div>
+<div class="tile"><small>Target</small><strong id="t2"></strong><span>CGPA goal</span></div>
+<div class="tile"><small>Need SGPA</small><strong id="t3"></strong><span id="t3s"></span></div>
+</div>
+
+<section class="card">
+<div class="step"><b>3</b>SGPA overview</div>
+<div class="chart"><svg id="chart" viewBox="0 0 720 380" role="img" aria-label="SGPA bar chart"></svg></div>
+<div class="legend">
+<span><i style="background:#4f46e5"></i>Locked SGPA</span>
+<span><i style="background:#10b981"></i>Expected SGPA</span>
+<span><i style="border:1.5px dashed #6a7390"></i>Required</span>
+<span><i style="background:#f59e0b;border-radius:50%"></i>Achieved target</span>
+</div>
+</section>
+
+<section class="card">
+<div class="step"><b>4</b>Try expected SGPA</div>
+<div class="fl">Type what you expect in upcoming semesters — leave blank to see what is required.</div>
+<div class="ins" id="plan"></div>
+</section>
+
+<section class="card box">
+<div class="lbl" id="bl">CGPA</div>
+<div class="num" id="cg">–</div>
+<div class="sub" id="bs"></div>
+<div class="msg" id="msg"></div>
+</section>
+</div>
+</div>
+</main>
+
+<!-- FOOTER -->
+<footer>
+  <div class="container">
+    <div class="footer-grid">
+      <div>
+        <h4>🌱 Agri Core</h4>
+        <p style="opacity:.8;font-size:.88rem;max-width:320px;">Academic resource, knowledge &amp; timeline platform built for agriculture students in Bangladesh.</p>
+      </div>
+      <div>
+        <h4>Quick Links</h4>
+        <ul>
+          <li><a href="knowledge-hub.html">Knowledge Hub</a></li>
+          <li><a href="teacher-recommendation.html">Teacher Recommendation</a></li>
+          <li><a href="resources.html">Resources</a></li>
+          <li><a href="cgpa-planner.html">CGPA Planner</a></li>
+          <li><a href="blog.html">Blog</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Contact</h4>
+        <ul>
+          <li><a href="https://wa.me/8801753486065" target="_blank" rel="noopener">WhatsApp</a></li>
+          <li><a href="mailto:iubatagriculture@gmail.com">Email</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">© Agri Core — All Rights Reserved.</div>
+  </div>
+</footer>
+
+<script type="module" src="js/session.js"></script>
+<script src="js/main.js"></script>
+<script src="js/cgpa-planner.js"></script>
+</body>
+</html>

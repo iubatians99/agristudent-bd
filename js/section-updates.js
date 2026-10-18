@@ -16,9 +16,9 @@
 // First-ever visit starts a baseline at "now", so a new visitor isn't greeted
 // by four blinking cards for content that was already there.
 //
-// Static sections (Calculators, Ask For Help) have no Firestore data. To make
+// Static sections (CGPA Planner, Ask For Help) have no Firestore data. To make
 // one of those blink after you change it, put the date on its card in
-// index.html, e.g.  <a ... data-section="calculators" data-updated="2026-10-01">
+// index.html, e.g.  <a ... data-section="cgpa-planner" data-updated="2026-10-01">
 // ============================================
 import { db } from "./firebase-config.js";
 import {
